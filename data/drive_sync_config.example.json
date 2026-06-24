@@ -1,0 +1,14 @@
+{
+  "rosters_folder_id": "YOUR_DRIVE_FOLDER_ID_HERE",
+  "cache_dir": "data/location_rosters",
+  "parse_timezone": "America/New_York",
+  "location_aliases": {
+    "Moses": ["Moses Campus", "MMC", "Montefiore Moses"],
+    "Wakefield": ["Wakefield Campus", "Wakefield Hospital"],
+    "Weiler": ["Weiler Campus", "Weiler Hospital"],
+    "Hutch": ["Hutchinson Metro Center", "Hutch Metro"],
+    "Stone Clinic": ["Stone Clinic", "Urology Stone Clinic"],
+    "Greene": ["Greene Medical Arts", "Greene Clinic"]
+  },
+  "_note": "Copy this to drive_sync_config.json and fill in the rosters_folder_id"
+}

@@ -3,9 +3,11 @@
   "name": "DevOps Audit",
   "skill": "devops-audit",
   "cron": "0 8 * * 1",
-  "enabled": true,
+  "enabled": false,
+  "migrated_to": "hermes-cron",
   "created": "2026-05-17T00:00:00Z",
   "last_run": null,
   "next_run": null,
-  "description": "Weekly infrastructure audit every Monday at 8 AM"
+  "description": "Weekly infrastructure audit every Monday at 8 AM",
+  "notify": {"channel": "email", "recipient": ""}
 }

@@ -100,3 +100,14 @@ YESTERDAY (May 17):
 - Multiple daily-standup skill runs across opencode + Hermes (runs 7215be12 through a6d21650)
 - Heartbeat tested successfully
 - Chat interactions across all 3 a
+
+## 2026-06-24 (Run b76b595d)
+- Agent: hermes
+- Input: (none)
+- Output: I'll execute the daily-standup skill now by reading the relevant brain files.
+Now let me check for any recent changes and the audit log.
+Let me also check what's changed in the working tree (uncommitted changes).
+Now I have all the data. Here's your daily standup:
+Agentic OS — Daily Standup (Wednesday, June 24, 2026)
+YESTERDAY (June 23) → Last Session Activity (June 5 + recent config)
+- Agentic OS Dashboard v0.2.0 — 7 new features shipped: Kanban Board, Goals, Journal, Agent Health, Smart Router

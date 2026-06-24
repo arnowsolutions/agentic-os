@@ -11,3 +11,43 @@ audit/*
 data/settings.json
 data/chat-history.json
 data/cost-history.json
+
+# Secrets and credentials
+data/google_credentials.json
+data/google_token.json
+data/supabase_key.json
+data/vps_config.json
+data/drive_sync_config.json
+tunnel_url.txt
+
+# Runtime data/cache (keep in working tree, do not commit)
+data/*.json
+!data/drive_sync_config.example.json
+data/*.py
+data/*.db
+data/kanban/
+data/location_rosters/
+data/notebooklm/
+dashboard/data/
+logs/
+reports/**
+!reports/.gitkeep
+
+# Debug / one-off scripts (superseded or contain secrets)
+calendar_mailer.py
+check_vapi.py
+check_calls.py
+dump_auth_vps.py
+dump_last_auth.py
+dump_last_auth2.py
+analyze_auth.py
+data/_test_vps_mail.py
+test_auth_vps.py
+test_drive_vps.py
+test_vps_data.py
+vps_kb_test.py
+test_swap_*.json
+
+# Duplicate / unused code
+google_workspace.py
+*.pkl

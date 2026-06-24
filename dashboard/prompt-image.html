@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎨 Prompt Builder Pro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f0f0f; color: #e0e0e0; min-height: 100vh;
+  }
+  
+  .header {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    padding: 20px 40px;
+    border-bottom: 1px solid #333;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .header h1 { font-size: 24px; color: #fff; }
+  .header span { color: #888; font-size: 14px; }
+  
+  .section {
+    padding: 24px 40px;
+    border-bottom: 1px solid #222;
+  }
+  .section-title {
+    font-size: 18px; font-weight: 600; color: #bbb;
+    margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;
+  }
+  .section-desc { color: #666; font-size: 13px; margin-bottom: 12px; }
+  
+  .grid {
+    display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px;
+  }
+  .card {
+    min-width: 200px; max-width: 240px;
+    background: #1a1a1a; border-radius: 12px; overflow: hidden;
+    border: 2px solid transparent; cursor: pointer;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .card:hover { border-color: #555; transform: translateY(-2px); }
+  .card.selected { border-color: #4a9eff; box-shadow: 0 0 20px rgba(74,158,255,0.3); }
+  .card img { width: 100%; height: 140px; object-fit: cover; display: block; background: #222; }
+  .card .label { padding: 10px 12px 4px; font-size: 13px; font-weight: 500; color: #ccc; }
+  .card .desc { padding: 0 12px 10px; font-size: 11px; color: #777; }
+  
+  .theme-card {
+    min-width: 180px; max-width: 220px;
+    background: linear-gradient(135deg, #1e1e2e, #2a1a3e);
+    border-radius: 12px; padding: 16px;
+    border: 2px solid transparent; cursor: pointer;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .theme-card:hover { border-color: #555; transform: translateY(-2px); }
+  .theme-card.selected { border-color: #ff6b6b; box-shadow: 0 0 20px rgba(255,107,107,0.3); }
+  .theme-card .emoji { font-size: 32px; margin-bottom: 8px; }
+  .theme-card .name { font-size: 14px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
+  .theme-card .desc { font-size: 11px; color: #888; line-height: 1.4; }
+  .theme-card .tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .theme-card .tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); color: #999; }
+  
+  .prompt-area {
+    background: #1a1a2e; padding: 24px 40px;
+    position: sticky; bottom: 0;
+    border-top: 1px solid #333;
+  }
+  .prompt-box {
+    background: #111; border: 1px solid #333; border-radius: 8px;
+    padding: 16px; min-height: 80px; font-size: 14px; line-height: 1.5;
+    color: #ccc; margin-bottom: 12px;
+  }
+  .prompt-box .hl { color: #4a9eff; }
+  .prompt-box .hl2 { color: #ff6b6b; }
+  .prompt-box .hl3 { color: #ffd93d; }
+  .prompt-box .hl4 { color: #6bcb77; }
+  
+  .btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    padding: 12px 32px; border: none; border-radius: 8px;
+    font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary { background: #4a9eff; color: #fff; }
+  .btn-primary:hover { background: #3a8eef; }
+  .btn-secondary { background: #333; color: #ccc; }
+  .btn-secondary:hover { background: #444; }
+  .btn-success { background: #6bcb77; color: #111; }
+  .btn-success:hover { background: #5abb67; }
+  
+  .subject-input {
+    background: #111; border: 1px solid #333; border-radius: 8px;
+    padding: 12px 16px; width: 100%; font-size: 14px; color: #e0e0e0;
+    margin-bottom: 12px;
+  }
+  .subject-input:focus { outline: none; border-color: #4a9eff; }
+  
+  .model-select { display: flex; gap: 10px; margin-bottom: 12px; }
+  .model-btn {
+    padding: 8px 16px; border-radius: 6px; border: 1px solid #333;
+    background: #1a1a1a; color: #888; cursor: pointer; font-size: 13px;
+  }
+  .model-btn.selected { border-color: #4a9eff; color: #4a9eff; background: rgba(74,158,255,0.1); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎨 Prompt Builder Pro</h1>
+  <span>Click to build → then paste the prompt here</span>
+</div>
+
+<div class="section">
+  <div class="section-title">📷 What are we making?</div>
+  <input class="subject-input" id="subject" placeholder="Describe the subject..." value="a product or scene">
+</div>
+
+<!-- MODEL -->
+<div class="section">
+  <div class="section-title">🧠 Model</div>
+  <div class="model-select" id="modelSelect">
+    <div class="model-btn selected" data-value="Nano Banana 2 (~$0.03)">Nano Banana 2</div>
+    <div class="model-btn" data-value="Nano Banana Pro (~$0.13-0.24)">Nano Banana Pro</div>
+    <div class="model-btn" data-value="Hugging Face Flux (free)">Flux (free)</div>
+  </div>
+</div>
+
+<!-- THEMES - NEW -->
+<div class="section" style="background: linear-gradient(135deg, #0f0f1a, #1a0f2a);">
+  <div class="section-title">🎯 Quick Themes</div>
+  <div class="section-desc">Pick a pre-built style for your use case — auto-selects everything</div>
+  <div class="grid" id="themeGrid"></div>
+</div>
+
+<!-- LENS -->
+<div class="section">
+  <div class="section-title">🔭 Lens</div>
+  <div class="grid" id="lensGrid"></div>
+</div>
+
+<!-- ANGLE -->
+<div class="section">
+  <div class="section-title">📐 Camera Angle</div>
+  <div class="grid" id="angleGrid"></div>
+</div>
+
+<!-- LIGHTING -->
+<div class="section">
+  <div class="section-title">💡 Lighting</div>
+  <div class="grid" id="lightGrid"></div>
+</div>
+
+<!-- STYLE -->
+<div class="section">
+  <div class="section-title">🎨 Style & Film</div>
+  <div class="grid" id="styleGrid"></div>
+</div>
+
+<div class="prompt-area">
+  <div class="prompt-box" id="promptDisplay">Select options above to build your prompt...</div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="copyPrompt()">📋 Copy Prompt</button>
+    <button class="btn btn-success" onclick="generateNow()">⚡ Generate Now</button>
+    <button class="btn btn-secondary" onclick="resetAll()">↺ Reset</button>
+  </div>
+</div>
+
+<script>
+// ===== OPTIONS =====
+const lensOptions = [
+  {id:'wide24', name:'24mm Wide', desc:'Whole scene, spacious, stretch edges', file:'img/ref-lens-wide.png', kw:'24mm wide angle lens expansive view'},
+  {id:'fisheye', name:'Fisheye 8mm', desc:'Warped, chaotic, everything visible', file:'img/ref-lens-fisheye.png', kw:'fisheye 8mm ultra wide barrel distortion'},
+  {id:'35mm', name:'35mm Street', desc:'Natural + environment, candid', file:'img/ref-lens-35mm.png', kw:'35mm lens candid reportage style'},
+  {id:'50mm', name:'50mm Standard', desc:'Natural perspective, like being there', file:'img/ref-lens-50mm.png', kw:'50mm lens natural perspective'},
+  {id:'85mm', name:'85mm Portrait', desc:'Tight on subject, blurry background', file:'img/ref-lens-85mm.png', kw:'85mm lens f/1.4 creamy bokeh shallow depth'},
+  {id:'200mm', name:'200mm Telephoto', desc:'Pulled in, compressed flat view', file:'img/ref-lens-tele.png', kw:'200mm telephoto compressed perspective'},
+  {id:'macro', name:'Macro 100mm', desc:'Extreme detail, tiny close-up', file:'img/ref-lens-macro.png', kw:'macro 100mm extreme close-up detail texture'},
+  {id:'tiltshift', name:'Tilt-Shift', desc:'Selective focus, miniature effect', file:'img/ref-lens-tiltshift.png', kw:'tilt-shift selective focus miniature diorama'},
+];
+
+const angleOptions = [
+  {id:'low', name:'Low Angle', desc:'Looking up, powerful towering', file:'img/ref-angle-low.png', kw:'low angle looking up dramatic perspective'},
+  {id:'high', name:'High Angle', desc:'Looking down, overview', file:'img/ref-angle-eye.png', kw:'high angle looking down overview'},
+  {id:'eye', name:'Eye Level', desc:'Natural, right there with them', file:'img/ref-angle-eye.png', kw:'eye level natural perspective'},
+  {id:'dutch', name:'Dutch Angle', desc:'Tilted, uneasy tense feeling', file:'img/ref-angle-dutch.png', kw:'dutch angle tilted camera tension'},
+  {id:'shoulder', name:'Over-Shoulder', desc:'See their perspective, intimate', file:'img/ref-angle-shoulder.png', kw:'over the shoulder shot intimate'},
+  {id:'bird', name:'Birds Eye', desc:'Straight down, flat lay', file:'img/ref-angle-bird.png', kw:'bird eye view straight down overhead'},
+  {id:'worm', name:'Worms Eye', desc:'From ground, heroic', file:'img/ref-angle-worm.png', kw:'worm eye extreme low angle heroic'},
+  {id:'pov', name:'POV First Person', desc:'You are the subject', file:'img/ref-angle-pov.png', kw:'first person POV immersive'},
+  {id:'profile', name:'Profile Side', desc:'Side view, silhouette', file:'img/ref-angle-profile.png', kw:'profile silhouette side view'},
+  {id:'threeq', name:'3/4 Angle', desc:'Front+side, flattering', file:'img/ref-angle-threequarter.png', kw:'three quarter 45 degree angle'},
+  {id:'wideest', name:'Establishing Wide', desc:'Sets the scene, context', file:'img/ref-angle-establishing.png', kw:'wide establishing shot full context'},
+];
+
+const lightOptions = [
+  {id:'golden', name:'Golden Hour', desc:'Warm orange, long shadows, magic', file:'img/ref-light-golden.png', kw:'golden hour warm sunlight magic hour'},
+  {id:'chiaro', name:'Chiaroscuro', desc:'Extreme dark/light, painterly', file:'img/ref-light-chiaroscuro.png', kw:'chiaroscuro extreme contrast Rembrandt'},
+  {id:'split', name:'Split Lighting', desc:'Half lit half dark, theatrical', file:'img/ref-light-split.png', kw:'split lighting half face lit'},
+  {id:'rim', name:'Rim/Edge Light', desc:'Glowing outline, halo effect', file:'img/ref-light-rim.png', kw:'rim lighting edge glow backlight'},
+  {id:'soft', name:'Soft Window', desc:'Gentle natural, no harsh shadows', file:'img/ref-light-soft.png', kw:'soft natural window light diffused'},
+  {id:'top', name:'Top Down', desc:'Single overhead, deep shadows', file:'img/ref-light-top.png', kw:'top down overhead hard light'},
+  {id:'monitor', name:'Screen Glow', desc:'Lit by electronics, blue tint', file:'img/ref-light-monitor.png', kw:'practical monitor screen glow blue'},
+  {id:'backlight', name:'Backlight', desc:'Dark subject, bright behind, flare', file:'img/ref-light-rim.png', kw:'strong backlight silhouette lens flare'},
+  {id:'neon', name:'Neon Night', desc:'Colored signs, cyberpunk mood', file:'img/ref-light-monitor.png', kw:'neon lights at night colored urban'},
+  {id:'fire', name:'Fire/Candle', desc:'Warm flickering, dancing shadows', file:'img/ref-light-golden.png', kw:'firelight candlelight warm flickering'},
+  {id:'studio', name:'Studio Softbox', desc:'Clean commercial, even light', file:'img/ref-light-soft.png', kw:'softbox studio lighting clean commercial'},
+  {id:'mixed', name:'Mixed Color', desc:'Different colored lights, artistic', file:'img/ref-light-monitor.png', kw:'mixed color lighting creative artistic'},
+];
+
+const styleOptions = [
+  {id:'cinematic', name:'Cinematic Movie', desc:'Teal/orange, flares, widescreen', file:'img/ref-style-cinematic.png', kw:'cinematic teal and orange color grade anamorphic'},
+  {id:'vintage', name:'Vintage Kodachrome', desc:'Warm faded, nostalgic film', file:'img/ref-style-vintage.png', kw:'vintage Kodachrome warm faded film grain'},
+  {id:'gritty-bw', name:'Gritty B&W', desc:'High contrast grain, raw', file:'img/ref-style-gritty.png', kw:'gritty high contrast black and white documentary'},
+  {id:'clinical', name:'Clean Clinical', desc:'White/blue sterile, sharp', file:'img/ref-style-clinical.png', kw:'clean clinical white blue sterile minimalist'},
+  {id:'editorial', name:'Fashion Editorial', desc:'Magazine quality, high fashion', file:'img/ref-style-cinematic.png', kw:'high fashion editorial magazine cover dramatic'},
+  {id:'noir', name:'Film Noir', desc:'1940s crime, venetian shadows', file:'img/ref-style-gritty.png', kw:'film noir venetian blind shadows'},
+  {id:'polaroid', name:'Instant Polaroid', desc:'White border, washed out', file:'img/ref-style-vintage.png', kw:'Polaroid instant camera white border'},
+  {id:'vhs-80s', name:'1980s VHS', desc:'Grainy purple neon, retro', file:'img/ref-style-vintage.png', kw:'1980s VHS grainy purple retro camcorder'},
+  {id:'drone', name:'Drone Aerial', desc:'From way above, patterns', file:'img/ref-angle-bird.png', kw:'drone aerial view from above landscape patterns'},
+  {id:'thermal', name:'Night Vision', desc:'Infrared green glow', file:'img/ref-style-gritty.png', kw:'night vision thermal green infrared military'},
+  {id:'product', name:'Product Clean', desc:'White bg, studio lit, sharp', file:'img/ref-style-clinical.png', kw:'pure white background product photography studio'},
+  {id:'macro-art', name:'Macro Artistic', desc:'Extreme detail, abstract', file:'img/ref-lens-macro.png', kw:'extreme macro fine detail abstract texture'},
+  {id:'hyperreal', name:'Hyper Realistic', desc:'So real it looks like photo', file:'img/ref-lens-85mm.png', kw:'hyper realistic ultra detailed 8k photograph'},
+  {id:'moody', name:'Moody Dark', desc:'Dark tones, shadows, atmosphere', file:'img/ref-light-chiaroscuro.png', kw:'moody dark atmosphere deep shadows'},
+];
+
+// ===== THEMES =====
+const themes = [
+  // MARKETING
+  { id:'product-launch', emoji:'📦', name:'Product Launch', desc:'Clean, dramatic product hero shot for website', lens:'85mm', angle:'eye', light:'studio', style:'product', kw:'professional product photography commercial hero shot, pure white background, studio softbox lighting, sharp focus, 8k detail, clean reflection'},
+  { id:'team-photo', emoji:'👔', name:'Corporate Team', desc:'Professional team portrait for website/LinkedIn', lens:'50mm', angle:'eye', light:'soft', style:'clinical', kw:'professional corporate team portrait, natural expressions, soft diffused lighting, clean background, business attire, polished professional look'},
+  { id:'office-env', emoji:'🏢', name:'Office Environment', desc:'Modern office interior, clean and professional', lens:'24mm', angle:'eye', light:'soft', style:'clinical', kw:'modern office interior photography, bright clean space, natural lighting through windows, professional atmosphere, architectural interior'},
+  { id:'brand-hero', emoji:'⭐', name:'Brand Hero Image', desc:'Dramatic brand statement image for homepage', lens:'24mm', angle:'low', light:'golden', style:'cinematic', kw:'cinematic brand hero image, dramatic lighting, wide angle epic view, warm golden tones, inspirational atmosphere, premium brand photography'},
+
+  // SOCIAL MEDIA
+  { id:'yt-thumbnail', emoji:'▶️', name:'YouTube Thumbnail', desc:'Bold, high contrast clickable thumbnail', lens:'85mm', angle:'eye', light:'top', style:'gritty-bw', kw:'bold YouTube thumbnail style, extreme close-up, high contrast, dramatic expression, clickable, vibrant colors, sharp detail, 16:9 aspect ratio'},
+  { id:'ig-product', emoji:'📱', name:'Instagram Product', desc:'Clean product flat lay or hero for feed', lens:'35mm', angle:'bird', light:'studio', style:'product', kw:'Instagram product photography, flat lay style from above, clean bright composition, pastel background, soft shadows, aesthetic social media'},
+  { id:'ig-portrait', emoji:'✨', name:'Insta Portrait', desc:'Aesthetic portrait for personal brand', lens:'85mm', angle:'threeq', light:'golden', style:'editorial', kw:'Instagram aesthetic portrait, golden hour warm light, flattering angle, fashion editorial style, warm skin tones, dreamy bokeh background'},
+  { id:'tiktok-set', emoji:'🎬', name:'TikTok / Shorts', desc:'Vertical, bright, eye-catching scene', lens:'35mm', angle:'eye', light:'soft', style:'vintage', kw:'TikTok style vertical shot, bright colorful, engaging, relatable, natural lighting, candid feel, 9:16 portrait aspect'},
+
+  // PHOTOSHOOT
+  { id:'fashion-lookbook', emoji:'👗', name:'Fashion Lookbook', desc:'High fashion editorial for collection', lens:'85mm', angle:'threeq', light:'studio', style:'editorial', kw:'fashion lookbook editorial photography, high fashion pose, studio strobe lighting, clean background, dramatic silhouette, magazine quality'},
+  { id:'headshot-pro', emoji:'📸', name:'Pro Headshot', desc:'Professional headshot for LinkedIn/resume', lens:'85mm', angle:'eye', light:'soft', style:'clinical', kw:'professional headshot portrait, soft diffused lighting, neutral background, confident natural expression, corporate professional, clean retouched'},
+  { id:'lifestyle', emoji:'🌿', name:'Lifestyle Shoot', desc:'Candid lifestyle, natural setting', lens:'35mm', angle:'eye', light:'golden', style:'vintage', kw:'lifestyle photography candid moment, natural environment, golden hour outdoor light, relaxed authentic, warm filmic tones'},
+  { id:'editorial-spread', emoji:'📰', name:'Editorial Spread', desc:'Magazine quality editorial', lens:'50mm', angle:'threeq', light:'chiaro', style:'editorial', kw:'magazine editorial photography, dramatic chiaroscuro lighting, avant-garde, high contrast, dark background, art direction'},
+
+  // VIDEO / CONTENT
+  { id:'talking-head', emoji:'🎙️', name:'Talking Head', desc:'Clean presenter shot for video', lens:'85mm', angle:'eye', light:'soft', style:'clinical', kw:'talking head video presenter shot, professional, soft key light, clean background, medium close-up, engaging, broadcast quality'},
+  { id:'b-roll', emoji:'🎥', name:'Cinematic B-Roll', desc:'Dramatic b-roll footage look', lens:'35mm', angle:'dutch', light:'backlight', style:'cinematic', kw:'cinematic b-roll footage, shallow depth of field, dramatic backlight, lens flare, anamorphic style, motion blur, widescreen cinematic'},
+  { id:'unboxing', emoji:'📦', name:'Unboxing / Review', desc:'Product unboxing or review thumbnail', lens:'35mm', angle:'shoulder', light:'studio', style:'hyperreal', kw:'unboxing photography, product reveal, bright clean lighting, hands holding product, detailed texture, review style, professional'},
+
+  // MOOD / ATMOSPHERE
+  { id:'dark-dramatic', emoji:'🌑', name:'Dark & Dramatic', desc:'Moody, shadow-heavy atmosphere', lens:'50mm', angle:'low', light:'chiaro', style:'moody', kw:'dark moody atmosphere, extreme shadows, single light source, dramatic contrast, film noir mood, tense atmosphere'},
+  { id:'dreamy-soft', emoji:'🌅', name:'Dreamy & Soft', desc:'Soft, romantic, ethereal look', lens:'85mm', angle:'threeq', light:'golden', style:'vintage', kw:'dreamy soft ethereal photography, backlit golden hour, soft focus, warm glow, romantic atmosphere, lens flare, pastel tones'},
+  { id:'edgy-urban', emoji:'🏙️', name:'Edgy Urban', desc:'Street, gritty, city atmosphere', lens:'35mm', angle:'dutch', light:'neon', style:'gritty-bw', kw:'edgy urban street photography, gritty city atmosphere, neon lights, hard shadows, candid, raw urban energy, high contrast'},
+  { id:'luxury-premium', emoji:'💎', name:'Luxury Premium', desc:'High-end, elegant, expensive look', lens:'85mm', angle:'threeq', light:'golden', style:'cinematic', kw:'luxury premium photography, elegant composition, warm golden light, rich colors, sophisticated atmosphere, high end branded, polished'},
+];
+
+const selections = { lens: null, angle: null, light: null, style: null, model: 'Nano Banana 2 (~$0.03)', subject: 'a product or scene' };
+
+// ===== RENDER =====
+function renderGrid(id, options, cat) {
+  const grid = document.getElementById(id);
+  grid.innerHTML = '';
+  options.forEach(o => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.value = o.id;
+    card.onclick = () => selectOption(cat, o.id);
+    const img = document.createElement('img');
+    img.src = o.file;
+    img.alt = o.name;
+    img.onerror = () => { img.src = ''; img.style.background = '#333'; };
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = o.name;
+    const desc = document.createElement('div');
+    desc.className = 'desc';
+    desc.textContent = o.desc;
+    card.appendChild(img); card.appendChild(label); card.appendChild(desc);
+    grid.appendChild(card);
+  });
+}
+
+function renderThemes() {
+  const grid = document.getElementById('themeGrid');
+  themes.forEach(t => {
+    const card = document.createElement('div');
+    card.className = 'theme-card';
+    card.onclick = () => applyTheme(t.id);
+    card.innerHTML = `
+      <div class="emoji">${t.emoji}</div>
+      <div class="name">${t.name}</div>
+      <div class="desc">${t.desc}</div>
+      <div class="tags">
+        <span class="tag">${t.lens}</span>
+        <span class="tag">${t.angle}</span>
+        <span class="tag">${t.light}</span>
+        <span class="tag">${t.style}</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function applyTheme(themeId) {
+  const t = themes.find(x => x.id === themeId);
+  if (!t) return;
+  selections.lens = t.lens;
+  selections.angle = t.angle;
+  selections.light = t.light;
+  selections.style = t.style;
+  
+  // Update visual selection
+  ['lens','angle','light','style'].forEach(cat => {
+    document.querySelectorAll(`#${cat}Grid .card`).forEach(c => {
+      c.classList.toggle('selected', c.dataset.value === selections[cat]);
+    });
+  });
+  
+  // Highlight the theme card
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  
+  // Also set a suggested subject based on theme
+  const suggestions = {
+    'product-launch':'a premium tech gadget on a pedestal',
+    'team-photo':'a diverse team of professionals',
+    'office-env':'a modern open-plan office',
+    'brand-hero':'a dramatic landscape with a person standing',
+    'yt-thumbnail':'a person with surprised excited expression',
+    'ig-product':'a skincare product with natural elements',
+    'ig-portrait':'a person in stylish casual clothing',
+    'tiktok-set':'a cozy bedroom setup with ring light',
+    'fashion-lookbook':'a model wearing avant-garde fashion',
+    'headshot-pro':'a person with professional attire',
+    'lifestyle':'a person enjoying coffee outdoors',
+    'editorial-spread':'a model in dramatic pose',
+    'talking-head':'a presenter speaking to camera',
+    'b-roll':'steam rising from a coffee cup',
+    'unboxing':'hands opening a product box',
+    'dark-dramatic':'a lone figure in shadow',
+    'dreamy-soft':'a couple in a sunflower field',
+    'edgy-urban':'a person walking down a rainy street',
+    'luxury-premium':'a luxury watch on marble surface',
+  };
+  
+  if (suggestions[themeId]) {
+    document.getElementById('subject').value = suggestions[themeId];
+  }
+  
+  updatePrompt();
+}
+
+function selectOption(cat, val) {
+  selections[cat] = val;
+  document.querySelectorAll(`#${cat}Grid .card`).forEach(c => {
+    c.classList.toggle('selected', c.dataset.value === val);
+  });
+  // Un-highlight any theme
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+  updatePrompt();
+}
+
+function updatePrompt() {
+  const s = selections;
+  const subj = document.getElementById('subject').value || 'a subject';
+  const allOpts = [...lensOptions, ...angleOptions, ...lightOptions, ...styleOptions];
+  
+  const l = allOpts.find(o => o.id === s.lens);
+  const a = allOpts.find(o => o.id === s.angle);
+  const li = allOpts.find(o => o.id === s.light);
+  const st = allOpts.find(o => o.id === s.style);
+  
+  let parts = [];
+  if (l) parts.push(`<span class="hl">[${l.kw}]</span>`);
+  if (a) parts.push(`<span class="hl2">[${a.kw}]</span>`);
+  parts.push(`<b>${subj}</b>`);
+  if (li) parts.push(`<span class="hl3">[${li.kw}]</span>`);
+  if (st) parts.push(`<span class="hl4">[${st.kw}]</span>`);
+  parts.push('[highly detailed, sharp focus, professional quality]');
+  
+  const p = parts.join(' ');
+  document.getElementById('promptDisplay').innerHTML = p || 'Select options above to build your prompt...';
+  document.getElementById('promptDisplay').dataset.plaintext = parts.map(x => x.replace(/<[^>]+>/g,'')).join(' ');
+}
+
+function copyPrompt() {
+  const el = document.getElementById('promptDisplay');
+  const text = el.dataset.plaintext || el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.btn-primary');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy Prompt', 2000);
+  });
+}
+
+function generateNow() {
+  const text = document.getElementById('promptDisplay').dataset.plaintext || document.getElementById('promptDisplay').textContent;
+  if (text.includes('Select options')) return;
+  // Open in a new message to the agent
+  const model = selections.model;
+  navigator.clipboard.writeText(`Generate image with ${model}: ${text}`).then(() => {
+    const btn = document.querySelector('.btn-success');
+    btn.textContent = '✅ Copied — paste here!';
+    setTimeout(() => btn.textContent = '⚡ Generate Now', 2000);
+  });
+}
+
+function resetAll() {
+  ['lens','angle','light','style'].forEach(cat => {
+    selections[cat] = null;
+    document.querySelectorAll(`#${cat}Grid .card`).forEach(c => c.classList.remove('selected'));
+  });
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+  updatePrompt();
+}
+
+// Model buttons
+document.querySelectorAll('.model-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selections.model = btn.dataset.value;
+    updatePrompt();
+  };
+});
+
+// Subject input
+document.getElementById('subject').oninput = updatePrompt;
+
+renderThemes();
+renderGrid('lensGrid', lensOptions, 'lens');
+renderGrid('angleGrid', angleOptions, 'angle');
+renderGrid('lightGrid', lightOptions, 'light');
+renderGrid('styleGrid', styleOptions, 'style');
+</script>
+</body>
+</html>

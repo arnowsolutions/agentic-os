@@ -6,9 +6,9 @@
 <title>Agentic OS</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="styles.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div id="topLoadingBar"></div>
@@ -31,30 +31,75 @@
       </button>
     </div>
     <div class="sidebar-nav">
-      <div class="sidebar-section"><div class="sidebar-section-label">Primary</div></div>
+      <div class="sidebar-section"><div class="sidebar-section-label">🏠 Home</div></div>
+      <a href="#tools" class="nav-item active" data-page="tools"><span class="nav-icon">🔗</span><span class="nav-label">My Tools</span></a>
+      <a href="#morning-briefing" class="nav-item" data-page="morning-briefing"><span class="nav-icon">🌅</span><span class="nav-label">Morning Briefing</span></a>
+      <a href="#system-overview" class="nav-item" data-page="system-overview"><span class="nav-icon">🏥</span><span class="nav-label">System Overview</span></a>
+      <a href="#compliance" class="nav-item" data-page="compliance"><span class="nav-icon">📊</span><span class="nav-label">Compliance</span></a>
+      <a href="#quick-actions" class="nav-item" data-page="quick-actions"><span class="nav-icon">⚡</span><span class="nav-label">Quick Actions</span></a>
+      <a href="#notifications" class="nav-item" data-page="notifications"><span class="nav-icon">🔔</span><span class="nav-label">Notifications</span></a>
+      <a href="#dashboard" class="nav-item" data-page="dashboard"><span class="nav-icon">◉</span><span class="nav-label">Dashboard</span></a>
+
+      <div class="sidebar-section"><div class="sidebar-section-label">🏥 Urology</div></div>
+      <a href="#unified-dashboard" class="nav-item" data-page="unified-dashboard"><span class="nav-icon">🏥</span><span class="nav-label">Unified Dashboard</span></a>
+      <a href="#manager" class="nav-item" data-page="manager"><span class="nav-icon">📋</span><span class="nav-label">Manager Command Center</span></a>
+      <a href="#oncall" class="nav-item" data-page="oncall"><span class="nav-icon">📅</span><span class="nav-label">Call Schedule</span></a>
+      <a href="#grand-rounds" class="nav-item" data-page="grand-rounds"><span class="nav-icon">📋</span><span class="nav-label">Grand Rounds</span></a>
+      <a href="#grand-rounds-attendance" class="nav-item" data-page="grand-rounds-attendance"><span class="nav-icon">📊</span><span class="nav-label">Attendance</span></a>
+      <a href="#call-schedule-pdf" class="nav-item" data-page="call-schedule-pdf"><span class="nav-icon">📄</span><span class="nav-label">Call Schedule PDF</span></a>
+      <a href="#gme-tracker" class="nav-item" data-page="gme-tracker"><span class="nav-icon">💰</span><span class="nav-label">GME Tracker</span></a>
+      <a href="#eval-portal" class="nav-item" data-page="eval-portal"><span class="nav-icon">📝</span><span class="nav-label">Eval Portal</span></a>
+      <a href="#gme-detail" class="nav-item" data-page="gme-detail"><span class="nav-icon">📈</span><span class="nav-label">GME Deep Dive</span></a>
+      <a href="#staff-schedule" class="nav-item" data-page="staff-schedule"><span class="nav-icon">👥</span><span class="nav-label">Staff Schedule</span></a>
+      <a href="#pdf-archive" class="nav-item" data-page="pdf-archive"><span class="nav-icon">📄</span><span class="nav-label">PDF Archive</span></a>
+      <a href="#voice-commands" class="nav-item" data-page="voice-commands"><span class="nav-icon">🎤</span><span class="nav-label">Voice Commands</span></a>
+
+      <div class="sidebar-section"><div class="sidebar-section-label">🤖 Agents</div></div>
       <a href="#chat" class="nav-item" data-page="chat"><span class="nav-icon">💬</span><span class="nav-label">AI Chat</span></a>
-      <a href="#dashboard" class="nav-item active" data-page="dashboard"><span class="nav-icon">◉</span><span class="nav-label">Dashboard</span></a>
-      <div class="sidebar-section"><div class="sidebar-section-label">Agents</div></div>
+      <a href="#agent-health" class="nav-item" data-page="agent-health"><span class="nav-icon">🏥</span><span class="nav-label">Agent Health</span><span class="nav-badge" id="agentHealthCount">0</span></a>
+      <a href="#health" class="nav-item" data-page="health"><span class="nav-icon">📈</span><span class="nav-label">System Health</span></a>
+      <a href="#smart-router" class="nav-item" data-page="smart-router"><span class="nav-icon">🧭</span><span class="nav-label">Smart Router</span></a>
+      <a href="#ai-builder" class="nav-item" data-page="ai-builder"><span class="nav-icon">🤖</span><span class="nav-label">AI Builder</span></a>
+
+      <div class="sidebar-section"><div class="sidebar-section-label">💻 Development</div></div>
+      <a href="#vs-coder" class="nav-item" data-page="vs-coder"><span class="nav-icon">💻</span><span class="nav-label">VS Coder</span></a>
       <a href="#skills" class="nav-item" data-page="skills"><span class="nav-icon">⚡</span><span class="nav-label">Skills</span><span class="nav-badge" id="skillCount">0</span></a>
       <a href="#memory" class="nav-item" data-page="memory"><span class="nav-icon">🧠</span><span class="nav-label">Memory</span></a>
+      <a href="#google-studio" class="nav-item" data-page="google-studio"><span class="nav-icon">🔷</span><span class="nav-label">Google Studio</span></a>
+      <a href="#prompt-tools-image" class="nav-item" data-page="prompt-tools-image"><span class="nav-icon">🖼️</span><span class="nav-label">Image Builder</span></a>
+      <a href="#prompt-tools-video" class="nav-item" data-page="prompt-tools-video"><span class="nav-icon">🎬</span><span class="nav-label">Video Builder</span></a>
+      <a href="https://die-systematic-hotels-corresponding.trycloudflare.com" class="nav-item" data-page="video-editor" target="_blank" rel="noopener"><span class="nav-icon">✂️</span><span class="nav-label">Video Editor</span><span class="nav-badge" id="videoEditorBadge" style="background:#10b981">NEW</span></a>
+      <a href="#image-gallery" class="nav-item" data-page="image-gallery"><span class="nav-icon">🎨</span><span class="nav-label">Image Gallery</span></a>
+      <a href="#file-browser" class="nav-item" data-page="file-browser"><span class="nav-icon">🗂</span><span class="nav-label">File Browser</span></a>
+      <a href="#script-runner" class="nav-item" data-page="script-runner"><span class="nav-icon">⚙️</span><span class="nav-label">Script Runner</span></a>
+
+      <div class="sidebar-section"><div class="sidebar-section-label">📋 Operations</div></div>
       <a href="#scheduler" class="nav-item" data-page="scheduler"><span class="nav-icon">⏱</span><span class="nav-label">Scheduler</span></a>
-      <a href="#audit" class="nav-item" data-page="audit"><span class="nav-icon">📋</span><span class="nav-label">Audit</span></a>
-      <div class="sidebar-section"><div class="sidebar-section-label">Workflow</div></div>
+      <a href="#drive-sync" class="nav-item" data-page="drive-sync"><span class="nav-icon">📁</span><span class="nav-label">Drive Sync</span></a>
       <a href="#kanban" class="nav-item" data-page="kanban"><span class="nav-icon">📌</span><span class="nav-label">Kanban Board</span></a>
       <a href="#goals" class="nav-item" data-page="goals"><span class="nav-icon">🎯</span><span class="nav-label">Goals</span></a>
       <a href="#journal" class="nav-item" data-page="journal"><span class="nav-icon">📓</span><span class="nav-label">Journal</span></a>
-      <div class="sidebar-section"><div class="sidebar-section-label">Monitoring</div></div>
-      <a href="#agent-health" class="nav-item" data-page="agent-health"><span class="nav-icon">🏥</span><span class="nav-label">Agent Health</span><span class="nav-badge" id="agentHealthCount">0</span></a>
-      <a href="#smart-router" class="nav-item" data-page="smart-router"><span class="nav-icon">🧭</span><span class="nav-label">Smart Router</span></a>
+      <a href="#audit" class="nav-item" data-page="audit"><span class="nav-icon">📋</span><span class="nav-label">Audit</span></a>
+
+      <div class="sidebar-section"><div class="sidebar-section-label">👥 People</div></div>
+      <a href="#resident-roster" class="nav-item" data-page="resident-roster"><span class="nav-icon">🩺</span><span class="nav-label">Resident Roster</span></a>
+      <a href="#contacts" class="nav-item" data-page="contacts"><span class="nav-icon">📇</span><span class="nav-label">CRM</span></a>
+      <a href="#crm-audit" class="nav-item" data-page="crm-audit"><span class="nav-icon">🔍</span><span class="nav-label">CRM Audit</span></a>
+      <a href="#email-templates" class="nav-item" data-page="email-templates"><span class="nav-icon">📋</span><span class="nav-label">Email Templates</span></a>
+
+      <div class="sidebar-section"><div class="sidebar-section-label">📱 Messaging</div></div>
+      <a href="#telegram" class="nav-item" data-page="telegram"><span class="nav-icon">✈️</span><span class="nav-label">Telegram</span><span class="nav-badge" id="telegramCount">0</span></a>
+      <a href="#telegram-logs" class="nav-item" data-page="telegram-logs"><span class="nav-icon">📋</span><span class="nav-label">Telegram Logs</span></a>
+
+      <div class="sidebar-section"><div class="sidebar-section-label">⚙️ System</div></div>
       <a href="#learning-analytics" class="nav-item" data-page="learning-analytics"><span class="nav-icon">📊</span><span class="nav-label">Learning Analytics</span></a>
       <a href="#session-replay" class="nav-item" data-page="session-replay"><span class="nav-icon">🔄</span><span class="nav-label">Session Replay</span></a>
-      <div class="sidebar-section"><div class="sidebar-section-label">Management</div></div>
       <a href="#cost" class="nav-item" data-page="cost"><span class="nav-icon">💰</span><span class="nav-label">Cost Analytics</span></a>
       <a href="#plugins" class="nav-item" data-page="plugins"><span class="nav-icon">🔌</span><span class="nav-label">Plugins</span></a>
       <a href="#backups" class="nav-item" data-page="backups"><span class="nav-icon">💾</span><span class="nav-label">Backups</span></a>
       <a href="#prompts" class="nav-item" data-page="prompts"><span class="nav-icon">📝</span><span class="nav-label">Prompts</span></a>
       <a href="#standards" class="nav-item" data-page="standards"><span class="nav-icon">📐</span><span class="nav-label">Standards</span></a>
-      <div class="sidebar-section"><div class="sidebar-section-label">System</div></div>
+      <a href="#pin-manager" class="nav-item" data-page="pin-manager"><span class="nav-icon">🔑</span><span class="nav-label">PIN Manager</span></a>
       <a href="#settings" class="nav-item" data-page="settings"><span class="nav-icon">⚙</span><span class="nav-label">Settings</span></a>
       <a href="#setup-wizard" class="nav-item" data-page="setup-wizard"><span class="nav-icon">🚀</span><span class="nav-label">Setup Wizard</span></a>
     </div>
@@ -74,6 +119,7 @@
         <span class="topbar-breadcrumb" id="pageBreadcrumb">Overview</span>
       </div>
       <div class="topbar-right">
+        <div id="healthWidget" class="health-widget" style="display:flex;align-items:center;gap:10px;margin-right:12px;font-size:12px"></div>
         <div class="topbar-search">
           <span>🔍</span>
           <input type="text" placeholder="Search skills..." id="globalSearch" oninput="handleGlobalSearch(this.value)">

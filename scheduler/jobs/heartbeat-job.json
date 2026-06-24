@@ -3,7 +3,7 @@
   "name": "Heartbeat Check",
   "skill": "heartbeat",
   "cron": "*/5 * * * *",
-  "enabled": true,
+  "enabled": false, "migrated_to": "hermes-cron",
   "created": "2026-05-17T00:00:00Z",
   "last_run": null,
   "next_run": null,

@@ -25,8 +25,8 @@ function loadScript(src) {
 }
 
 async function navigate(page) {
-  const hash = page || window.location.hash.slice(1) || 'dashboard';
-  if (!hash) { window.location.hash = 'dashboard'; return; }
+  const hash = page || window.location.hash.slice(1) || 'tools';
+  if (!hash) { window.location.hash = 'tools'; return; }
 
   // Show loading bar
   const bar = document.getElementById('topLoadingBar');
@@ -87,7 +87,9 @@ async function updateAgentStatus() {
 window.addEventListener('hashchange', () => navigate());
 window.addEventListener('DOMContentLoaded', () => {
   loadTheme();
-  navigate(window.location.hash.slice(1) || 'dashboard');
+  navigate(window.location.hash.slice(1) || 'tools');
   updateAgentStatus();
+  loadHealth();
   setInterval(updateAgentStatus, 15000);
+  setInterval(loadHealth, 30000);
 });

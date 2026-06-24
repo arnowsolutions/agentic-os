@@ -22,6 +22,7 @@ async function renderDashboard() {
         <div id="recentActivity"><div class="skeleton" style="height:100px"></div></div>
       </div>
     </div>
+    <div id="voiceDataHealth" class="mb-4"></div>
   `;
 
   try {
@@ -92,6 +93,42 @@ async function renderDashboard() {
           <div class="event-time">${timeAgo(e.timestamp)}</div>
         </div>
       `).join('')}</div>`;
+
+    // ── Voice Data Health ──
+    try {
+      const vh = await api.getVapiDataHealth();
+      const sources = vh.sources || {};
+      const entries = Object.entries(sources).map(([name, s]) => {
+        const statusColor = s.status === 'ok' ? '#34c759' :
+                           s.status === 'stale' ? '#ffcc00' :
+                           s.status === 'parse_error' ? '#ff9500' : '#ff3b30';
+        const statusDot = s.status === 'ok' ? '✓' : s.status === 'missing' ? '✕' : '⚠';
+        const label = name.replace(/_/g, ' ');
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-dim);font-size:12px">
+          <span style="width:20px;text-align:center;color:${statusColor};font-weight:700">${statusDot}</span>
+          <span style="flex:1;font-weight:500;text-transform:capitalize">${label}</span>
+          <span style="color:${statusColor};font-size:11px;white-space:nowrap">${s.status}</span>
+          <span class="event-time" title="${escapeHtml(s.detail)}${s.next_action ? ' — ' + escapeHtml(s.next_action) : ''}">${s.next_action ? '⚠' : ''}</span>
+        </div>`;
+      }).join('');
+
+      document.getElementById('voiceDataHealth').innerHTML = `
+        <div class="card">
+          <div class="card-header"><span class="card-title">🎤 Voice Data Health</span></div>
+          <div style="padding:4px 20px 12px">
+            ${entries || '<div style="padding:16px;color:var(--text-muted);font-size:12px">No data sources found</div>'}
+          </div>
+          <div style="padding:4px 20px 12px;border-top:1px solid var(--border-dim);font-size:11px;color:var(--text-muted)">
+            Last checked: ${vh.timestamp ? new Date(vh.timestamp).toLocaleTimeString() : 'just now'}
+          </div>
+        </div>`;
+    } catch (e) {
+      document.getElementById('voiceDataHealth').innerHTML = `
+        <div class="card">
+          <div class="card-header"><span class="card-title">🎤 Voice Data Health</span></div>
+          <div style="padding:16px 20px;color:var(--text-muted);font-size:12px">⚠ Could not load: ${escapeHtml(e.message)}</div>
+        </div>`;
+    }
 
   } catch (err) {
     document.getElementById('dashStats').innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Connection Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Retry</button></div></div>`;

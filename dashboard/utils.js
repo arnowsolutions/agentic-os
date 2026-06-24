@@ -129,5 +129,60 @@ const PAGE_TITLES = {
   'agent-health': { title: 'Agent Health', breadcrumb: 'Real-time agent monitoring' },
   'smart-router': { title: 'Smart Router', breadcrumb: 'Task routing intelligence' },
   'learning-analytics': { title: 'Learning Analytics', breadcrumb: 'Skill improvement tracking' },
+  'drive-sync': { title: 'Drive Sync', breadcrumb: 'Location-roster files from Drive' },
   'session-replay': { title: 'Session Replay', breadcrumb: 'Conversation history playback' },
+  tools: { title: 'My Tools', breadcrumb: 'NotebookLM, Cron, KB, Hermes & more' },
+  telegram: { title: 'Telegram Sessions', breadcrumb: 'Messaging conversations from state.db' },
+  contacts: { title: 'CRM', breadcrumb: 'Contact management system' },
+  'prompt-tools-image': { title: '🖼️ Image Prompt Builder', breadcrumb: 'Build professional image prompts visually' },
+  'prompt-tools-video': { title: '🎬 Video Prompt Builder', breadcrumb: 'Build professional video prompts visually' },
+  'email-templates': { title: 'Email Templates', breadcrumb: 'Pre-built email templates for quick sending' },
+  'gme-tracker': { title: 'GME Reimbursement Tracker', breadcrumb: 'Resident education fund management' },
+  'google-studio': { title: 'Google Dev Studio', breadcrumb: 'Apps Script editor & project manager' },
+  'image-gallery': { title: '🎨 Image Gallery', breadcrumb: 'Browse design mockups and generated images' },
+  'ai-builder': { title: 'AI Builder', breadcrumb: 'Google Antigravity — build with Gemini' },
+  'crm-audit': { title: 'CRM Audit', breadcrumb: 'Access log for CRM operations' },
+  oncall: { title: 'Call Schedule', breadcrumb: 'Weekly resident call rotation' },
+  'grand-rounds': { title: 'Grand Rounds', breadcrumb: 'Urology academic schedule & Outlook invites' },
+  'grand-rounds-attendance': { title: '📊 Grand Rounds Attendance', breadcrumb: 'Faculty compliance tracking & reports' },
+  'unified-dashboard': { title: '🏥 Unified Dashboard', breadcrumb: 'Montefiore Urology — all systems in one view' },
+  manager: { title: '📋 Manager Command Center', breadcrumb: 'Schedule, coverage & approvals at a glance' },
+  'voice-commands': { title: '🎤 Voice Commands', breadcrumb: 'Telegram report generator cheat sheet' },
+  health: { title: '🏥 System Health', breadcrumb: 'Central services & cron health monitor' },
+  'vs-coder': { title: '💻 VS Coder', breadcrumb: 'Full code editor — edit, run, commit' },
+  'system-overview': { title: '🏥 System Overview', breadcrumb: 'Central services, cron health & monitoring' },
+  'quick-actions': { title: '⚡ Quick Actions', breadcrumb: 'One-click operations for common workflows' },
+  'eval-portal': { title: '📝 Eval Portal', breadcrumb: 'CMS evaluation forms — track & remind' },
+  'call-schedule-pdf': { title: '📄 Call Schedule PDF', breadcrumb: 'Generate and email call schedule PDFs' },
+  'telegram-logs': { title: '✈️ Telegram Logs', breadcrumb: 'Recent messages, gateway status & log viewer' },
+  'script-runner': { title: '⚙️ Script Runner', breadcrumb: 'Run workspace scripts from the dashboard' },
+  'resident-roster': { title: '🩺 Resident Roster', breadcrumb: 'Urology residents contact info and status' },
+  'compliance': { title: '📊 Compliance Dashboard', breadcrumb: 'Attendance, evals & GME — color-coded metrics' },
+  'morning-briefing': { title: '🌅 Morning Briefing', breadcrumb: 'Daily urology briefing — call, evals, events' },
+  'file-browser': { title: '🗂 File Browser', breadcrumb: 'Browse and view workspace files' },
+  'notifications': { title: '🔔 Notification Feed', breadcrumb: 'Cron, eval & system events feed' },
+  'staff-schedule': { title: '👥 Staff Schedule', breadcrumb: 'NP/PA/coordinator schedules by hospital' },
+  'pdf-archive': { title: '📄 PDF Archive', breadcrumb: 'All generated PDFs in one place' },
+  'gme-detail': { title: '📈 GME Deep Dive', breadcrumb: 'Resident fund usage breakdown with charts' },
 };
+
+async function loadHealth() {
+  const widget = document.getElementById('healthWidget');
+  if (!widget) return;
+  widget.innerHTML = '<span style="color:var(--text-muted)">Checking...</span>';
+  try {
+    const data = await fetch('/api/health/full').then(r => r.json());
+    const services = data.services || {};
+    const names = Object.keys(services);
+    const allOk = names.length > 0 && names.every(n => services[n].ok);
+    widget.innerHTML = names.map(n => {
+      const ok = services[n].ok;
+      const color = ok ? 'var(--green)' : 'var(--red)';
+      const icon = ok ? '🟢' : '🔴';
+      return `<span title="${n}: ${ok ? 'OK' : services[n].error || 'down'}" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;color:var(--text)" onclick="navigate('health')">${icon}<span style="color:${color};font-weight:600">${n}</span></span>`;
+    }).join('');
+    widget.onclick = null;
+  } catch (err) {
+    widget.innerHTML = `<span style="color:var(--red);cursor:pointer" onclick="navigate('health')">⚠️ Health unavailable</span>`;
+  }
+}

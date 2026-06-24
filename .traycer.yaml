@@ -1,0 +1,45 @@
+review:
+  include:
+    - server.py
+    - google_workspace.py
+    - email_helper.py
+    - deploy_vapi_v5.py
+    - update_vapi_config.py
+    - modules/vapi_bridge.py
+    - modules/vapi_unified.py
+    - modules/vapi_email.py
+    - modules/vapi_knowledge.py
+    - modules/vapi_data.py
+    - modules/vapi_concierge.py
+    - modules/vapi_swap.py
+    - modules/vapi_call_summary.py
+    - modules/llm_client.py
+    - modules/config.py
+    - modules/logging_config.py
+    - modules/supabase_client.py
+    - modules/metrics.py
+    - tests/test_vapi_webhooks.py
+    - dashboard/pages/voice-commands.js
+    - legacy/deploy_vapi_v4.py
+  exclude:
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - "**/node_modules/**"
+    - "**/reports/**"
+    - "**/logs/**"
+    - "**/backups/**"
+    - "**/data/**"
+    - "**/.pytest_cache/**"
+    - "**/reviews/**"
+    - "**/migrations/**"
+    - "**/registry/**"
+    - "**/prompts/**"
+    - "**/audit/**"
+    - "**/standards/**"
+    - "**/scheduler/**"
+    - "**/brain/**"
+    - "**/docs/**"
+    - "**/email_templates/**"
+    - "**/monitoring/**"
+    - "dashboard/data/**"
+    - "dashboard/index.html"

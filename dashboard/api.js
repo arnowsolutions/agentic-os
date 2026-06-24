@@ -27,6 +27,8 @@ const api = {
     return r.json();
   },
   getStatus: () => api.get('/api/status'),
+  getHealthFull: () => api.get('/api/health/full'),
+  processSwap: (dryRun = true) => api.post(`/api/swap/process?dry_run=${dryRun}`),
   getBrain: () => api.get('/api/brain'),
   getBrainFile: (name) => api.get(`/api/brain/${encodeURIComponent(name)}`),
   updateBrainFile: (name, content) => api.put(`/api/brain/${encodeURIComponent(name)}`, { content }),
@@ -89,4 +91,38 @@ const api = {
   // Session Replay
   listSessions: () => api.get('/api/sessions/list'),
   getSessionReplay: (id) => api.get(`/api/sessions/${encodeURIComponent(id)}/replay`),
+  // Tools Integration
+  getToolsOverview: () => api.get('/api/tools/overview'),
+  getToolsNotebooks: (profile = 'default') => api.get(`/api/tools/notebooks?profile=${encodeURIComponent(profile)}`),
+  getToolsCron: () => api.get('/api/tools/cron'),
+  getToolsKB: () => api.get('/api/tools/kb'),
+  getTelegramSessions: () => api.get('/api/tools/telegram'),
+  // CRM
+  getContacts: () => api.get('/api/crm/contacts'),
+  addContact: (data) => api.post('/api/crm/contacts', data),
+  updateContact: (id, data) => api.put(`/api/crm/contacts/${encodeURIComponent(id)}`, data),
+  deleteContact: (id) => api.del(`/api/crm/contacts/${encodeURIComponent(id)}`),
+  getCrmAccessLog: () => api.get('/api/crm/access-log'),
+  clearCrmAccessLog: () => api.post('/api/crm/access-log/clear?confirm=true', {}),
+  // On Call Schedule
+  getOncallNow: () => api.get('/api/oncall/now'),
+  getOncallByDate: (date) => api.get(`/api/oncall/date?date=${encodeURIComponent(date)}`),
+  getOncallByWeek: (start) => api.get(`/api/oncall/week?start=${encodeURIComponent(start)}`),
+  getOncallSchedule: () => api.get('/api/oncall/schedule'),
+  searchOncall: (date) => api.get(`/api/oncall/search?date=${encodeURIComponent(date)}`),
+  // GME Tracker
+  getGmeSummary: (ay) => api.get(`/api/crm/gme/summary${ay ? `?ay=${encodeURIComponent(ay)}` : ''}`),
+  getGmeResidents: (ay) => api.get(`/api/crm/gme/residents${ay ? `?ay=${encodeURIComponent(ay)}` : ''}`),
+  addReimbursement: (data) => api.post('/api/crm/gme/reimbursement', data),
+  // Email
+  sendEmail: (data) => api.post('/api/email/send', data),
+  getEmailTemplates: () => api.get('/api/email/templates'),
+  createEmailTemplate: (data) => api.post('/api/email/templates', data),
+  deleteEmailTemplate: (name) => api.del(`/api/email/templates/${encodeURIComponent(name)}`),
+  scheduleEmail: (data) => api.post('/api/email/schedule', data),
+  // Drive Sync
+  syncDrive: () => api.post('/api/drive/sync'),
+  getDriveSyncStatus: () => api.get('/api/drive/sync/status'),
+  // Voice Data Health
+  getVapiDataHealth: () => api.get('/api/vapi/data-health'),
 };

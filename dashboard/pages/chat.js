@@ -1,3 +1,5 @@
+let _hermesIframeInstance = null;
+
 async function renderChat() {
   const content = document.getElementById('pageContent');
   content.innerHTML = `
@@ -39,7 +41,7 @@ async function renderChat() {
           <div id="chatAgentStatus">opencode • ready</div>
         </div>
       </div>
-      <div class="chat-main">
+      <div class="chat-main" id="chatMain">
         <div id="chatMessages" class="chat-messages">
           <div class="chat-welcome">
             <div class="chat-welcome-icon">💬</div>
@@ -56,6 +58,12 @@ async function renderChat() {
           <div class="chat-agent-indicator" id="chatAgentIndicator">opencode</div>
           <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message..." onkeydown="handleChatKey(event)"></textarea>
           <button class="btn btn-primary btn-icon" onclick="sendChatMessage()" id="chatSendBtn" title="Send">➤</button>
+        </div>
+      </div>
+      <div class="chat-iframe-container" id="hermesIframeContainer" style="display:none;flex:1;position:relative;background:var(--bg-primary);border-radius:var(--radius-lg);overflow:hidden;">
+        <div class="chat-iframe-loading" id="hermesIframeLoading">
+          <div class="loading-spinner"></div>
+          <span>Loading Hermes WebUI...</span>
         </div>
       </div>
     </div>
@@ -87,8 +95,38 @@ function selectAgent(agent) {
   document.querySelectorAll('.chat-agent').forEach(el => el.classList.remove('active'));
   document.querySelector(`.chat-agent[data-agent="${agent}"]`).classList.add('active');
   document.getElementById('chatAgentIndicator').textContent = agent;
-  document.getElementById('chatInput').focus();
   updateAgentStatusText();
+
+  const chatMain = document.getElementById('chatMain');
+  const iframeContainer = document.getElementById('hermesIframeContainer');
+
+  if (agent === 'hermes') {
+    // Hide chat main, show Hermes WebUI iframe
+    chatMain.style.display = 'none';
+    iframeContainer.style.display = 'flex';
+
+    // Only create iframe once — reuse on subsequent selections
+    if (!_hermesIframeInstance) {
+      _hermesIframeInstance = document.createElement('iframe');
+      _hermesIframeInstance.src = '/hermes-webui/';
+      _hermesIframeInstance.className = 'chat-iframe';
+      _hermesIframeInstance.title = 'Hermes WebUI';
+      _hermesIframeInstance.allow = 'clipboard-read; clipboard-write';
+
+      // Remove loading spinner once iframe loads
+      _hermesIframeInstance.addEventListener('load', () => {
+        const loading = document.getElementById('hermesIframeLoading');
+        if (loading) loading.style.display = 'none';
+      });
+
+      iframeContainer.appendChild(_hermesIframeInstance);
+    }
+  } else {
+    // Show chat main, hide iframe
+    chatMain.style.display = 'flex';
+    iframeContainer.style.display = 'none';
+    document.getElementById('chatInput').focus();
+  }
 }
 
 function updateAgentStatusText() {
@@ -121,6 +159,17 @@ async function sendChatMessage() {
   const agent = window._currentAgent || 'opencode';
   input.value = '';
   input.style.height = 'auto';
+
+  // If Hermes is selected, redirect to the Hermes iframe instead
+  if (agent === 'hermes') {
+    // Send the message to the Hermes WebUI via the iframe
+    // Since we're cross-origin (different port), we can't postMessage
+    // Instead, just focus the iframe and let the user type there directly
+    if (_hermesIframeInstance) {
+      _hermesIframeInstance.contentWindow.focus();
+    }
+    return;
+  }
 
   // Add user message to chat
   addChatMessage('user', message, agent);

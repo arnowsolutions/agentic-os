@@ -442,6 +442,23 @@ When you (an AI agent) are dropped into this directory for the first time:
 
 ---
 
+## Vapi Voice Assistant — Data Sources
+
+The Vapi voice assistant reads from three local data files and one Drive-synced roster cache:
+
+| Source | Path | Format | Contents |
+|--------|------|--------|----------|
+| **Call Schedule** | `/workspace/Call_Schedule_Q3_Q4_2026.xlsx` | xlsx (openpyxl) | 3 sheets (Moses, Wakefield, Weiler) — dates, day, primary/backup/peds attendings |
+| **QGenda** | `/workspace/repos/qgenda/data/Montefiore_Medical_Center_-_Urology_Schedule_Export_1-1-2026_to_12-31-2026.csv` | CSV | 4,272 rows — physician daily clinic/OR assignments by person and date |
+| **Staff (associates)** | `/workspace/repos/sick-call-line/data/associates.csv` | CSV | Staff directory for sick-call and lookup |
+| **Location Rosters** | `/workspace/agentic-os/data/location_rosters/parsed/` | JSON (parsed from xlsx) | ~13 parsed roster files covering Nursing, Clerical, etc. — Drive-synced from `urologyresidencyprogram@gmail.com` |
+
+Health check: `GET /api/vapi/data-health` returns status per source (`ok`, `missing`, `stale`, `parse_error`, `auth_required`) with file metadata and next-action hints. Dashboard card on the main dashboard page shows this at a glance.
+
+The system prompt for the Vapi assistant lives at `prompts/vapi_assistant_v5.md` — both `update_vapi_config.py` and `deploy_vapi_v5.py` read from it.
+
+---
+
 ## Version History
 
 | Date | Version | Changes |

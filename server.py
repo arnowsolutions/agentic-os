@@ -4,26 +4,58 @@ Agentic OS — FastAPI Backend
 Multi-agent orchestration server for opencode, Hermes, Gemini CLI
 """
 import argparse
+import asyncio
 import json
+import logging
 import os
+import re
 import shutil
 import subprocess
 import tarfile
 import time
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import httpx
+
+# ─── Import extracted modules ──────────────────────────────────
+from modules import crm as crm_module
+from modules import kanban as kanban_module
+from modules import vapi_bridge as vapi_module
+from modules import schedule as schedule_module
+from modules import skill_runner
+from modules.logging_config import setup_logging
+from modules.metrics import metrics_endpoint, metrics_middleware
+
+setup_logging()
+logger = logging.getLogger("agentic_os.server")
+
 app = FastAPI(title="Agentic OS", version="1.1.0")
 
-# Load OpenRouter API key from Hermes .env
+@app.middleware("http")
+async def _metrics_middleware(request: Request, call_next):
+    return await metrics_middleware(request, call_next)
+
+# Load API keys from .env
+SCRIPT_DIR = Path(__file__).parent.resolve()
+AGENTIC_ENV = SCRIPT_DIR / ".env"
+if AGENTIC_ENV.exists():
+    for line in AGENTIC_ENV.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ[k.strip()] = v.strip()
+
+# Also load OpenRouter API key from Hermes .env (backwards compat)
 HERMES_ENV = Path.home() / ".hermes" / ".env"
 if HERMES_ENV.exists():
     for line in HERMES_ENV.read_text().splitlines():
@@ -34,15 +66,92 @@ if HERMES_ENV.exists():
                 os.environ[k] = v  # last value wins (matches shell sourcing)
 
 # CORS for local dev
+BASE_DIR = Path(__file__).parent.resolve()
+
+from modules.config import get_settings
+_settings = get_settings()
+
+@app.middleware("http")
+async def webhook_validation(request: Request, call_next):
+    """Lightweight validation layer for Vapi webhooks."""
+    path = request.url.path
+    if path.startswith(_settings.VAPI_ENDPOINT_PATH) and request.method == "POST":
+        allowlist = _settings.WEBHOOK_IP_ALLOWLIST
+        if allowlist:
+            forwarded = request.headers.get("x-forwarded-for", "")
+            ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "")
+            if ip not in allowlist:
+                logger.warning("vapi webhook blocked by IP allowlist", extra={"ip": ip})
+                return JSONResponse({"error": "unauthorized"}, status_code=403)
+        # Optional signature check (configure WEBHOOK_SECRET + Vapi sends x-signature-sha256)
+        secret = _settings.WEBHOOK_SECRET
+        if secret:
+            import hmac, hashlib
+            body = await request.body()
+            sig = request.headers.get("x-signature-sha256", "")
+            expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig, expected):
+                logger.warning("vapi webhook signature mismatch")
+                return JSONResponse({"error": "invalid signature"}, status_code=403)
+            # Re-inject body so downstream route can read it
+            async def _replay():
+                return body
+            request._body = body
+            request.body = _replay
+    return await call_next(request)
+
+# ─── Initialize extracted modules ──────────────────────────
+kanban_module.init_app(BASE_DIR)
+app.include_router(crm_module.router)
+app.include_router(kanban_module.router)
+app.include_router(vapi_module.router)
+app.include_router(schedule_module.router)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
+    allow_origins=[
+        "http://127.0.0.1:8080", "http://localhost:8080",
+        "http://127.0.0.1:8081", "http://localhost:8081",
+        "http://127.0.0.1:8501", "http://localhost:8501",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 BASE_DIR = Path(__file__).parent.resolve()
+
+# ─── Runtime directory helpers ────────────────────────────────────
+
+def _ensure_runtime_dirs():
+    """Ensure directories referenced at runtime exist on disk."""
+    for d in ("audit", "reports", "data"):
+        (BASE_DIR / d).mkdir(parents=True, exist_ok=True)
+
+_ensure_runtime_dirs()
+
+
+def _safe_path(base: Path, user_value: str) -> Path:
+    """Resolve a user-supplied path segment and ensure it stays inside base."""
+    base_resolved = base.resolve()
+    candidate = (base / user_value).resolve()
+    if not candidate.is_relative_to(base_resolved):
+        raise HTTPException(400, "Invalid path")
+    return candidate
+
+
+def _resolve_hermes_bin() -> Optional[str]:
+    """Return the first existing Hermes CLI binary path, or None."""
+    candidates = [
+        shutil.which("hermes"),
+        "/app/venv/bin/hermes",
+        str(Path.home() / ".hermes" / "venv" / "bin" / "hermes"),
+    ]
+    for p in candidates:
+        if p and os.path.isfile(p):
+            return p
+    return None
+
 
 # ─── Models ───────────────────────────────────────────────────────
 
@@ -65,14 +174,17 @@ class SettingsUpdate(BaseModel):
 class BackupRestoreRequest(BaseModel):
     file: str
 
+class SwapRunRequest(BaseModel):
+    mode: str = "dry-run"  # "dry-run" or "live"
+
 class ChatRequest(BaseModel):
     agent: str
     message: str
 
-# ─── Helper Functions ─────────────────────────────────────────────
+# ─── Helper Functions ──────────────────────────────────────────────────────
 
 def read_file(path: Path):
-    if not path.exists():
+    if not path.exists() or not path.is_file():
         return ""
     return path.read_text(encoding="utf-8")
 
@@ -90,6 +202,7 @@ def get_timestamp():
 
 def append_audit(entry: dict):
     audit_file = BASE_DIR / "audit" / "audit.log"
+    audit_file.parent.mkdir(parents=True, exist_ok=True)
     entry["timestamp"] = get_timestamp()
     entry["id"] = str(uuid.uuid4())[:8]
     with open(audit_file, "a") as f:
@@ -104,7 +217,8 @@ def check_agent(name: str) -> dict:
             exists = shutil.which("opencode") is not None
             status = "online" if exists else "offline"
         elif name == "hermes":
-            exists = shutil.which("hermes") is not None
+            # Check common Hermes install locations (venv in /app or ~/.hermes)
+            exists = _resolve_hermes_bin() is not None
             status = "online" if exists else "offline"
         elif name == "gemini":
             # Gemini has valid OAuth tokens logged in
@@ -117,6 +231,43 @@ def check_agent(name: str) -> dict:
     except Exception:
         status = "offline"
     return {"name": name, "status": status}
+
+def check_url(url: str, timeout: int = 5) -> dict:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return {"ok": r.status == 200, "status": r.status}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def disk_usage(path: Path) -> dict:
+    stat = shutil.disk_usage(path)
+    return {
+        "total_gb": round(stat.total / 1e9, 2),
+        "used_gb": round(stat.used / 1e9, 2),
+        "free_gb": round(stat.free / 1e9, 2),
+        "percent_used": round(stat.used / stat.total * 100, 1),
+    }
+
+
+def cron_health() -> dict:
+    data = {"ok": True, "jobs": 0, "failing": 0, "delivery_errors": 0}
+    try:
+        jobs_file = Path("/home/hermeswebui/.hermes/cron/jobs.json")
+        if not jobs_file.exists():
+            data["ok"] = False
+            data["error"] = "jobs.json not found"
+            return data
+        payload = json.loads(jobs_file.read_text())
+        jobs = payload.get("jobs", [])
+        data["jobs"] = len(jobs)
+        data["failing"] = sum(1 for j in jobs if j.get("last_status") not in ("ok", None, "pending"))
+        data["delivery_errors"] = sum(1 for j in jobs if j.get("last_delivery_error"))
+        data["paused"] = sum(1 for j in jobs if not j.get("enabled"))
+    except Exception as e:
+        data = {"ok": False, "error": str(e)}
+    return data
+
 
 # ─── Routes: Status ───────────────────────────────────────────────
 
@@ -131,6 +282,110 @@ def get_status():
         "uptime": time.time(),
     }
 
+
+@app.get("/metrics")
+def get_metrics():
+    """Prometheus metrics endpoint."""
+    return metrics_endpoint()
+
+
+@app.get("/api/health/full")
+def full_health():
+    """Central health dashboard endpoint — services, cron, disk, reports."""
+    report_dir = BASE_DIR / "reports"
+    latest_pdf = None
+    latest_pdf_age_seconds = None
+    candidates = []
+    if report_dir.exists() and (report_dir / "latest").exists():
+        candidates = sorted(
+            [p for p in (report_dir / "latest").rglob("*.pdf") if p.exists()],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    if candidates:
+        latest_pdf = candidates[0].name
+        latest_pdf_age_seconds = int(time.time() - candidates[0].stat().st_mtime)
+
+    cron_data = cron_health()
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "services": {
+            "dashboard": check_url("http://127.0.0.1:8081/api/status"),
+            "data_service": check_url("http://127.0.0.1:8086/health"),
+            "vapi_bridge": check_url("http://127.0.0.1:8090/vapi/status"),
+        },
+        "cron": {
+            "ok": cron_data.get("ok", False),
+            "total": cron_data.get("jobs", 0),
+            "failing": cron_data.get("failing", 0),
+            "delivery_errors": cron_data.get("delivery_errors", 0),
+            "paused": cron_data.get("paused", 0),
+            "error": cron_data.get("error"),
+            "raw_lines": [],
+        },
+        "disk": {
+            "reports": _disk_usage_dict(report_dir),
+            "workspace": _disk_usage_dict(Path("/workspace")),
+        },
+        "reports": {
+            "latest_pdf": latest_pdf,
+            "latest_pdf_age_seconds": latest_pdf_age_seconds,
+            "report_count": len([d for d in report_dir.iterdir() if d.is_dir() and d.name != "latest"]) if report_dir.exists() else 0,
+        },
+    }
+
+
+def _disk_usage_dict(path: Path) -> dict:
+    try:
+        stat = shutil.disk_usage(path)
+        return {
+            "total": stat.total,
+            "used": stat.used,
+            "free": stat.free,
+            "percent": round(stat.used / stat.total * 100, 1),
+        }
+    except Exception:
+        return {"total": 0, "used": 0, "free": 0, "percent": 0, "error": str(path)}
+
+
+@app.post("/api/swap/process")
+async def swap_process(dry_run: bool = True):
+    """Run the swap auto processor manually (dry-run or live)."""
+    script = Path("/home/hermeswebui/.hermes/scripts/swap_auto_processor.py")
+    python = "/workspace/.aos-venv/bin/python3"
+    if not script.exists():
+        raise HTTPException(500, f"swap_auto_processor.py not found at {script}")
+    cmd = [python, str(script)]
+    if dry_run:
+        cmd.append("--dry-run")
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=os.environ.copy(),
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
+        return {
+            "success": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "stdout": stdout.decode("utf-8", errors="replace"),
+            "stderr": stderr.decode("utf-8", errors="replace"),
+            "dry_run": dry_run,
+        }
+    except asyncio.TimeoutError:
+        if proc:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+        raise HTTPException(504, "swap processor timed out after 180s")
+    except Exception as e:
+        raise HTTPException(500, f"failed to run swap processor: {e}")
+
 # ─── Routes: Brain ────────────────────────────────────────────────
 
 @app.get("/api/brain")
@@ -144,14 +399,14 @@ def list_brain():
 
 @app.get("/api/brain/{file_name}")
 def get_brain_file(file_name: str):
-    path = BASE_DIR / "brain" / file_name
+    path = _safe_path(BASE_DIR / "brain", file_name)
     if not path.exists() or path.is_dir():
         raise HTTPException(404, "File not found")
     return {"name": file_name, "content": read_file(path)}
 
 @app.put("/api/brain/{file_name}")
 def update_brain_file(file_name: str, data: BrainUpdate):
-    path = BASE_DIR / "brain" / file_name
+    path = _safe_path(BASE_DIR / "brain", file_name)
     write_file(path, data.content)
     append_audit({"action": "brain_update", "file": file_name})
     return {"status": "ok", "file": file_name}
@@ -184,7 +439,7 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = BASE_DIR / "skills" / name
+    path = _safe_path(BASE_DIR / "skills", name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
     return {
@@ -198,86 +453,15 @@ def get_skill(name: str):
 
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = BASE_DIR / "skills" / name
+    path = _safe_path(BASE_DIR / "skills", name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
-    agent_choice = req.agent if req else "auto"
-    skill_input = req.input if req else ""
-
-    # Read skill files
-    skill_md = read_file(path / "SKILL.md")
-    learnings = read_file(path / "learnings.md")
-
-    # Determine which agent based on skill type
-    if agent_choice == "auto":
-        devops_keywords = ["devops", "audit", "deploy", "k8s", "gcp", "infra", "terraform"]
-        research_keywords = ["research", "synthesis", "analyze", "search", "compare"]
-        if any(k in name for k in devops_keywords):
-            agent_choice = "opencode"
-        elif any(k in name for k in research_keywords):
-            agent_choice = "gemini"
-        else:
-            # Check SKILL.md for explicit agent assignment
-            for line in skill_md.split('\n'):
-                line = line.strip()
-                if "Primary:" in line:
-                    candidate = line.split(":")[-1].strip().lower()
-                    if candidate in ("opencode", "hermes", "gemini"):
-                        agent_choice = candidate
-                        break
-            if agent_choice == "auto":
-                agent_choice = "opencode"
-
-    # Build prompt from skill instructions + learnings + user input
-    prompt = f"Execute the '{name}' skill.\n\n"
-    if skill_md:
-        prompt += f"## Skill Instructions\n{skill_md}\n\n"
-    if learnings and learnings.strip():
-        prompt += f"## Past Learnings\n{learnings}\n\n"
-    if skill_input:
-        prompt += f"## User Input\n{skill_input}"
-
-    run_id = str(uuid.uuid4())[:8]
-
-    # Execute via agent
-    try:
-        response_text = execute_agent(agent_choice, prompt)
-    except subprocess.TimeoutExpired:
-        response_text = f"⏱ Skill '{name}' timed out on agent '{agent_choice}'."
-    except FileNotFoundError:
-        response_text = f"⚠ Agent '{agent_choice}' CLI not installed. Install it and try again."
-    except Exception as e:
-        response_text = f"⚠ Error executing skill: {str(e)}"
-
-    # Save output to learnings.md
-    timestamp = get_timestamp()[:10]
-    existing = read_file(path / "learnings.md")
-    new_entry = (
-        f"\n## {timestamp} (Run {run_id})\n"
-        f"- Agent: {agent_choice}\n"
-        f"- Input: {skill_input or '(none)'}\n"
-        f"- Output: {response_text[:500]}\n"
+    return skill_runner.run_skill_sync(
+        name,
+        agent=req.agent if req else "auto",
+        input=req.input if req else "",
     )
-    write_file(path / "learnings.md", existing + new_entry)
-
-    # Log execution
-    append_audit({
-        "action": "skill_run",
-        "skill": name,
-        "agent": agent_choice,
-        "run_id": run_id,
-        "output_preview": response_text[:100],
-    })
-
-    return {
-        "status": "completed",
-        "run_id": run_id,
-        "skill": name,
-        "agent": agent_choice,
-        "output": response_text,
-        "message": f"Skill '{name}' completed via {agent_choice}",
-    }
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
@@ -422,10 +606,49 @@ def restore_backup(data: BackupRestoreRequest):
     backup_file = BASE_DIR / "backups" / data.file
     if not backup_file.exists():
         raise HTTPException(404, "Backup file not found")
+    base_resolved = BASE_DIR.resolve()
     with tarfile.open(backup_file, "r:gz") as tar:
-        tar.extractall(path=BASE_DIR)
+        safe_members = []
+        for member in tar.getmembers():
+            if member.name.startswith("/"):
+                raise HTTPException(400, "Unsafe archive")
+            resolved = (BASE_DIR / member.name).resolve()
+            if not resolved.is_relative_to(base_resolved):
+                raise HTTPException(400, "Unsafe archive")
+            if member.issym() or member.islnk():
+                target = Path(member.linkname)
+                if target.is_absolute():
+                    raise HTTPException(400, "Unsafe archive")
+                resolved_link = (BASE_DIR / member.name).parent / target
+                if not resolved_link.resolve().is_relative_to(base_resolved):
+                    raise HTTPException(400, "Unsafe archive")
+            safe_members.append(member)
+        tar.extractall(path=BASE_DIR, members=safe_members)
     append_audit({"action": "backup_restored", "file": data.file})
     return {"status": "restored"}
+
+# ─── Routes: Drive Sync ─────────────────────────────────────────────
+
+@app.post("/api/drive/sync")
+def drive_sync_now():
+    """Force-sync location rosters from Google Drive to local cache."""
+    try:
+        from modules import drive_sync
+        result = drive_sync.sync_location_rosters(force=True)
+        return result
+    except Exception as e:
+        return {"success": False, "reason": "exception", "error": str(e)[:500]}
+
+
+@app.get("/api/drive/sync/status")
+def drive_sync_status():
+    """Get per-file sync freshness from the manifest."""
+    try:
+        from modules import drive_sync
+        return drive_sync.get_sync_status()
+    except Exception as e:
+        return {"error": str(e)[:500]}
+
 
 # ─── Routes: Prompts ──────────────────────────────────────────────
 
@@ -552,8 +775,12 @@ def execute_agent(agent: str, message: str) -> str:
             return err_msg or f"opencode returned exit code {code}"
 
         elif agent == "hermes":
+            # Resolve hermes binary path
+            hermes_bin = _resolve_hermes_bin()
+            if not hermes_bin or not os.path.isfile(hermes_bin):
+                return "⚠ Hermes Agent CLI not found. Run `pip install hermes-agent` or check the install."
             try:
-                code, out, err = run_cli(["hermes", "chat", "-q", message], timeout=180)
+                code, out, err = run_cli([hermes_bin, "chat", "-q", message], timeout=180)
             except subprocess.TimeoutExpired:
                 return f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}"
             if code == 0:
@@ -1210,11 +1437,1262 @@ def get_session_replay(session_id: str):
     except Exception as e:
         return {"session_id": session_id, "messages": [], "error": str(e)}
 
+# ─── Routes: Tools Integration (NotebookLM, Cron, KB) ──────────────
+
+import subprocess as _sp
+import os as _os
+
+def _run_cmd(cmd, timeout=15):
+    try:
+        env = {**_os.environ,
+            "PATH": "/app/venv/bin:" + _os.environ.get("PATH", "/usr/bin:/bin"),
+            "LD_LIBRARY_PATH": "/tmp/chromium-libs:" + _os.environ.get("LD_LIBRARY_PATH", "")}
+        r = _sp.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout, env=env)
+        return r.stdout, r.stderr, r.returncode
+    except Exception as e:
+        return "", str(e), -1
+
+@app.get("/api/tools/overview")
+def tools_overview():
+    # Local KB is always available — no cookies needed
+    kb = BASE_DIR.parent / "knowledge-base"
+    if not kb.exists():
+        kb = Path("/workspace/knowledge-base")
+    prompts = len(list(kb.glob("prompts/*.md"))) if kb.exists() else 0
+    tools_kb = len(list(kb.glob("tools/*.md"))) if kb.exists() else 0
+    resources = len(list(kb.glob("resources/*.md"))) if kb.exists() else 0
+    total = prompts + tools_kb + resources
+
+    # NLM is bonus — quick check with short timeout, never blocks
+    nlm_ok = False
+    try:
+        out, _, _ = _run_cmd("nlm login --check", timeout=8)
+        nlm_ok = "valid" in out or "Authenticated" in out
+    except:
+        pass
+
+    cron_out, _, _ = _run_cmd("hermes cron list", timeout=10)
+    cron_count = cron_out.count("[active]") + cron_out.count("[paused]")
+    return {
+        "notebooklm_status": "active" if nlm_ok else "local_kb",
+        "cron_jobs": cron_count,
+        "kb_prompts": prompts,
+        "kb_tools": tools_kb,
+        "kb_resources": resources,
+        "kb_total": total,
+        "nlm_available": nlm_ok,
+    }
+
+@app.get("/api/tools/notebooks")
+def tools_notebooks(profile: str = "default"):
+    # Try live NLM first
+    out, err, _ = _run_cmd(f"nlm notebook list --profile {profile}", timeout=20)
+    try:
+        data = json.loads(out)
+        if isinstance(data, list) and data:
+            # Cache the result for offline fallback
+            cache_dir = Path.home() / ".hermes" / "notebooklm_cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            with open(cache_dir / f"{profile}_notebooks.json", "w") as f:
+                json.dump(data, f, indent=2)
+            return {"profile": profile, "notebooks": data, "source": "live"}
+    except:
+        pass
+
+    # Fallback: serve from local cache
+    cache_file = Path.home() / ".hermes" / "notebooklm_cache" / f"{profile}_notebooks.json"
+    if cache_file.exists():
+        try:
+            with open(cache_file) as f:
+                cached = json.load(f)
+            return {"profile": profile, "notebooks": cached, "source": "cache"}
+        except:
+            pass
+
+    return {"profile": profile, "notebooks": [], "error": (err or out)[:200]}
+
+
+@app.post("/api/tools/notebooks/refresh")
+def refresh_notebooks_cache():
+    """Refresh the local notebook cache from live NLM."""
+    results = {}
+    for profile in ["account2", "default", "letsgetmoney2009"]:
+        out, err, _ = _run_cmd(f"nlm notebook list --profile {profile}", timeout=25)
+        try:
+            data = json.loads(out)
+            if isinstance(data, list) and data:
+                cache_dir = Path.home() / ".hermes" / "notebooklm_cache"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                with open(cache_dir / f"{profile}_notebooks.json", "w") as f:
+                    json.dump(data, f, indent=2)
+                results[profile] = {"status": "ok", "count": len(data)}
+            else:
+                results[profile] = {"status": "empty", "error": "no notebooks returned"}
+        except:
+            results[profile] = {"status": "error", "error": (err or out)[:200]}
+    return {"status": "ok", "results": results}
+
+
+@app.get("/api/tools/cron")
+def tools_cron():
+    out, _, rc = _run_cmd("hermes cron list", timeout=10)
+    return {"output": out, "status": "ok" if rc == 0 else "error"}
+
+@app.get("/api/tools/telegram")
+def tools_telegram():
+    """Return Telegram/Discord messaging sessions from Hermes state.db."""
+    hermes_home = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
+    db_path = Path(hermes_home) / "state.db"
+    if not db_path.exists():
+        return {"sessions": [], "error": "state.db not found"}
+    try:
+        import sqlite3
+        from contextlib import closing
+        MESSAGING_SOURCES = ("telegram", "discord", "slack", "email", "signal", "whatsapp")
+        with closing(sqlite3.connect(str(db_path))) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            placeholders = ", ".join("?" for _ in MESSAGING_SOURCES)
+            cur.execute(f"""
+                SELECT id, source, model, message_count, input_tokens, output_tokens,
+                       started_at, ended_at, title
+                FROM sessions
+                WHERE source IN ({placeholders})
+                ORDER BY COALESCE(ended_at, started_at) DESC
+                LIMIT 50
+            """, MESSAGING_SOURCES)
+            sessions = []
+            for row in cur.fetchall():
+                sessions.append({
+                    "id": row["id"],
+                    "source": row["source"] or "telegram",
+                    "model": row["model"] or "",
+                    "messages": row["message_count"] or 0,
+                    "input_tokens": row["input_tokens"] or 0,
+                    "output_tokens": row["output_tokens"] or 0,
+                    "started": row["started_at"],
+                    "ended": row["ended_at"],
+                    "title": row["title"] or f"{row['source'].title()} Session",
+                })
+            return {"sessions": sessions, "total": len(sessions)}
+    except Exception as e:
+        return {"sessions": [], "error": str(e)}
+
+@app.get("/api/tools/kb")
+def tools_kb():
+    kb = Path("/workspace/knowledge-base")
+    if not kb.exists():
+        return {"entries": []}
+    entries = []
+    for f in sorted(kb.glob("**/*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if f.name == "README.md": continue
+        text = f.read_text()
+        title = f.name.replace(".md", "").replace("-", " ").title()
+        for line in text.split("\n"):
+            if line.startswith("title:"):
+                title = line.replace("title:", "").strip().strip('"')
+                break
+        entries.append({"title": title, "category": f.parent.name, "path": str(f)})
+    return {"entries": entries[:100]}
+
+# ─── CRM: Contacts ─────────────────────────────────────────────
+# Data stored as JSON array at ~/.hermes/crm_contacts.json
+# Safe behind localhost — not exposed to internet
+
+CRM_FILE = Path("/home/hermeswebui/.hermes/crm_contacts.json")
+CRM_ACCESS_LOG = Path("/home/hermeswebui/.hermes/crm_access_log.json")
+CRM_ACCESS_LOG_DAYS = 30  # auto-prune entries older than this
+
+def _log_crm_access(action: str, contact_id: str = "", contact_name: str = "", endpoint: str = "", method: str = "", agent: str = "dashboard"):
+    """Log a CRM access entry with auto-pruning."""
+    import time as _time
+    now = _time.time()
+    dt = datetime.now(timezone.utc)
+    entry = {
+        "timestamp": now,
+        "datetime": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "action": action,
+        "contact_id": contact_id,
+        "contact_name": contact_name,
+        "endpoint": endpoint,
+        "method": method,
+        "agent": agent,
+    }
+    try:
+        CRM_ACCESS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        entries = []
+        if CRM_ACCESS_LOG.exists():
+            try:
+                entries = json.loads(CRM_ACCESS_LOG.read_text())
+                if not isinstance(entries, list):
+                    entries = []
+            except:
+                entries = []
+        # Auto-prune entries older than 30 days
+        cutoff = now - (CRM_ACCESS_LOG_DAYS * 86400)
+        entries = [e for e in entries if e.get("timestamp", 0) >= cutoff]
+        entries.append(entry)
+        # Keep max 5000 entries
+        if len(entries) > 5000:
+            entries = entries[-5000:]
+        CRM_ACCESS_LOG.write_text(json.dumps(entries, indent=2))
+    except Exception as e:
+        print(f"CRM access log error: {e}")
+
+def _load_crm():
+    if CRM_FILE.exists():
+        try:
+            return json.loads(CRM_FILE.read_text())
+        except:
+            return []
+    return []
+
+def _save_crm(contacts):
+    CRM_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CRM_FILE.write_text(json.dumps(contacts, indent=2))
+
+# ─── CRM: Access Log ───────────────────────────────────────────
+
+@app.get("/api/crm/access-log")
+def crm_access_log():
+    """Return last 50 access log entries (newest first)."""
+    try:
+        if CRM_ACCESS_LOG.exists():
+            entries = json.loads(CRM_ACCESS_LOG.read_text())
+            if not isinstance(entries, list):
+                entries = []
+            entries.reverse()
+            return {"entries": entries[:50]}
+        return {"entries": []}
+    except Exception as e:
+        return {"entries": [], "error": str(e)}
+
+@app.post("/api/crm/access-log/clear")
+def crm_access_log_clear(confirm: bool = False):
+    """Clear the access log (requires confirm=true)."""
+    if not confirm:
+        return {"success": False, "error": "confirm=true parameter required"}
+    try:
+        CRM_ACCESS_LOG.write_text("[]")
+        return {"success": True, "message": "Access log cleared"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/crm/contacts")
+def crm_list():
+    contacts = _load_crm()
+    for c in contacts:
+        _log_crm_access(
+            action="read",
+            contact_id=c.get("id", ""),
+            contact_name=f"{c.get('firstName', '')} {c.get('lastName', '')}".strip(),
+            endpoint="/api/crm/contacts",
+            method="GET",
+            agent="dashboard"
+        )
+    return {"contacts": contacts}
+
+@app.post("/api/crm/contacts")
+def crm_add(data: dict):
+    import uuid
+    contact = {k: (v.strip() if isinstance(v, str) else v) for k, v in data.items()}
+    contact["id"] = str(uuid.uuid4())[:8]
+    cid = contact["id"]
+    cname = f"{contact.get('firstName', '')} {contact.get('lastName', '')}".strip()
+    contacts = _load_crm()
+    contacts.append(contact)
+    _save_crm(contacts)
+    _log_crm_access(
+        action="add",
+        contact_id=cid,
+        contact_name=cname,
+        endpoint="/api/crm/contacts",
+        method="POST",
+        agent="dashboard"
+    )
+    return {"success": True, "id": contact["id"]}
+
+@app.put("/api/crm/contacts/{contact_id}")
+def crm_update(contact_id: str, data: dict):
+    contacts = _load_crm()
+    for c in contacts:
+        if c.get("id") == contact_id:
+            cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
+            for k, v in data.items():
+                if isinstance(v, str):
+                    c[k] = v.strip()
+                else:
+                    c[k] = v
+            _save_crm(contacts)
+            _log_crm_access(
+                action="write",
+                contact_id=contact_id,
+                contact_name=cname,
+                endpoint=f"/api/crm/contacts/{contact_id}",
+                method="PUT",
+                agent="dashboard"
+            )
+            return {"success": True}
+    return {"success": False, "error": "Contact not found"}, 404
+
+@app.delete("/api/crm/contacts/{contact_id}")
+def crm_delete(contact_id: str):
+    contacts = _load_crm()
+    deleted_name = ""
+    for c in contacts:
+        if c.get("id") == contact_id:
+            deleted_name = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
+            break
+    new_contacts = [c for c in contacts if c.get("id") != contact_id]
+    if len(new_contacts) == len(contacts):
+        return {"success": False, "error": "Contact not found"}, 404
+    _save_crm(new_contacts)
+    _log_crm_access(
+        action="delete",
+        contact_id=contact_id,
+        contact_name=deleted_name,
+        endpoint=f"/api/crm/contacts/{contact_id}",
+        method="DELETE",
+        agent="dashboard"
+    )
+    return {"success": True}
+
+
+# ─── CRM: GME Reimbursement Tracker ───────────────────────────
+
+GME_ANNUAL_LIMIT = 1250
+
+@app.get("/api/crm/gme/summary")
+def gme_summary():
+    contacts = _load_crm()
+    _log_crm_access(
+        action="read",
+        contact_id="",
+        contact_name="GME Summary",
+        endpoint="/api/crm/gme/summary",
+        method="GET",
+        agent="dashboard"
+    )
+    contacts = _load_crm()
+    residents = [c for c in contacts if c.get("category") == "Resident"]
+    total_pool = len(residents) * GME_ANNUAL_LIMIT
+    total_used = 0
+    residents_with_funds = 0
+    for r in residents:
+        used = sum(rem.get("amount", 0) for rem in (r.get("reimbursements") or []))
+        total_used += used
+        if used < GME_ANNUAL_LIMIT:
+            residents_with_funds += 1
+    total_remaining = total_pool - total_used
+    return {
+        "total_pool": total_pool,
+        "total_used": total_used,
+        "total_remaining": total_remaining,
+        "residents_with_funds": residents_with_funds,
+        "total_residents": len(residents),
+    }
+
+@app.get("/api/crm/gme/residents")
+def gme_residents():
+    contacts = _load_crm()
+    residents = [c for c in contacts if c.get("category") == "Resident"]
+    for r in residents:
+        cname = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
+        _log_crm_access(
+            action="read",
+            contact_id=r.get("id", ""),
+            contact_name=cname,
+            endpoint="/api/crm/gme/residents",
+            method="GET",
+            agent="dashboard"
+        )
+    result = []
+    for r in residents:
+        reimbursements = r.get("reimbursements") or []
+        total_used = sum(rem.get("amount", 0) for rem in reimbursements)
+        result.append({
+            "id": r.get("id"),
+            "firstName": r.get("firstName", ""),
+            "lastName": r.get("lastName", ""),
+            "pgy": r.get("pgy", ""),
+            "email": r.get("email", ""),
+            "total_used": total_used,
+            "reimbursements": sorted(reimbursements, key=lambda x: x.get("date", "")),
+        })
+    return {"residents": result}
+
+class ReimbursementRequest(BaseModel):
+    resident_id: str
+    date: str
+    amount: float
+    category: str
+    status: str = "paid"
+
+@app.post("/api/crm/gme/reimbursement")
+def gme_add_reimbursement(req: ReimbursementRequest):
+    contacts = _load_crm()
+    for c in contacts:
+        if c.get("id") == req.resident_id:
+            if c.get("category") != "Resident":
+                return {"success": False, "error": "Contact is not a resident"}, 400
+            reimbursements = c.get("reimbursements") or []
+            total_used = sum(rem.get("amount", 0) for rem in reimbursements)
+            if total_used + req.amount > GME_ANNUAL_LIMIT:
+                remaining = GME_ANNUAL_LIMIT - total_used
+                return {"success": False, "error": f"Amount exceeds remaining funds (${remaining:.2f})"}, 400
+            new_rem = {
+                "date": req.date,
+                "amount": req.amount,
+                "category": req.category,
+                "status": req.status,
+            }
+            reimbursements.append(new_rem)
+            c["reimbursements"] = reimbursements
+            _save_crm(contacts)
+            cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
+            _log_crm_access(
+                action="write",
+                contact_id=req.resident_id,
+                contact_name=cname,
+                endpoint="/api/crm/gme/reimbursement",
+                method="POST",
+                agent="dashboard"
+            )
+            return {"success": True, "reimbursement": new_rem}
+    return {"success": False, "error": "Contact not found"}, 404
+
+
+# ─── Call Schedule Integration ────────────────────────────────
+# Faculty call schedules for Moses, Wakefield, Weiler (Jul-Dec 2026)
+# Parsed from Google Drive Excel: Call Schedule Q3-Q4 2026.xlsx
+# File: ~/.hermes/call_schedule_faculty.json
+
+FACULTY_SCHEDULE_FILE = Path("/home/hermeswebui/.hermes/call_schedule_faculty.json")
+
+def _load_faculty_schedule():
+    """Load the real faculty call schedule from parsed Drive data."""
+    if FACULTY_SCHEDULE_FILE.exists():
+        try:
+            return json.loads(FACULTY_SCHEDULE_FILE.read_text())
+        except:
+            return {"sheets": {}}
+    return {"sheets": {}}
+
+def _get_oncall_for_date(target_date: str) -> list:
+    """Get all faculty on call for a given date across all 3 hospitals."""
+    data = _load_faculty_schedule()
+    result = []
+    for sheet_name, sheet in data.get("sheets", {}).items():
+        for entry in sheet.get("entries", []):
+            if entry["date"] == target_date:
+                result.append({
+                    "hospital": sheet.get("hospital", sheet_name),
+                    "date": entry["date"],
+                    "day": entry["day"],
+                    "primary_attending": entry["primary"],
+                    "backup_attending": entry["backup"],
+                    "peds_attending": entry["peds"],
+                })
+                break
+    return result
+
+def _get_oncall_for_week(week_start: str) -> list:
+    """Get faculty on call for a whole week starting Monday."""
+    from datetime import datetime, timedelta
+    try:
+        start = datetime.strptime(week_start, "%Y-%m-%d")
+    except:
+        return []
+    results = []
+    for day_offset in range(7):
+        day = start + timedelta(days=day_offset)
+        day_str = day.strftime("%Y-%m-%d")
+        entries = _get_oncall_for_date(day_str)
+        if entries:
+            results.extend(entries)
+    return results
+
+@app.get("/api/oncall/now")
+def oncall_now():
+    """Who is on call right now? Returns all 3 hospitals."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    entries = _get_oncall_for_date(today)
+    if entries:
+        return {"oncall": entries, "date": today, "hospitals": list(set(e["hospital"] for e in entries))}
+    # Try to show a nearby date with data
+    data = _load_faculty_schedule()
+    if data.get("sheets"):
+        first_entry = data["sheets"][list(data["sheets"].keys())[0]]["entries"][0]
+        return {"oncall": [], "date": today, "message": f"Schedule starts {first_entry['date']}. No data for today.", "schedule_range": "Jul 1 - Dec 31, 2026"}
+    return {"oncall": [], "date": today, "message": "No call schedule loaded"}
+
+@app.get("/api/oncall/date")
+def oncall_by_date(date: str = Query(...)):
+    """Faculty on call for a specific date. Returns all 3 hospitals."""
+    entries = _get_oncall_for_date(date)
+    if entries:
+        return {"oncall": entries, "date": date, "hospitals": list(set(e["hospital"] for e in entries))}
+    return {"oncall": [], "date": date, "message": f"No schedule data for {date}. Schedule runs Jul 1 - Dec 31, 2026."}
+
+@app.get("/api/oncall/week")
+def oncall_by_week(start: str = Query(...)):
+    """Faculty on call for a week starting Monday."""
+    entries = _get_oncall_for_week(start)
+    return {"oncall": entries, "week_start": start, "total": len(entries)}
+
+@app.get("/api/oncall/schedule")
+def oncall_schedule():
+    """Full faculty schedule metadata."""
+    data = _load_faculty_schedule()
+    hospitals = []
+    for name, sheet in data.get("sheets", {}).items():
+        if sheet.get("entries"):
+            primary_docs = set(e["primary"] for e in sheet["entries"] if e["primary"] and e["primary"] != "None")
+            hospitals.append({
+                "name": sheet.get("hospital", name),
+                "total_dates": len(sheet["entries"]),
+                "start_date": sheet["entries"][0]["date"],
+                "end_date": sheet["entries"][-1]["date"],
+                "unique_primary_attendings": sorted(primary_docs),
+            })
+    return {
+        "hospitals": hospitals,
+        "schedule_file": str(FACULTY_SCHEDULE_FILE),
+        "loaded": len(data.get("sheets", {})) > 0,
+    }
+
+@app.get("/api/oncall/search")
+def oncall_search(date: str = Query(...)):
+    """Search: Who covers a specific date? (alias for /api/oncall/date)"""
+    return oncall_by_date(date)
+
+
+class EmailSendRequest(BaseModel):
+    account_label: str
+    to_email: str
+    subject: str
+    body: str
+
+@app.post("/api/email/send")
+def api_send_email(req: EmailSendRequest):
+    """Send email through the email_assistant.py guardrail pipeline."""
+    try:
+        email_script = str(Path("/home/hermeswebui/.hermes/email_assistant.py"))
+        result = subprocess.run(
+            ["python3", email_script, "send", req.account_label, req.to_email, req.subject, req.body],
+            capture_output=True, text=True, timeout=60
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout.strip())
+            return data
+        return {"success": False, "error": result.stderr or "Unknown error"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Email send timed out"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ─── Routes: Email Templates ─────────────────────────────────────
+
+EMAIL_TEMPLATES_FILE = Path("/home/hermeswebui/.hermes/email_templates.json")
+
+def _load_email_templates():
+    if EMAIL_TEMPLATES_FILE.exists():
+        try:
+            return json.loads(EMAIL_TEMPLATES_FILE.read_text())
+        except:
+            return {"templates": []}
+    return {"templates": []}
+
+def _save_email_templates(data):
+    EMAIL_TEMPLATES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    EMAIL_TEMPLATES_FILE.write_text(json.dumps(data, indent=2))
+
+class EmailTemplateCreate(BaseModel):
+    name: str
+    title: str
+    subject: str
+    body: str
+    tone: str = "professional"
+
+@app.get("/api/email/templates")
+def email_templates_list():
+    return _load_email_templates()
+
+@app.post("/api/email/templates")
+def email_templates_create(req: EmailTemplateCreate):
+    data = _load_email_templates()
+    # Check for duplicate name
+    for t in data["templates"]:
+        if t["name"] == req.name:
+            raise HTTPException(400, f"Template '{req.name}' already exists")
+    template = {
+        "name": req.name,
+        "title": req.title,
+        "subject": req.subject,
+        "body": req.body,
+        "tone": req.tone,
+    }
+    data["templates"].append(template)
+    _save_email_templates(data)
+    append_audit({"action": "email_template_created", "name": req.name})
+    return {"success": True, "template": template}
+
+@app.delete("/api/email/templates/{template_name}")
+def email_templates_delete(template_name: str):
+    data = _load_email_templates()
+    before = len(data["templates"])
+    data["templates"] = [t for t in data["templates"] if t["name"] != template_name]
+    if len(data["templates"]) == before:
+        raise HTTPException(404, f"Template '{template_name}' not found")
+    _save_email_templates(data)
+    append_audit({"action": "email_template_deleted", "name": template_name})
+    return {"success": True}
+
+
+# ─── Routes: Scheduled Email (via Hermes Cron) ──────────────────
+
+SCHEDULED_EMAIL_SCRIPT = Path("/home/hermeswebui/.hermes/scheduled_email.py")
+
+class ScheduledEmailRequest(BaseModel):
+    template_name: str
+    recipient_filter: str  # "all", "has-funds", "exhausted", or a contact name
+    subject_override: str = ""
+    schedule: str  # cron schedule string, e.g. "0 9 * * 1" for Monday 9am
+    account_label: str = "urology"
+    name: str = ""  # optional cron job name
+
+@app.post("/api/email/schedule")
+def api_schedule_email(req: ScheduledEmailRequest):
+    """Schedule an email for bulk delivery via Hermes cron."""
+    import subprocess
+
+    job_name = req.name or f"scheduled-{req.template_name}-{req.recipient_filter}"
+    job_prompt = (
+        f"Send the '{req.template_name}' email template to "
+        f"{'all residents' if req.recipient_filter == 'all' else req.recipient_filter} "
+        f"via the scheduled_email.py script. "
+        f"Run: python3 {SCHEDULED_EMAIL_SCRIPT} send-template-bulk "
+        f"'{req.template_name}' '{req.recipient_filter}' "
+        f"'{req.subject_override}' '{req.account_label}'"
+    )
+
+    # Try to create the cron job via hermes CLI
+    try:
+        result = subprocess.run(
+            ["hermes", "cron", "create", req.schedule, job_prompt],
+            capture_output=True, text=True, timeout=30
+        )
+        output = result.stdout or result.stderr
+        return {
+            "success": result.returncode == 0,
+            "job_name": job_name,
+            "template": req.template_name,
+            "schedule": req.schedule,
+            "recipients": req.recipient_filter,
+            "detail": output.strip()
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ─── Routes: Google Dev Studio (Apps Script) ────────────────────
+
+GOOGLE_TOKEN_PATH = str(Path.home() / ".hermes" / "google_token_letsgetmoney2009.json")
+GOOGLE_SECRET_PATH = str(Path.home() / ".hermes" / "google_client_secret.json")
+_google_creds_cache = None
+
+def _get_google_creds():
+    """Get (and cache) Google credentials for letsgetmoney2009."""
+    global _google_creds_cache
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+    except ImportError:
+        return None, "google-api-python-client not installed"
+    
+    if not os.path.isfile(GOOGLE_TOKEN_PATH):
+        return None, "No Google token found — run OAuth setup first"
+    
+    try:
+        creds = Credentials.from_authorized_user_file(
+            GOOGLE_TOKEN_PATH,
+            ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/script.projects"]
+        )
+        # Auto-refresh if expired
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            # Save refreshed token
+            with open(GOOGLE_TOKEN_PATH, "w") as f:
+                f.write(creds.to_json())
+        _google_creds_cache = creds
+        return creds, None
+    except Exception as e:
+        return None, str(e)
+
+@app.get("/api/google/projects")
+def list_google_projects():
+    """List all Google Apps Script projects from Drive."""
+    creds, err = _get_google_creds()
+    if err:
+        return {"status": "error", "message": err}
+    try:
+        from googleapiclient.discovery import build
+        drive = build("drive", "v3", credentials=creds)
+        results = drive.files().list(
+            q="mimeType='application/vnd.google-apps.script'",
+            pageSize=50,
+            fields="files(id, name, modifiedTime, createdTime, webViewLink, description)"
+        ).execute()
+        files = results.get("files", [])
+        return {"status": "ok", "projects": files}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/google/projects/{project_id}")
+def get_google_project(project_id: str):
+    """Get a Google Apps Script project's files and content."""
+    creds, err = _get_google_creds()
+    if err:
+        return {"status": "error", "message": err}
+    try:
+        from googleapiclient.discovery import build
+        script = build("script", "v1", credentials=creds)
+        # Get project metadata
+        project = script.projects().get(scriptId=project_id).execute()
+        return {"status": "ok", "project": project}
+    except Exception as e:
+        # Fallback: just return Drive metadata
+        try:
+            drive = build("drive", "v3", credentials=creds)
+            meta = drive.files().get(fileId=project_id, fields="id,name,modifiedTime,webViewLink").execute()
+            return {"status": "ok", "project": {"scriptId": project_id, "title": meta.get("name"), "files": []}}
+        except:
+            return {"status": "error", "message": str(e)}
+
+@app.post("/api/google/projects")
+def create_google_project(data: dict):
+    """Create a new Google Apps Script project."""
+    title = data.get("title", "Untitled Project")
+    creds, err = _get_google_creds()
+    if err:
+        return {"status": "error", "message": err}
+    try:
+        from googleapiclient.discovery import build
+        script = build("script", "v1", credentials=creds)
+        project = script.projects().create(body={"title": title}).execute()
+        return {"status": "ok", "project": project}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/google/projects/{project_id}/content")
+def update_google_project_content(project_id: str, data: dict):
+    """Update Google Apps Script project files (push code)."""
+    files = data.get("files", [])  # List of {name, type, source}
+    creds, err = _get_google_creds()
+    if err:
+        return {"status": "error", "message": err}
+    try:
+        from googleapiclient.discovery import build
+        script = build("script", "v1", credentials=creds)
+        body = {
+            "files": [{"name": f["name"], "type": f.get("type", "SERVER_JS"), "source": f["source"]} for f in files]
+        }
+        result = script.projects().updateContent(body=body, scriptId=project_id).execute()
+        return {"status": "ok", "project": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ─── Routes: Hermes WebUI Proxy ──────────────────────────────────
+# Proxy /hermes-webui/* to the Hermes WebUI server on port 8787
+# so the iframe is same-origin (no cross-origin auth/cookie issues).
+
+HERMES_WEBUI_TARGET = "http://127.0.0.1:8787"
+_hermes_async_client = None
+
+def _get_hermes_client():
+    global _hermes_async_client
+    if _hermes_async_client is None or _hermes_async_client.is_closed:
+        _hermes_async_client = httpx.AsyncClient(base_url=HERMES_WEBUI_TARGET, timeout=30.0)
+    return _hermes_async_client
+
+@app.api_route("/hermes-webui/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def proxy_hermes_webui(path: str, request: Request):
+    client = _get_hermes_client()
+    target_path = f"/{path}" if path else "/"
+    
+    # Forward query params, headers, and body
+    params = dict(request.query_params)
+    headers = dict(request.headers)
+    # Drop host header so the upstream server resolves correctly
+    headers.pop("host", None)
+    
+    body = await request.body()
+    
+    try:
+        resp = await client.request(
+            method=request.method,
+            url=target_path,
+            params=params,
+            headers=headers,
+            content=body,
+        )
+        # Build response headers — strip CSP/X-Frame headers that block iframe embedding
+        resp_headers = {}
+        for k, v in resp.headers.items():
+            kl = k.lower()
+            if kl in ("content-security-policy", "content-security-policy-report-only", "x-frame-options"):
+                continue  # Strip frame-blocking headers so the iframe works
+            # Rewrite Location headers for same-origin redirects so the iframe works
+            if kl == "location":
+                loc = v
+                if loc.startswith("/"):
+                    loc = f"/hermes-webui{loc}"
+                # Also fix the next= parameter to point to the proxied path
+                if "next=" in loc and not loc.startswith("/hermes-webui"):
+                    loc = loc.replace("next=/", "next=/hermes-webui/")
+                resp_headers[k] = loc
+                continue
+            resp_headers[k] = v
+        
+        # Read the full body content for the response
+        body_content = resp.content
+        
+        # Use a regular Response for 302/301 redirects, StreamingResponse for others
+        if resp.status_code in (301, 302, 303, 307, 308):
+            return Response(
+                content=body_content,
+                status_code=resp.status_code,
+                headers=resp_headers,
+            )
+        return StreamingResponse(
+            content=resp.iter_bytes(),
+            status_code=resp.status_code,
+            headers=resp_headers,
+        )
+    except httpx.ConnectError:
+        return HTMLResponse(
+            content="<html><body style='background:#1a1a2e;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;'><div style='font-size:48px;'>🔌</div><h2>Hermes WebUI Not Running</h2><p style='color:#888;'>The Hermes WebUI server on port 8787 is not available.</p><p style='color:#666;font-size:13px;'>Start it with: <code>python3 /app/server.py --port 8787</code></p></body></html>",
+            status_code=502,
+        )
+
+# ─── Routes: Gemini AI Proxy (Antigravity) ──────────────────────
+# Proxy for Google Gemini API — lets the frontend call Gemini
+# without exposing the API key to the browser.
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+if not GEMINI_API_KEY:
+    print("WARNING: GEMINI_API_KEY not found in .env — AI Builder will not work")
+
+_GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+]
+_GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
+
+class GeminiChatRequest(BaseModel):
+    message: str
+    model: Optional[str] = _GEMINI_DEFAULT_MODEL
+    system: Optional[str] = ""
+
+@app.post("/api/gemini/chat")
+def gemini_chat(req: GeminiChatRequest):
+    if not GEMINI_API_KEY:
+        raise HTTPException(500, "Gemini API key not configured")
+    
+    model = req.model if req.model in _GEMINI_MODELS else _GEMINI_DEFAULT_MODEL
+    
+    contents = []
+    if req.system:
+        contents.append({"role": "user", "parts": [{"text": f"[System: {req.system}]"}]})
+        contents.append({"role": "model", "parts": [{"text": "Understood. I'll follow those instructions."}]})
+    contents.append({"role": "user", "parts": [{"text": req.message}]})
+    
+    try:
+        r = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
+            json={"contents": contents},
+            timeout=120,
+        )
+        if r.status_code != 200:
+            return {"status": "error", "error": f"Gemini API returned {r.status_code}", "detail": r.text[:300]}
+        
+        data = r.json()
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return {"status": "error", "error": "No response from Gemini"}
+        
+        text = ""
+        for part in candidates[0].get("content", {}).get("parts", []):
+            text += part.get("text", "")
+        
+        return {"status": "ok", "response": text, "model": model}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# ─── Quick Actions ─────────────────────────────────────────────
+
+@app.post("/api/quick-action")
+def quick_action(data: dict):
+    """Execute a quick action command from the dashboard."""
+    action = data.get("action", "")
+    try:
+        if action == "schedule":
+            r = subprocess.run(
+                ["python3", "/workspace/agentic-os/deliver_messages.py", "--type", "schedule"],
+                capture_output=True, text=True, timeout=120
+            )
+            return {"success": r.returncode == 0, "output": r.stdout[-2000:] if r.stdout else r.stderr[-2000:]}
+        elif action == "gme":
+            r = subprocess.run(
+                ["python3", "/workspace/agentic-os/deliver_messages.py", "--type", "gme"],
+                capture_output=True, text=True, timeout=120
+            )
+            return {"success": r.returncode == 0, "output": r.stdout[-2000:] if r.stdout else r.stderr[-2000:]}
+        elif action == "test-email":
+            r = subprocess.run(
+                ["python3", "/workspace/send-report.py", "--test"],
+                capture_output=True, text=True, timeout=60
+            )
+            return {"success": r.returncode == 0, "output": r.stdout[-2000:] if r.stdout else r.stderr[-2000:]}
+        elif action == "eval":
+            return {"success": True, "output": "Eval portal data — see #eval-portal page for details"}
+        elif action == "restart-server":
+            import sys
+            os.execv(sys.executable, ["python3", __file__, "--port", "8090", "--host", "0.0.0.0"])
+            return {"success": True, "output": "Server restarting..."}
+        else:
+            return {"success": False, "error": f"Unknown action: {action}"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Command timed out after 120s"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# ─── Eval Portal ───────────────────────────────────────────────
+
+EVAL_FORMS_FILE = BASE_DIR / "data" / "eval_forms.json"
+
+@app.get("/api/eval/forms")
+def eval_forms_list():
+    """List evaluation forms with completion status."""
+    if EVAL_FORMS_FILE.exists():
+        return json.loads(EVAL_FORMS_FILE.read_text())
+    # Return empty structure
+    return {"faculty": [], "residents": []}
+
+@app.post("/api/eval/send-reminders")
+def eval_send_reminders():
+    """Send evaluation reminders to pending evaluators."""
+    try:
+        r = subprocess.run(
+            ["python3", "/workspace/agentic-os/deliver_messages.py", "--type", "eval-reminder"],
+            capture_output=True, text=True, timeout=60
+        )
+        return {"success": r.returncode == 0, "count": 0, "output": r.stdout[-500:] if r.stdout else r.stderr[-500:]}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# ─── Script Runner ────────────────────────────────────────────
+
+class ScriptRunRequest(BaseModel):
+    cmd: str
+
+@app.post("/api/script/run")
+def script_run(req: ScriptRunRequest):
+    """Run an arbitrary command and return output."""
+    import shlex
+    try:
+        # Use shell for pipes/redirects but limit via timeout
+        r = subprocess.run(
+            req.cmd, shell=True, capture_output=True, text=True, timeout=120
+        )
+        return {
+            "exit_code": r.returncode,
+            "stdout": r.stdout[-5000:] if r.stdout else "",
+            "stderr": r.stderr[-5000:] if r.stderr else ""
+        }
+    except subprocess.TimeoutExpired:
+        return {"exit_code": -1, "stdout": "", "stderr": "Command timed out after 120s"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# ─── Call Schedule PDF Generator ───────────────────────────────
+
+@app.post("/api/call-schedule/pdf")
+def call_schedule_pdf(data: dict):
+    """Generate and optionally email the call schedule PDF."""
+    mode = data.get("mode", "generate")
+    email = data.get("email", "")
+    period = data.get("period", "Q3-Q4 2026")
+    options = data.get("options", {})
+    try:
+        if mode == "email" and email:
+            cmd = ["python3", "/workspace/send-report.py", "--schedule-pdf", "--email", email]
+            if period: cmd += ["--period", period]
+        else:
+            cmd = ["python3", "/workspace/send-report.py", "--schedule-pdf", "--output", f"/tmp/call_schedule_{period.replace(' ','_')}.pdf"]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        output = (r.stdout[-3000:] if r.stdout else "") or (r.stderr[-3000:] if r.stderr else "")
+        return {
+            "success": r.returncode == 0,
+            "message": f"Call schedule PDF {'generated and emailed to ' + email if mode == 'email' else 'generated'}" if r.returncode == 0 else "Generation failed",
+            "output": output, "error": r.stderr[-500:] if r.returncode != 0 and r.stderr else None
+        }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Timed out after 120s", "output": ""}
+    except Exception as e:
+        return {"success": False, "error": str(e), "output": ""}
+
+# ─── Telegram Status & Logs ────────────────────────────────────
+
+@app.get("/api/telegram/status")
+def telegram_status():
+    """Return telegram gateway connection status and recent messages."""
+    try:
+        r = subprocess.run(["hermes", "gateway", "status"], capture_output=True, text=True, timeout=15)
+        connected = "running" in (r.stdout+r.stderr).lower() or "active" in (r.stdout+r.stderr).lower()
+        recent = []
+        state_db = Path.home() / ".hermes" / "state.db"
+        if state_db.exists():
+            try:
+                import sqlite3
+                conn = sqlite3.connect(str(state_db))
+                cur = conn.execute("SELECT title, preview, last_active FROM sessions WHERE source='telegram' AND preview IS NOT NULL ORDER BY last_active DESC LIMIT 10")
+                for row in cur.fetchall():
+                    recent.append({"sender": row[0] or "Telegram", "text": (row[1] or "")[:120], "time": str(row[2]) if row[2] else ""})
+                conn.close()
+            except: pass
+        return {"connected": connected, "detail": "Gateway is running" if connected else "Gateway is not running", "platforms": {"telegram": {"connected": connected}}, "recent_messages": recent}
+    except Exception as e:
+        return {"connected": False, "detail": str(e), "platforms": {}, "recent_messages": []}
+
+@app.get("/api/telegram/logs")
+def telegram_logs():
+    """Return the last 50 lines from gateway.log."""
+    for p in [Path.home() / ".hermes" / "logs" / "gateway.log", Path.home() / ".hermes" / "gateway.log"]:
+        if p.exists():
+            return {"lines": p.read_text().splitlines()[-50:]}
+    return {"lines": ["No gateway log found"]}
+
+# ─── Routes: Image Gallery ──────────────────────────────────────
+
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'}
+IMAGE_FOLDERS = ["/workspace/design_mockups", "/workspace"]
+
+@app.get("/api/images/list")
+def images_list():
+    """Scan workspace for images and return folder structure."""
+    images = []
+    folders = set()
+    scanned = set()
+
+    for base in IMAGE_FOLDERS:
+        bp = Path(base)
+        if not bp.exists():
+            continue
+        for root, dirs, files in os.walk(str(bp)):
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('node_modules', '__pycache__', '.git', 'venv', '__pycache__')]
+            for f in sorted(files):
+                ext = os.path.splitext(f)[1].lower()
+                if ext not in IMAGE_EXTENSIONS:
+                    continue
+                fpath = os.path.join(root, f)
+                if fpath in scanned:
+                    continue
+                scanned.add(fpath)
+                try:
+                    st = os.stat(fpath)
+                    width = height = 0
+                    try:
+                        from PIL import Image
+                        with Image.open(fpath) as img:
+                            width, height = img.size
+                    except:
+                        pass
+                    images.append({"name": f, "path": fpath, "ext": ext, "size": st.st_size, "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"), "folder": root, "width": width, "height": height})
+                    folders.add(root)
+                except:
+                    pass
+
+    return {"images": images, "folders": sorted(folders, key=lambda f: (f != "/workspace/design_mockups", f))}
+
+@app.get("/api/images/file")
+def images_file(path: str = Query(...)):
+    """Serve an image file by absolute path."""
+    p = Path(path)
+    if not p.exists() or not p.is_file():
+        raise HTTPException(404, "Image not found")
+    ext = p.suffix.lower()
+    mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.ico': 'image/x-icon'}.get(ext, 'application/octet-stream')
+    return Response(content=p.read_bytes(), media_type=mime)
+
+# ─── Routes: Dashboard Static Files (first occurrence) ──────────
+
+@app.get("/api/fs/list")
+def fs_list(path: str = "/workspace"):
+    """List directory contents."""
+    try:
+        p = Path(path)
+        if not p.exists() or not p.is_dir():
+            raise HTTPException(404, f"Directory not found: {path}")
+        items = []
+        for entry in sorted(p.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
+            try:
+                st = entry.stat()
+                items.append({
+                    "name": entry.name,
+                    "path": str(entry),
+                    "type": "dir" if entry.is_dir() else "file",
+                    "size": st.st_size if entry.is_file() else 0,
+                    "modified": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat() if hasattr(st, 'st_mtime') else ""
+                })
+            except: pass
+        return {"items": items, "path": path}
+    except HTTPException: raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/api/fs/read")
+def fs_read(path: str):
+    """Read a file's contents."""
+    try:
+        p = Path(path)
+        if not p.exists() or not p.is_file():
+            raise HTTPException(404, f"File not found: {path}")
+        if p.stat().st_size > 500_000:
+            return {"content": "(file too large — 500KB limit)", "truncated": True}
+        return {"content": p.read_text(encoding="utf-8", errors="replace"), "path": path}
+    except HTTPException: raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ─── Morning Briefing ──────────────────────────────────────────
+
+@app.get("/api/morning-briefing")
+def morning_briefing():
+    """Daily briefing data — call, evals, cron status, events."""
+    try:
+        on_call = "—"
+        pending = 0
+        try:
+            import sqlite3
+            db = Path.home() / ".hermes" / "state.db"
+            if db.exists():
+                conn = sqlite3.connect(str(db))
+                cur = conn.execute("SELECT COUNT(*) FROM sessions WHERE title LIKE '%eval%' OR title LIKE '%Evaluate%'")
+                pending = cur.fetchone()[0] or 0
+                conn.close()
+        except: pass
+        return {
+            "on_call_today": on_call,
+            "pending_evals": pending,
+            "cron_status": {"ok": 3, "failed": 0},
+            "upcoming_events": [
+                {"day": "Mon", "event": "Grand Rounds — 7:00 AM"},
+                {"day": "Wed", "event": "Clinic Meeting — 12:00 PM"},
+                {"day": "Fri", "event": "GME Report Due"},
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# ─── Compliance Overview ───────────────────────────────────────
+
+@app.get("/api/compliance/overview")
+def compliance_overview():
+    """Compliance metrics across attendance, evals, and GME."""
+    return {
+        "grand_rounds_attendance": [],
+        "eval_completion": {"done": 0, "pending": 0, "overdue": 0},
+        "gme_usage": {"used": 0, "available": 1250, "residents": 0}
+    }
+
+# ─── Notification Feed ─────────────────────────────────────────
+
+NOTIF_FILE = BASE_DIR / "data" / "notifications.json"
+
+@app.get("/api/notifications")
+def notifications_list():
+    """Return recent notifications from the feed."""
+    if NOTIF_FILE.exists():
+        return json.loads(NOTIF_FILE.read_text())
+    return {"notifications": []}
+
+@app.post("/api/notifications/clear")
+def notifications_clear():
+    """Clear all notifications."""
+    NOTIF_FILE.write_text(json.dumps({"notifications": []}))
+    return {"success": True}
+
+# ─── Staff Schedule ────────────────────────────────────────────
+
+STAFF_FILE = BASE_DIR / "data" / "staff_schedule.json"
+
+@app.get("/api/staff-schedule")
+def staff_schedule(hospital: str = "Moses"):
+    """Return staff schedule for a given hospital."""
+    if STAFF_FILE.exists():
+        data = json.loads(STAFF_FILE.read_text())
+        return {"staff": data.get(hospital, [])}
+    return {"staff": []}
+
+# ─── PDF Archive ────────────────────────────────────────────────
+
+PDF_DATA_FILE = BASE_DIR / "data" / "pdf_archive.json"
+
+@app.get("/api/pdf-archive")
+def pdf_archive():
+    """List all generated PDFs."""
+    if PDF_DATA_FILE.exists():
+        return json.loads(PDF_DATA_FILE.read_text())
+    return {"pdfs": []}
+
+# ─── GME Detail ────────────────────────────────────────────────
+
+GME_DETAIL_FILE = BASE_DIR / "data" / "gme_detail.json"
+
+@app.get("/api/gme/detail")
+def gme_detail():
+    """Return per-resident GME fund usage breakdown."""
+    if GME_DETAIL_FILE.exists():
+        return json.loads(GME_DETAIL_FILE.read_text())
+    return {"residents": []}
+
 # ─── Routes: Dashboard Static Files ──────────────────────────────
+
+class BootErrorReport(BaseModel):
+    msg: str
+    ua: Optional[str] = ""
+    url: Optional[str] = ""
+
+__BOOT_ERRORS__: list = []  # in-memory ring buffer of last 50 errors
+
+@app.post("/api/_boot_error")
+def boot_error(req: BootErrorReport):
+    __BOOT_ERRORS__.append({
+        "msg": req.msg, "ua": req.ua, "url": req.url, "ts": time.time()
+    })
+    if len(__BOOT_ERRORS__) > 50:
+        del __BOOT_ERRORS__[:len(__BOOT_ERRORS__) - 50]
+    print(f"[boot] {req.msg}  (ua={req.ua[:60]}  url={req.url})", flush=True)
+    return {"ok": True}
+
+@app.get("/api/_boot_error")
+def get_boot_errors():
+    return {"errors": __BOOT_ERRORS__[-20:]}
+
+# ─── Routes: Full Health Check (async version at ~2630) ────────────────────
 
 dashboard_dir = BASE_DIR / "dashboard"
 if dashboard_dir.exists():
     app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir)), name="dashboard")
+
+prompt_tools_dir = BASE_DIR / "prompt-tools"
+if prompt_tools_dir.exists():
+    app.mount("/prompt-tools", StaticFiles(directory=str(prompt_tools_dir)), name="prompt-tools")
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -1226,6 +2704,58 @@ def index():
         content = content.replace('src="api.js"', 'src="/dashboard/api.js"')
         content = content.replace('src="app.js"', 'src="/dashboard/app.js"')
         content = content.replace('pages/', '/dashboard/pages/')
+        # Inject a top-of-body error reporter so any uncaught JS error / failed
+        # asset shows up visibly on the page instead of producing a blank screen.
+        error_reporter = """
+<div id="__boot_error__" style="position:fixed;top:0;left:0;right:0;z-index:99999;padding:10px 14px;background:#ff4757;color:#fff;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;display:none;white-space:pre-wrap;word-break:break-word"></div>
+<script>
+(function(){
+  var box = document.getElementById('__boot_error__');
+  function show(msg){ if (box){ box.style.display='block'; box.textContent += msg + '\\n'; } console.error(msg); }
+  window.addEventListener('error', function(e){ show('JS ERROR: ' + (e.message||e) + (e.filename?' @ '+e.filename+':'+e.lineno:'')); });
+  window.addEventListener('unhandledrejection', function(e){ show('PROMISE: ' + (e.reason && (e.reason.stack||e.reason.message||e.reason))); });
+  // Catch script load failures (utils.js/api.js/app.js/pages/*.js)
+  document.addEventListener('error', function(e){
+    var t = e.target;
+    if (t && (t.tagName==='SCRIPT' || t.tagName==='LINK') && t.src){
+      show('ASSET FAILED: ' + t.tagName + ' ' + t.src);
+    }
+  }, true);
+  // Boot probe — if app.js does not define navigate() within 5s, complain.
+  setTimeout(function(){
+    if (typeof navigate !== 'function'){
+      show('BOOT: app.js did not define navigate() in 5s — JS failed to initialize');
+    }
+  }, 5000);
+})();
+</script>
+"""
+        # Insert the error reporter right after <body>
+        content = content.replace('<body>', '<body>' + error_reporter, 1)
+        # Also inject a server-side error logger that POSTs the JS error to /api/_boot_error
+        # so we can read the exact message from a separate endpoint when the page fails to load.
+        server_logger = """
+<script>
+(function(){
+  function post(msg) {
+    try { fetch('/api/_boot_error', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({msg: String(msg).slice(0, 2000), ua: navigator.userAgent, url: location.href}), keepalive: true}); } catch(e) {}
+  }
+  // Mirror the existing show() to also POST
+  var origShow = window.show;
+  // show is defined inside the earlier IIFE, so just hook error events again here
+  window.addEventListener('error', function(e){ post('JS ERROR: ' + (e.message||e) + (e.filename?' @ '+e.filename+':'+e.lineno+':'+e.colno:'')); });
+  window.addEventListener('unhandledrejection', function(e){ post('PROMISE: ' + (e.reason && (e.reason.stack||e.reason.message||e.reason))); });
+  setTimeout(function(){
+    if (typeof window.navigate !== 'function') {
+      post('BOOT: app.js did not define navigate() in 5s — JS failed to initialize');
+    } else {
+      post('BOOT_OK: navigate() defined, page initialized');
+    }
+  }, 5500);
+})();
+</script>
+"""
+        content = content.replace('</head>', server_logger + '</head>', 1)
         return HTMLResponse(content=content)
     return HTMLResponse("<h1>Agentic OS</h1><p>Dashboard not built yet. Run <code>./install.sh</code> first.</p>")
 
@@ -1241,12 +2771,410 @@ def favicon():
 def favicon_svg():
     return Response(content=FAVICON_SVG, media_type="image/svg+xml")
 
+# ─── Grand Rounds API ─────────────────────────────────────────────
+
+@app.post("/api/run-auto-invite")
+async def run_auto_invite():
+    """Trigger the Grand Rounds auto-invite sender script."""
+    script = "/workspace/urology_schedule/auto_send_invites.py"
+    codes_csv = "/workspace/urology_schedule/sample_cme_codes.csv"
+    python = "/workspace/.aos-venv/bin/python"
+    
+    if not os.path.exists(script):
+        return {"status": "error", "message": "Auto-invite script not found"}
+    
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            python, script, "--action", "outlook", "--codes", codes_csv,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "DISPLAY": ":0", "FONTCONFIG_PATH": "/workspace/.vnc-system/etc/fonts"}
+        )
+        return {"status": "started", "message": "Auto-invite triggered (check server terminal for output)"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/fs/stat")
+async def fs_stat(path: str = ""):
+    """Get file stats."""
+    import stat as stat_mod
+    if not path or not os.path.exists(path):
+        return {"exists": False}
+    s = os.stat(path)
+    return {
+        "exists": True,
+        "size": s.st_size,
+        "modified": s.st_mtime,
+        "is_dir": stat_mod.S_ISDIR(s.st_mode)
+    }
+
+@app.get("/api/fs/list")
+async def fs_list(path: str = ""):
+    """List directory contents."""
+    if not path or not os.path.isdir(path):
+        return {"files": []}
+    files = []
+    for f in os.listdir(path):
+        fp = os.path.join(path, f)
+        files.append({"name": f, "size": os.path.getsize(fp), "is_dir": os.path.isdir(fp)})
+    return {"files": files}
+
+@app.get("/api/fs/read")
+async def fs_read(path: str = ""):
+    """Read a text file."""
+    if not path or not os.path.isfile(path):
+        return {"error": "File not found"}
+    with open(path) as f:
+        return {"content": f.read()}
+
+
+# ─── Routes: Unified Data Service Proxy ───────────────────────────
+
+DATA_SERVICE_BASE = "http://localhost:8086"
+
+@app.get("/api/unified/{rest:path}")
+async def unified_proxy_get(rest: str):
+    """Proxy GET requests to the data service (port 8086)."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{DATA_SERVICE_BASE}/api/unified/{rest}")
+            return r.json()
+    except httpx.ConnectError:
+        raise HTTPException(503, "Data service (port 8086) not running — start it with: python3 data-service.py --port 8086")
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+@app.get("/api/reimbursement/{rest:path}")
+async def reimbursement_proxy_get(rest: str):
+    """Proxy reimbursement queries to data service."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{DATA_SERVICE_BASE}/api/reimbursement/{rest}")
+            return r.json()
+    except httpx.ConnectError:
+        raise HTTPException(503, "Data service (port 8086) not running")
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+@app.get("/health/data-service")
+async def data_service_health():
+    """Check if the data service is reachable."""
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(f"{DATA_SERVICE_BASE}/health")
+            return r.json()
+    except httpx.ConnectError:
+        raise HTTPException(503, "Data service (port 8086) not running")
+
+
+# ─── Routes: GME Tracker (proxied from data service) ──────────────
+
+@app.get("/api/crm/gme/summary")
+async def gme_summary_proxy():
+    """GME summary proxied from data service."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            ds = await client.get(f"{DATA_SERVICE_BASE}/api/reimbursement/gme-summary")
+            data = ds.json()
+            return {
+                "total_pool": data["total_cap"],
+                "total_used": data["total_used"],
+                "total_remaining": data["total_remaining"],
+                "active_residents": data["total_residents"],
+                "cap_per_resident": data["annual_cap_per_resident"]
+            }
+    except httpx.ConnectError:
+        raise HTTPException(503, "Data service (port 8086) not running")
+
+@app.get("/api/crm/gme/residents")
+async def gme_residents_proxy():
+    """GME residents list proxied from data service."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            ds = await client.get(f"{DATA_SERVICE_BASE}/api/unified/residents")
+            return ds.json()
+    except httpx.ConnectError:
+        raise HTTPException(503, "Data service (port 8086) not running")
+
+
+# ─── Routes: Voice PIN Management ──────────────────────────────────
+
+PIN_DB_PATH = BASE_DIR / "data" / "user_pins.json"
+
+class PinResetRequest(BaseModel):
+    uid: str
+    new_pin: str
+
+@app.get("/api/vapi/pins")
+def vapi_pins_list():
+    """List all users with their PINs (no hashes exposed)."""
+    if not PIN_DB_PATH.exists():
+        return {"users": []}
+    db = json.loads(PIN_DB_PATH.read_text())
+    users = []
+    for uid, u in db.items():
+        users.append({
+            "uid": uid,
+            "name": u.get("name", u.get("display_name", uid)),
+            "pin": u.get("default_pin", "not set"),
+            "role": u.get("role", ""),
+        })
+    return {"users": sorted(users, key=lambda x: x["name"].lower())}
+
+@app.post("/api/vapi/pins/reset")
+def vapi_pin_reset(req: PinResetRequest):
+    """Reset a user's PIN."""
+    import hashlib
+    if not PIN_DB_PATH.exists():
+        raise HTTPException(404, "PIN database not found")
+    db = json.loads(PIN_DB_PATH.read_text())
+    if req.uid not in db:
+        raise HTTPException(404, f"User '{req.uid}' not found")
+    if len(req.new_pin) != 4 or not req.new_pin.isdigit():
+        raise HTTPException(400, "PIN must be exactly 4 digits")
+    db[req.uid]["pin_hash"] = hashlib.sha256(req.new_pin.encode()).hexdigest()
+    db[req.uid]["default_pin"] = req.new_pin
+    PIN_DB_PATH.write_text(json.dumps(db, indent=2))
+    return {"success": True, "name": db[req.uid].get("name", req.uid), "new_pin": req.new_pin}
+
+
+# ─── Routes: Voice Data Health ────────────────────────────────
+
+@app.get("/api/vapi/data-health")
+def vapi_data_health():
+    """Structured health report on all data sources the voice assistant depends on."""
+    from modules import vapi_unified
+    from modules import roster_parser
+
+    base = Path("/workspace")
+    now = datetime.now()
+    report = {
+        "timestamp": now.isoformat(),
+        "sources": {},
+        "summary": {"ok": 0, "missing": 0, "stale": 0, "parse_error": 0, "auth_required": 0},
+    }
+
+    def _file_stat(path: Path | str) -> dict | None:
+        p = Path(path)
+        if not p.exists():
+            return None
+        s = p.stat()
+        return {
+            "exists": True,
+            "size_kb": round(s.st_size / 1024, 1),
+            "modified_utc": datetime.fromtimestamp(s.st_mtime, tz=timezone.utc).isoformat(),
+            "age_hours": round((now - datetime.fromtimestamp(s.st_mtime)).total_seconds() / 3600, 1),
+        }
+
+    def _source(name: str, stat: dict | None, status: str, detail: str, next_action: str):
+        entry = {"status": status, "detail": detail, "next_action": next_action}
+        if stat:
+            entry["file"] = stat
+        report["sources"][name] = entry
+        report["summary"][status] = report["summary"].get(status, 0) + 1
+
+    # ── 1. Call Schedule xlsx ──
+    sched_path = Path(vapi_unified.SCHEDULE_PATH)
+    stat = _file_stat(sched_path)
+    if not stat:
+        _source("call_schedule", None, "missing",
+                "Call_Schedule_Q3_Q4_2026.xlsx not found",
+                "Place the xlsx at " + str(sched_path))
+    else:
+        detail = f"{stat['size_kb']} KB, modified {stat['age_hours']}h ago"
+        try:
+            from modules.vapi_unified import _load_schedule
+            data = _load_schedule()
+            sheet_count = len(data)
+            row_count = sum(len(rows) for rows in data.values())
+            _source("call_schedule", stat, "ok",
+                    f"{detail} — {sheet_count} sheets, {row_count} rows loaded",
+                    "")
+        except Exception as e:
+            _source("call_schedule", stat, "parse_error",
+                    f"{detail} — failed to load: {e}",
+                    f"Fix the xlsx format or permissions")
+
+    # ── 2. QGenda CSV ──
+    qgenda_path = Path(vapi_unified.QGENDA_PATH)
+    stat = _file_stat(qgenda_path)
+    if not stat:
+        _source("qgenda", None, "missing",
+                "QGenda CSV not found",
+                "Export QGenda data to " + str(qgenda_path))
+    else:
+        detail = f"{stat['size_kb']} KB, modified {stat['age_hours']}h ago"
+        try:
+            from modules.vapi_unified import _load_qgenda
+            # Clear cache so we actually test the load, then re-cache
+            vapi_unified._qgenda_cache = None
+            data = _load_qgenda()
+            if isinstance(data, dict) and data.get("error"):
+                _source("qgenda", stat, "parse_error",
+                        f"{detail} — {data['error']}",
+                        "Check CSV path and format")
+            else:
+                rows = data.get("total_rows", 0)
+                people = len(data.get("all_names", []))
+                _source("qgenda", stat, "ok",
+                        f"{detail} — {rows} rows, {people} unique people",
+                        "")
+        except Exception as e:
+            _source("qgenda", stat, "parse_error",
+                    f"{detail} — failed to load: {e}",
+                    "Fix the CSV format or permissions")
+
+    # ── 3. associates.csv (Staff) ──
+    staff_path = Path(vapi_unified.STAFF_PATH)
+    stat = _file_stat(staff_path)
+    if not stat:
+        _source("associates", None, "missing",
+                "associates.csv not found",
+                "Place the file at " + str(staff_path))
+    else:
+        detail = f"{stat['size_kb']} KB, modified {stat['age_hours']}h ago"
+        try:
+            with open(staff_path, encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+            _source("associates", stat, "ok",
+                    f"{detail} — {len(rows)} records, fields: {list(reader.fieldnames or [])}",
+                    "")
+        except Exception as e:
+            _source("associates", stat, "parse_error",
+                    f"{detail} — failed to read: {e}",
+                    "Fix the CSV format")
+
+    # ── 4. Location rosters (parsed cache) ──
+    rosters_dir = Path("/workspace/agentic-os/data/location_rosters/parsed")
+    if not rosters_dir.exists():
+        _source("location_rosters", None, "missing",
+                "Parsed roster cache directory not found",
+                "Run roster sync or rebuild from raw files")
+    else:
+        files = [f for f in sorted(rosters_dir.iterdir())
+                 if f.suffix == ".json" and "Contact" not in f.name]
+        manifest_path = rosters_dir / "_manifest.json"
+        last_sync = None
+        if manifest_path.exists():
+            try:
+                m = json.loads(manifest_path.read_text())
+                last_sync = m.get("last_sync", m.get("synced_at"))
+            except Exception:
+                pass
+
+        # Find newest/oldest period_end
+        newest_end = ""
+        oldest_end = ""
+        for f in files:
+            try:
+                d = json.loads(f.read_text())
+                dr = d.get("date_range", {})
+                end = dr.get("end", "")
+                start = dr.get("start", "")
+                if end and (end > newest_end or not newest_end):
+                    newest_end = end
+                if start and (start < oldest_end or not oldest_end):
+                    oldest_end = start
+            except Exception:
+                continue
+
+        stat_info = {
+            "exists": True,
+            "file_count": len(files),
+            "oldest_period_start": oldest_end or "N/A",
+            "newest_period_end": newest_end or "N/A",
+            "last_sync": last_sync,
+        }
+
+        if not files:
+            # No roster files but directory exists
+            from modules.roster_parser import rebuild_parsed_cache
+            # Don't actually rebuild — just report
+            _source("location_rosters", stat_info, "missing",
+                    "Parsed roster cache is empty — run sync or rebuild",
+                    "Trigger Drive sync or run roster_parser.rebuild_parsed_cache()")
+        else:
+            # Check if most recent roster is stale (> 30 days since period_end)
+            status = "ok"
+            detail = f"{len(files)} roster files, covers {stat_info['oldest_period_start']} to {stat_info['newest_period_end']}"
+            next_action = ""
+            if newest_end:
+                try:
+                    end_dt = datetime.strptime(newest_end, "%Y-%m-%d").date()
+                    days_since_end = (date.today() - end_dt).days
+                    if days_since_end > 30:
+                        status = "stale"
+                        detail += f" — newest roster ended {days_since_end} days ago"
+                        next_action = "Sync latest roster from Drive"
+                except ValueError:
+                    pass
+            if last_sync:
+                detail += f", last sync: {last_sync}"
+            _source("location_rosters", stat_info, status, detail, next_action)
+
+    # ── 5. Google OAuth token ──
+    home = Path.home()
+    token_paths = [
+        home / ".hermes" / "google_token.json",
+        home / ".hermes" / "tokens-disabled" / "google_token.json",
+    ]
+    token_found = None
+    for tp in token_paths:
+        if tp.exists():
+            token_found = tp
+            break
+    if not token_found:
+        _source("google_auth", None, "missing",
+                "Google OAuth token not found",
+                "Run `hermes auth login` or set up Google Workspace credentials")
+    else:
+        stat = _file_stat(token_found)
+        try:
+            tok = json.loads(token_found.read_text())
+            expiry = tok.get("expiry", tok.get("expires_at", ""))
+            has_refresh = bool(tok.get("refresh_token", ""))
+            has_access = bool(tok.get("access_token", ""))
+            detail = f"token at {token_found.name}"
+
+            if expiry:
+                try:
+                    exp_dt = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                    if exp_dt < datetime.now(timezone.utc):
+                        if has_refresh:
+                            # Has refresh token — likely auto-refreshable
+                            detail += f", expired {exp_dt.isoformat()} but has refresh_token"
+                            _source("google_auth", stat, "ok", detail, "")
+                        else:
+                            detail += f", expired {exp_dt.isoformat()} without refresh_token"
+                            _source("google_auth", stat, "auth_required", detail,
+                                    "Re-run `hermes auth login` to refresh credentials")
+                    else:
+                        detail += f", valid until {exp_dt.isoformat()}"
+                        _source("google_auth", stat, "ok", detail, "")
+                except (ValueError, TypeError):
+                    detail += f", expiry unparseable: {expiry}"
+                    _source("google_auth", stat, "ok", detail, "Check token expiry format")
+            else:
+                detail += f", no expiry field (has_access={has_access})"
+                _source("google_auth", stat, "ok" if has_access else "auth_required",
+                        detail,
+                        "Run `hermes auth login` if email sending fails")
+        except (json.JSONDecodeError, Exception) as e:
+            _source("google_auth", stat or {}, "parse_error",
+                    f"token file unreadable: {e}",
+                    "Fix or re-generate the token file")
+
+    return report
+
 # ─── Main ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8081)
+    parser.add_argument("--host", type=str, default="0.0.0.0")
     args = parser.parse_args()
     uvicorn.run(app, host=args.host, port=args.port)

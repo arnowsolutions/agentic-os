@@ -1,27 +1,18 @@
 #!/usr/bin/env bash
+# Start Agentic OS Dashboard
 set -euo pipefail
 
-echo "Starting Agentic OS Dashboard..."
+cd /workspace/agentic-os
+
+# Get port from settings
+PORT=$(python3 -c "
+import json
+d = json.load(open('data/settings.json'))
+print(d.get('dashboard', {}).get('port', 8081))
+" 2>/dev/null || echo "8081")
+
+echo "Starting Agentic OS Dashboard on port ${PORT}..."
+echo "Dashboard: http://172.16.1.3:${PORT}"
 echo ""
 
-# Check if server.py exists
-if [ ! -f server.py ]; then
-    echo "ERROR: server.py not found. Are you in the right directory?"
-    exit 1
-fi
-
-# Check dependencies
-pip3 install -r requirements.txt --quiet 2>/dev/null
-
-# Get port from settings or default
-PORT=8080
-if command -v python3 &>/dev/null; then
-    PORT=$(python3 -c "import json; f=open('data/settings.json'); d=json.load(f); print(d.get('dashboard',{}).get('port',8080)); f.close()" 2>/dev/null || echo "8080")
-fi
-
-echo "Dashboard: http://127.0.0.1:${PORT}"
-echo "Press Ctrl+C to stop"
-echo ""
-
-# Start server
-python3 server.py --port "${PORT}"
+exec python3 server.py --port "${PORT}"
