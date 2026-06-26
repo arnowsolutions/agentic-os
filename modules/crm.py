@@ -13,12 +13,19 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from modules.config import get_settings
+
 router = APIRouter(prefix="/api/crm", tags=["crm"])
 
-# ─── Paths ────────────────────────────────────────────────────
+# ─── Settings-based Paths ─────────────────────────────────────
 
-CRM_FILE = Path("/home/hermeswebui/.hermes/crm_contacts.json")
-CRM_ACCESS_LOG = Path("/home/hermeswebui/.hermes/crm_access_log.json")
+def _get_crm_paths():
+    settings = get_settings()
+    crm_file = settings.CRM_PATH
+    # Place access log in same directory as CRM file
+    crm_access_log = crm_file.parent / "crm_access_log.json"
+    return crm_file, crm_access_log
+
 CRM_ACCESS_LOG_DAYS = 30
 GME_ANNUAL_LIMIT = 1250
 
@@ -78,11 +85,12 @@ def _log_crm_access(action: str, contact_id: str = "", contact_name: str = "",
         "agent": agent,
     }
     try:
-        CRM_ACCESS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        _, crm_access_log = _get_crm_paths()
+        crm_access_log.parent.mkdir(parents=True, exist_ok=True)
         entries = []
-        if CRM_ACCESS_LOG.exists():
+        if crm_access_log.exists():
             try:
-                entries = json.loads(CRM_ACCESS_LOG.read_text())
+                entries = json.loads(crm_access_log.read_text())
                 if not isinstance(entries, list):
                     entries = []
             except:
@@ -92,21 +100,23 @@ def _log_crm_access(action: str, contact_id: str = "", contact_name: str = "",
         entries.append(entry)
         if len(entries) > 5000:
             entries = entries[-5000:]
-        CRM_ACCESS_LOG.write_text(json.dumps(entries, indent=2))
+        crm_access_log.write_text(json.dumps(entries, indent=2))
     except Exception as e:
         print(f"CRM access log error: {e}")
 
 def _load_crm():
-    if CRM_FILE.exists():
+    crm_file, _ = _get_crm_paths()
+    if crm_file.exists():
         try:
-            return json.loads(CRM_FILE.read_text())
+            return json.loads(crm_file.read_text())
         except:
             return []
     return []
 
 def _save_crm(contacts):
-    CRM_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CRM_FILE.write_text(json.dumps(contacts, indent=2))
+    crm_file, _ = _get_crm_paths()
+    crm_file.parent.mkdir(parents=True, exist_ok=True)
+    crm_file.write_text(json.dumps(contacts, indent=2))
 
 # ─── Pydantic Models ──────────────────────────────────────────
 
@@ -122,8 +132,9 @@ class ReimbursementRequest(BaseModel):
 @router.get("/access-log")
 def crm_access_log():
     try:
-        if CRM_ACCESS_LOG.exists():
-            entries = json.loads(CRM_ACCESS_LOG.read_text())
+        _, crm_access_log = _get_crm_paths()
+        if crm_access_log.exists():
+            entries = json.loads(crm_access_log.read_text())
             if not isinstance(entries, list):
                 entries = []
             entries.reverse()
@@ -137,7 +148,8 @@ def crm_access_log_clear(confirm: bool = False):
     if not confirm:
         return {"success": False, "error": "confirm=true parameter required"}
     try:
-        CRM_ACCESS_LOG.write_text("[]")
+        _, crm_access_log = _get_crm_paths()
+        crm_access_log.write_text("[]")
         return {"success": True, "message": "Access log cleared"}
     except Exception as e:
         return {"success": False, "error": str(e)}

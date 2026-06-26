@@ -6,10 +6,9 @@ async function renderCost() {
         <h1 class="page-title">Cost Analytics</h1>
         <p class="page-subtitle">Track API usage and spending across agents</p>
       </div>
-      <button class="btn btn-primary" onclick="recordTestCost()">+ Record Test</button>
     </div>
     <div class="grid grid-3 mb-4" id="costStats"></div>
-    <div class="grid grid-2">
+    <div class="grid grid-2" id="costCharts" style="display:none">
       <div class="card">
         <div class="card-header"><span class="card-title">Usage by Agent</span></div>
         <div class="chart-container"><canvas id="agentChart"></canvas></div>
@@ -19,7 +18,7 @@ async function renderCost() {
         <div class="chart-container"><canvas id="timeChart"></canvas></div>
       </div>
     </div>
-    <div class="card mt-3">
+    <div class="card mt-3" id="costEntriesSection">
       <div class="card-header"><span class="card-title">Recent Cost Entries</span></div>
       <div id="costEntries"><div class="loading"><div class="loading-spinner"></div></div></div>
     </div>
@@ -42,8 +41,21 @@ async function renderCost() {
     `;
 
     const entriesContainer = document.getElementById('costEntries');
-    if (entries.length === 0) {
-      entriesContainer.innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-state-icon">📊</div><div class="empty-state-title">No cost data yet</div></div>';
+    const collectionState = data.collection_state || {};
+    
+    if (!collectionState.has_real_metadata || entries.length === 0) {
+      entriesContainer.innerHTML = `
+        <div class="empty-state" style="padding:40px 20px">
+          <div class="empty-state-icon">📊</div>
+          <div class="empty-state-title">No cost data yet</div>
+          <div class="empty-state-desc">Cost tracking begins automatically when agents are used. Data will appear here once chat messages or skills are executed with real usage metadata.</div>
+          <div style="margin-top:16px;font-size:11px;color:var(--text-muted)">
+            Status: ${collectionState.data_source || 'waiting for first event'}
+          </div>
+        </div>
+      `;
+      // Hide charts when no data
+      document.getElementById('costCharts').style.display = 'none';
     } else {
       entriesContainer.innerHTML = `
         <div class="table-wrapper">
@@ -63,6 +75,8 @@ async function renderCost() {
           </table>
         </div>
       `;
+      // Show charts when there's data
+      document.getElementById('costCharts').style.display = 'grid';
     }
 
     if (alerts.length > 0) {
@@ -80,16 +94,16 @@ async function renderCost() {
       `);
     }
 
-    // Build agent chart
-    const agentTotals = {};
-    entries.forEach(e => {
-      const a = e.agent || 'unknown';
-      agentTotals[a] = (agentTotals[a] || 0) + (e.tokens || 0);
-    });
-    const agentLabels = Object.keys(agentTotals);
-    const agentData = Object.values(agentTotals);
-
+    // Build agent chart only if there's data
     if (entries.length > 0) {
+      const agentTotals = {};
+      entries.forEach(e => {
+        const a = e.agent || 'unknown';
+        agentTotals[a] = (agentTotals[a] || 0) + (e.tokens || 0);
+      });
+      const agentLabels = Object.keys(agentTotals);
+      const agentData = Object.values(agentTotals);
+
       new Chart(document.getElementById('agentChart'), {
         type: 'doughnut',
         data: { labels: agentLabels, datasets: [{ data: agentData, backgroundColor: ['rgba(108,92,231,0.8)', 'rgba(0,212,170,0.8)', 'rgba(69,170,242,0.8)', 'rgba(255,165,2,0.8)'] }] },
@@ -112,47 +126,5 @@ async function renderCost() {
     }
   } catch (err) {
     document.getElementById('costStats').innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div></div>`;
-  }
-}
-
-async function recordTestCost() {
-  showModal('Record Cost Entry', `
-    <div class="form-group">
-      <label class="form-label">Agent</label>
-      <select id="rcAgent" class="form-select"><option>opencode</option><option>hermes</option><option>gemini</option></select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Model</label>
-      <input id="rcModel" class="form-input" value="deepseek-v4-flash-free">
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Tokens</label>
-        <input id="rcTokens" class="form-input" type="number" value="1000">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Cost ($)</label>
-        <input id="rcCost" class="form-input" type="number" step="0.000001" value="0.0001">
-      </div>
-    </div>
-  `, `
-    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="submitCostRecord()">Record</button>
-  `);
-}
-
-async function submitCostRecord() {
-  try {
-    await api.recordCost({
-      agent: document.getElementById('rcAgent').value,
-      model: document.getElementById('rcModel').value,
-      tokens: parseInt(document.getElementById('rcTokens').value) || 0,
-      cost: parseFloat(document.getElementById('rcCost').value) || 0,
-    });
-    closeModal();
-    showToast('Cost recorded', 'success');
-    renderCost();
-  } catch (err) {
-    showToast(`Error: ${err.message}`, 'error');
   }
 }

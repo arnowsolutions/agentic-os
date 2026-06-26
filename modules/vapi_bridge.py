@@ -229,14 +229,14 @@ def _get_greeting(role: str, name: str) -> str:
     return f"Welcome back, {name}!"
 
 
-def _handle_auth(name: str, pin: str, client_ip: str = "", request: Request | None = None):
-    result = _handle_auth_inner(name, pin, client_ip, request)
+def _handle_auth(name: str, pin: str, ez_id: str = "", client_ip: str = "", request: Request | None = None):
+    result = _handle_auth_inner(name, pin, ez_id, client_ip, request)
     status = "success" if result.get("verified") else result.get("next_step", "unknown")
     collector.observe_auth_attempt(status)
     return result
 
 
-def _handle_auth_inner(name: str, pin: str, client_ip: str = "", request: Request | None = None):
+def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = "", request: Request | None = None):
     name = _normalize_name(name)
     pin_clean = "".join(c for c in (pin or "") if c.isdigit())
     name_lower = name.lower().strip()
@@ -270,13 +270,66 @@ def _handle_auth_inner(name: str, pin: str, client_ip: str = "", request: Reques
                 return True
         return False
 
+    users = _load_pin_db()
+
+    # PRIORITY 0: EZ ID match — exact, unambiguous. Skip name matching entirely.
+    ez_id_clean = ez_id.strip().lower()
+    if ez_id_clean:
+        for uid, u in users.items():
+            db_ez = (u.get("ez_id", "") or "").strip().lower()
+            if db_ez and (db_ez == ez_id_clean or ez_id_clean in db_ez or db_ez in ez_id_clean):
+                name_lower = u.get("name", "").lower().strip()
+                if u.get("pin_hash") == _hash_pin(pin_clean):
+                    profile = {k: v for k, v in u.items() if k != "pin_hash"}
+                    greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid))
+                    _auth_limiter.record(name, True, ip)
+                    _log_auth_attempt(ez_id_clean, len(pin_clean), True, "verified_ezid", ip, ua)
+                    return {
+                        "verified": True,
+                        "user": profile,
+                        "greeting": greeting,
+                        "message": "Verified.",
+                        "next_step": "proceed",
+                    }
+                # EZ ID found but PIN wrong
+                _auth_limiter.record(name, False, ip)
+                _log_auth_attempt(ez_id_clean, len(pin_clean), False, "invalid_pin", ip, ua)
+                return {
+                    "verified": False, "user": None, "greeting": None,
+                    "message": "That PIN didn't match.", "next_step": "retry_pin",
+                }
+        
+        # EZ ID provided but no match found — try CRM directly
+        for c in _load_crm():
+            c_ez = (c.get("ezId", "") or "").strip().lower()
+            if c_ez and (c_ez == ez_id_clean or ez_id_clean in c_ez or c_ez in ez_id_clean):
+                d = _default_pin(c)
+                if pin_clean == d:
+                    role = _crm_role_to_vapi(c.get("category", ""))
+                    display = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
+                    _auth_limiter.record(name, True, ip)
+                    _log_auth_attempt(ez_id_clean, len(pin_clean), True, "verified_ezid_crm", ip, ua)
+                    return {
+                        "verified": True,
+                        "user": {"name": display, "role": role, "email": c.get("email", "")},
+                        "greeting": _get_greeting(role, c.get("firstName", "")),
+                        "message": "Verified.",
+                        "next_step": "proceed",
+                    }
+                _auth_limiter.record(name, False, ip)
+                _log_auth_attempt(ez_id_clean, len(pin_clean), False, "invalid_pin", ip, ua)
+                return {
+                    "verified": False, "user": None, "greeting": None,
+                    "message": "That PIN didn't match.", "next_step": "retry_pin",
+                }
+
+    # No EZ ID or EZ ID didn't match — fall back to name matching
     def _fuzzy(w1, w2):
         ml = min(len(w1), len(w2))
         if ml < 4 or w1[0] != w2[0]:
             return False
         return sum(1 for i in range(ml) if w1[i] == w2[i]) >= 3
 
-    users = _load_pin_db()
     had = False
     for uid, u in users.items():
         dbn = u.get("name", "").lower().strip()
@@ -491,6 +544,8 @@ def _create_google_cal_event(m: MeetingRequest):
 
 
 def _send_message_confirmation(email: str, result: dict, args: dict):
+    # TEST MODE: redirect all confirmation emails to sfrasier
+    email = "sfrasier@montefiore.org"
     try:
         subprocess.run(
             [sys.executable, str(BASE_DIR / "email_helper.py"), "--to", email, "--subject", "Message for Shareef Frasier - Confirmation"],
@@ -610,6 +665,7 @@ async def _dispatch_vapi_webhook(request: Request, body: dict):
     try:
         if fn_name in ("authUser", "verifyCaller"):
             name = fn_args.get("caller_name") or fn_args.get("name", "")
+            ez_id = fn_args.get("caller_ez_id") or fn_args.get("ez_id", "")
             pin = fn_args.get("caller_pin") or fn_args.get("pin", "")
             pd = "".join(c for c in (pin or "") if c.isdigit())
             if len(pd) < 4:
@@ -618,7 +674,7 @@ async def _dispatch_vapi_webhook(request: Request, body: dict):
                     "message": f"I only caught {len(pd)} digit{'s' if len(pd) != 1 else ''}. Please say your full 4-digit PIN again.",
                     "next_step": "retry_pin",
                 }), "_metric_fn": fn_name}, "ok"
-            r = _handle_auth(name, pin, request=request)
+            r = _handle_auth(name, pin, ez_id=ez_id, request=request)
             return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
         elif fn_name == "searchCrm":
             q = fn_args.get("q", "").lower()

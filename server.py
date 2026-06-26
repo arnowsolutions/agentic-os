@@ -33,6 +33,7 @@ from modules import kanban as kanban_module
 from modules import vapi_bridge as vapi_module
 from modules import schedule as schedule_module
 from modules import skill_runner
+from modules import cost_tracker
 from modules.logging_config import setup_logging
 from modules.metrics import metrics_endpoint, metrics_middleware
 
@@ -181,6 +182,38 @@ class ChatRequest(BaseModel):
     agent: str
     message: str
 
+class ReportGenerateRequest(BaseModel):
+    type: str
+    input: Optional[str] = ""
+    channel: str = "download"  # "download" or "email"
+    recipient: Optional[str] = ""
+
+class RouterSuggest(BaseModel):
+    task: str
+
+class RouterRoute(BaseModel):
+    task: str
+    agent: str = "auto"
+
+class AgentRunEvent(BaseModel):
+    action: str
+    source: str
+    agent: str
+    event_id: Optional[str] = None
+    route_id: Optional[str] = None
+    run_id: Optional[str] = None
+    status: str = "success"
+    metadata: Optional[dict] = None
+
+# ─── Report source catalog ────────────────────────────────────────────────
+
+REPORT_SOURCES = [
+    {"id": "daily-standup", "label": "Daily Standup", "kind": "skill", "supports_pdf": False},
+    {"id": "devops-audit", "label": "DevOps Audit", "kind": "skill", "supports_pdf": False},
+    {"id": "cost-analytics", "label": "Cost Analytics", "kind": "skill", "supports_pdf": False},
+    {"id": "schedule-pdf", "label": "Call Schedule PDF", "kind": "schedule", "supports_pdf": True},
+]
+
 # ─── Helper Functions ──────────────────────────────────────────────────────
 
 def read_file(path: Path):
@@ -207,6 +240,126 @@ def append_audit(entry: dict):
     entry["id"] = str(uuid.uuid4())[:8]
     with open(audit_file, "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+# ─── Normalized Agent Run Event Recording ──────────────────────────
+
+def record_agent_run(action: str, source: str, agent: str, status: str = "success", metadata: Optional[dict] = None) -> str:
+    """Record a normalized agent run event to the audit log.
+    
+    Returns the event_id for traceability.
+    """
+    event_id = str(uuid.uuid4())[:12]
+    entry = {
+        "action": action,
+        "source": source,
+        "agent": agent,
+        "event_id": event_id,
+        "status": status,
+        "metadata": metadata or {},
+    }
+    append_audit(entry)
+    return event_id
+
+def get_agent_runs_from_audit(agent_name: Optional[str] = None, limit: int = 1000) -> list:
+    """Aggregate agent run events from audit log."""
+    runs = []
+    audit_file = BASE_DIR / "audit" / "audit.log"
+    if not audit_file.exists():
+        return runs
+    
+    try:
+        lines = audit_file.read_text().strip().split("\n")
+        for line in reversed(lines[-limit:]):
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+                # Include normalized agent_run events and legacy events
+                if entry.get("action") in ["agent_run", "chat_message", "skill_run", "task_routed"]:
+                    if agent_name is None or entry.get("agent") == agent_name:
+                        runs.append(entry)
+            except:
+                continue
+    except Exception:
+        pass
+    return runs
+
+# ─── Router Config Loader ────────────────────────────────────────────────
+
+def load_router_config() -> dict:
+    """Load routing rules and capabilities from data/agent-routes.json."""
+    config_path = BASE_DIR / "data" / "agent-routes.json"
+    default_config = {
+        "routing_rules": [
+            {"pattern": "code|devops|infrastructure|terraform|k8s|gcp|git|deploy|ci/cd", "target": "opencode", "priority": 10},
+            {"pattern": "memory|remember|schedule|cron|telegram|discord|channel|notif", "target": "hermes", "priority": 10},
+            {"pattern": "research|analyze|search|summarize|compare|investigate|learn", "target": "gemini", "priority": 10},
+            {"pattern": ".*", "target": "opencode", "priority": 0, "description": "Default fallback"},
+        ],
+        "agent_capabilities": {
+            "opencode": ["code_generation", "file_operations", "git_management", "terminal_execution", "infrastructure_as_code", "testing", "debugging"],
+            "hermes": ["persistent_memory", "scheduled_tasks", "messaging_channels", "skill_hub", "voice", "browser_automation", "subagent_delegation"],
+            "gemini": ["web_search", "multi_modal_analysis", "document_understanding", "data_analysis", "research_synthesis", "reasoning"],
+        },
+    }
+    
+    if not config_path.exists():
+        return default_config
+    
+    try:
+        config = json.loads(config_path.read_text())
+        # Validate required fields
+        if "routing_rules" not in config:
+            config["routing_rules"] = default_config["routing_rules"]
+        if "agent_capabilities" not in config:
+            config["agent_capabilities"] = default_config["agent_capabilities"]
+        return config
+    except Exception:
+        return default_config
+
+def score_routing_rules(task: str, config: dict) -> tuple:
+    """Score task against routing rules and return scores with matched rules.
+    
+    Returns: (scores_dict, matched_rules_list, suggested_agent, confidence)
+    """
+    task_lower = task.lower()
+    scores = {"opencode": 0, "hermes": 0, "gemini": 0}
+    matched_rules = []
+    
+    for rule in config.get("routing_rules", []):
+        pattern = rule.get("pattern", ".*")
+        target = rule.get("target", "opencode")
+        priority = rule.get("priority", 0)
+        
+        try:
+            if re.search(pattern, task_lower):
+                scores[target] = scores.get(target, 0) + priority
+                matched_rules.append({
+                    "pattern": pattern,
+                    "target": target,
+                    "priority": priority,
+                    "description": rule.get("description", ""),
+                })
+        except re.error:
+            continue
+    
+    # Determine best agent
+    best = max(scores, key=scores.get)
+    best_score = scores[best]
+    
+    # Calculate confidence based on score differential
+    if best_score >= 10:
+        confidence = "high"
+    elif best_score >= 5:
+        confidence = "medium"
+    elif best_score > 0:
+        confidence = "low"
+    else:
+        # No matches - use fallback
+        best = "opencode"
+        confidence = "fallback"
+    
+    return scores, matched_rules, best, confidence
 
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
@@ -281,6 +434,92 @@ def get_status():
         "skills_count": len(skills),
         "uptime": time.time(),
     }
+
+
+@app.get("/api/selftest")
+def selftest_endpoint():
+    """One-click health confirmation.
+
+    Reports per-item pass/fail for: ``audit/`` writable, each agent CLI
+    resolvable (reuses ``check_agent``), OpenRouter key present, Google token
+    present/valid (probes the ``GoogleWorkspace`` token path without sending),
+    knowledge index loaded with a document count, and ``data/`` writable.
+    Returns a structured payload with an overall ``ok`` flag and appends a
+    ``selftest_run`` audit entry.
+    """
+    checks = []
+
+    def add(name: str, ok: bool, detail: str | None = None):
+        item = {"name": name, "ok": bool(ok)}
+        if detail is not None:
+            item["detail"] = detail
+        checks.append(item)
+
+    # audit/ writable
+    try:
+        audit_dir = BASE_DIR / "audit"
+        audit_dir.mkdir(parents=True, exist_ok=True)
+        probe = audit_dir / ".selftest_probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        add("audit_writable", True)
+    except Exception as e:
+        add("audit_writable", False, str(e)[:200])
+
+    # each agent CLI resolvable (reuse check_agent)
+    for name in ("opencode", "hermes", "gemini"):
+        info = check_agent(name)
+        add(f"agent_{name}", info.get("status") == "online", info.get("status"))
+
+    # OpenRouter key present
+    add("openrouter_key", bool(_settings.OPENROUTER_API_KEY),
+        "key set" if _settings.OPENROUTER_API_KEY else "OPENROUTER_API_KEY missing")
+
+    # Google token present/valid (probe token path without sending)
+    try:
+        token_path = Path(_settings.GOOGLE_TOKEN_PATH)
+        valid = False
+        detail = "token file missing"
+        if token_path.exists():
+            data = json.loads(token_path.read_text(encoding="utf-8"))
+            token = data.get("token") if isinstance(data, dict) else None
+            expiry = data.get("expiry") if isinstance(data, dict) else None
+            if token:
+                valid = True
+                detail = f"token present (expiry={expiry})"
+            else:
+                detail = "token file present but no token field"
+        add("google_token", valid, detail)
+    except Exception as e:
+        add("google_token", False, str(e)[:200])
+
+    # knowledge index loaded with a document count
+    try:
+        idx_path = BASE_DIR / "data" / "knowledge_index.json"
+        count = 0
+        if idx_path.exists():
+            kj = json.loads(idx_path.read_text(encoding="utf-8"))
+            docs = kj.get("docs", []) if isinstance(kj, dict) else (kj if isinstance(kj, list) else [])
+            count = len(docs) if isinstance(docs, list) else 0
+        add("knowledge_index", count > 0, f"{count} documents")
+    except Exception as e:
+        add("knowledge_index", False, str(e)[:200])
+
+    # data/ writable
+    try:
+        data_dir = BASE_DIR / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        probe = data_dir / ".selftest_probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        add("data_writable", True)
+    except Exception as e:
+        add("data_writable", False, str(e)[:200])
+
+    overall_ok = all(c["ok"] for c in checks)
+    append_audit({"action": "selftest_run", "ok": overall_ok,
+                  "failures": [c["name"] for c in checks if not c["ok"]]})
+    return {"ok": overall_ok, "checks": checks}
 
 
 @app.get("/metrics")
@@ -457,11 +696,26 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
-    return skill_runner.run_skill_sync(
+    result = skill_runner.run_skill_sync(
         name,
         agent=req.agent if req else "auto",
         input=req.input if req else "",
     )
+    
+    # Record normalized agent run event
+    record_agent_run(
+        action="skill_run",
+        source="skill",
+        agent=result.get("agent", "unknown"),
+        status="success" if result.get("status") == "completed" else "error",
+        metadata={
+            "skill": name,
+            "run_id": result.get("run_id"),
+            "output_preview": result.get("output", "")[:100]
+        }
+    )
+    
+    return result
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
@@ -526,24 +780,55 @@ def get_audit(limit: int = Query(100, le=500)):
 
 @app.get("/api/cost")
 def get_cost():
-    cost_file = BASE_DIR / "data" / "cost-history.json"
-    if not cost_file.exists():
-        return {"entries": [], "daily_totals": {}, "monthly_projection": 0, "free_tier_alerts": []}
-    return json.loads(cost_file.read_text())
+    """Return full cost history with collection-state metadata."""
+    data = cost_tracker.get_history()
+    entries = data.get("entries", [])
+    
+    # Add collection-state fields for truthful empty states
+    has_real_metadata = len(entries) > 0 and any(
+        e.get("agent") and e.get("model") for e in entries
+    )
+    
+    data["collection_state"] = {
+        "has_data": len(entries) > 0,
+        "has_real_metadata": has_real_metadata,
+        "entry_count": len(entries),
+        "data_source": "live tracking" if has_real_metadata else "no metadata collected yet",
+    }
+    
+    return data
 
 @app.post("/api/cost/record")
 def record_cost(data: dict):
-    cost_file = BASE_DIR / "data" / "cost-history.json"
-    cost_data = json.loads(cost_file.read_text()) if cost_file.exists() else \
-        {"entries": [], "daily_totals": {}, "monthly_projection": 0, "free_tier_alerts": []}
-    cost_data["entries"].append({
-        "timestamp": get_timestamp(),
-        "agent": data.get("agent", "unknown"),
-        "tokens": data.get("tokens", 0),
-        "cost": data.get("cost", 0.0),
-        "model": data.get("model", "unknown"),
-    })
-    cost_file.write_text(json.dumps(cost_data, indent=2))
+    """Record a cost entry — only writes when actual metadata is available."""
+    agent = data.get("agent", "")
+    model = data.get("model", "")
+    tokens = data.get("tokens", 0)
+    cost_val = data.get("cost", 0.0)
+    
+    # Gate: only record if we have real metadata
+    if not agent or not model or agent == "unknown" or model == "unknown":
+        return {
+            "status": "skipped",
+            "reason": "insufficient_metadata",
+            "message": "Cost entries require valid agent and model metadata"
+        }
+    
+    # Gate: don't record zero-token entries (likely test data)
+    if tokens == 0 and cost_val == 0.0:
+        return {
+            "status": "skipped", 
+            "reason": "no_usage_data",
+            "message": "No usage metrics to record"
+        }
+    
+    cost_tracker.record(
+        agent=agent,
+        model=model,
+        tokens=tokens,
+        cost=cost_val,
+        provider=data.get("provider"),
+    )
     return {"status": "recorded"}
 
 # ─── Routes: Registry/Plugins ─────────────────────────────────────
@@ -660,26 +945,53 @@ def list_prompts():
         prompts[f.stem] = read_file(f)
     return prompts
 
-# ─── Routes: Settings ─────────────────────────────────────────────
+# ─── Routes: Settings ───────────────────────────────
+
+DEFAULT_SETTINGS = {
+    "theme": "dark",
+    "agent_preferences": {
+        "opencode": {"enabled": True, "binary": "opencode"},
+        "hermes": {"enabled": True, "binary": "hermes"},
+        "gemini": {"enabled": True, "binary": "gemini", "model": "gemini-2.5-flash"}
+    },
+    "dashboard": {"port": 8080, "host": "127.0.0.1", "dark_mode": True},
+    "api_keys": {"gemini": "", "openrouter": ""},
+    "free_tier_limits": {
+        "gemini_flash": {"requests_per_day": 1500, "tokens_per_day": 1000000},
+        "openrouter_free": {"requests_per_day": 100, "tokens_per_day": 200000}
+    }
+}
 
 @app.get("/api/settings")
 def get_settings():
     sf = BASE_DIR / "data" / "settings.json"
     if not sf.exists():
-        return {}
+        # Bootstrap defaults and persist them
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        sf.write_text(json.dumps(DEFAULT_SETTINGS, indent=2))
+        return DEFAULT_SETTINGS
     return json.loads(sf.read_text())
 
 @app.put("/api/settings")
 def update_settings(data: SettingsUpdate):
     sf = BASE_DIR / "data" / "settings.json"
-    # Merge with existing
-    existing = json.loads(sf.read_text()) if sf.exists() else {}
-    existing.update(data.settings)
-    sf.write_text(json.dumps(existing, indent=2))
+    # Merge with existing or defaults
+    existing = json.loads(sf.read_text()) if sf.exists() else DEFAULT_SETTINGS.copy()
+    # Deep merge for nested dicts
+    def deep_merge(base, updates):
+        for key, value in updates.items():
+            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                deep_merge(base[key], value)
+            else:
+                base[key] = value
+        return base
+    merged = deep_merge(existing, data.settings)
+    sf.parent.mkdir(parents=True, exist_ok=True)
+    sf.write_text(json.dumps(merged, indent=2))
     append_audit({"action": "settings_updated"})
     return {"status": "ok"}
 
-# ─── Routes: Standards ────────────────────────────────────────────
+# ─── Routes: Standards ───────────────────────────────────
 
 @app.get("/api/standards")
 def list_standards():
@@ -698,9 +1010,195 @@ def list_standards():
 
 @app.post("/api/standards/discover")
 def discover_standards():
-    # Stub: scans codebase for patterns
-    append_audit({"action": "standards_discovery_run"})
-    return {"status": "discovery_started", "message": "Scanning codebase for patterns..."}
+    # Discovery is not implemented - return unavailable status
+    append_audit({"action": "standards_discovery_unavailable"})
+    return {
+        "status": "unavailable",
+        "message": "Standards discovery is not yet implemented. Define standards manually in the standards/ directory.",
+        "available": False
+    }
+
+# ─── Routes: Reports ──────────────────────────────────────────────
+
+@app.get("/api/reports/types")
+def get_report_types():
+    """Return the catalog of available report sources, filtering to those with existing skill dirs."""
+    types = []
+    for src in REPORT_SOURCES:
+        if src["kind"] == "skill":
+            skill_dir = BASE_DIR / "skills" / src["id"]
+            if not skill_dir.exists() or not skill_dir.is_dir():
+                continue
+        types.append({
+            "id": src["id"],
+            "label": src["label"],
+            "kind": src["kind"],
+            "supports_pdf": src["supports_pdf"],
+        })
+    return types
+
+
+def _run_skill_report_text(name: str, skill_input: str) -> tuple:
+    """Run a skill and return (agent_choice: str, output_text: str).
+
+    Shared helper used by the run_skill endpoint AND the reports endpoint
+    so prompt-building + execute_agent logic lives in one place.
+    """
+    from modules import skill_runner
+    result = skill_runner.run_skill_sync(name, agent="auto", input=skill_input)
+    return result.get("agent", "auto"), result.get("output", "")
+
+
+@app.post("/api/reports/generate")
+def generate_report(req: ReportGenerateRequest):
+    """Generate a report by type, delivering via download or email."""
+    # Find the source
+    source = None
+    for src in REPORT_SOURCES:
+        if src["id"] == req.type:
+            source = src
+            break
+    if not source:
+        raise HTTPException(404, f"Report type '{req.type}' not found")
+
+    try:
+        if source["kind"] == "skill":
+            agent, report_text = _run_skill_report_text(source["id"], req.input)
+
+            if req.channel == "download":
+                append_audit({"action": "report_generated", "type": req.type, "channel": "download"})
+                return {
+                    "status": "success",
+                    "type": req.type,
+                    "channel": "download",
+                    "content": report_text,
+                    "agent": agent,
+                    "message": f"Report '{source['label']}' generated via {agent}",
+                }
+
+            elif req.channel == "email":
+                recipient = req.recipient.strip()
+                if not recipient:
+                    # Try to find a default from settings
+                    sf = BASE_DIR / "data" / "settings.json"
+                    if sf.exists():
+                        settings = json.loads(sf.read_text())
+                        recipient = settings.get("SCHEDULE_EMAIL_RECIPIENT", settings.get("ADMIN_EMAIL", ""))
+                if not recipient:
+                    raise HTTPException(400, "recipient required and no default configured")
+
+                html_body = f"""<!DOCTYPE html>
+<html><body style="font-family:Arial,Helvetica,sans-serif;background:#f0f2f5;padding:24px">
+<table cellpadding="0" cellspacing="0" width="100%" style="max-width:620px;margin:0 auto">
+<tr><td style="background:#1a3a5c;padding:18px 28px;border-radius:4px 4px 0 0">
+<span style="color:#fff;font-size:16pt;font-weight:bold">Agentic OS — {source['label']}</span>
+</td></tr>
+<tr><td style="background:#fff;padding:24px 28px;border-radius:0 0 4px 4px">
+<pre style="white-space:pre-wrap;font-size:11pt;color:#333;line-height:1.5">{escape_html(report_text)}</pre>
+</td></tr>
+</table></body></html>"""
+
+                try:
+                    from modules.google_workspace import GoogleWorkspace
+                    ws = GoogleWorkspace()
+                    ws.send_email(
+                        user_id="default",
+                        to=recipient,
+                        subject=f"Agentic OS Report — {source['label']}",
+                        body=html_body,
+                        is_html=True,
+                    )
+                except ImportError:
+                    raise HTTPException(500, "Email sending not configured — Google Workspace module unavailable")
+                except Exception as e:
+                    raise HTTPException(500, f"Email failed: {str(e)}")
+
+                append_audit({"action": "report_generated", "type": req.type, "channel": "email", "recipient": recipient})
+                return {
+                    "status": "success",
+                    "type": req.type,
+                    "channel": "email",
+                    "message": f"Report '{source['label']}' emailed to {recipient}",
+                }
+
+            else:
+                raise HTTPException(400, f"Unknown channel: {req.channel}")
+
+        elif source["kind"] == "schedule":
+            # Schedule PDF report
+            from modules.vapi_email import build_schedule_pdf, build_email_html
+            schedule_data = {"date": "Schedule report"}
+            title = "Call Schedule"
+
+            pdf_path = build_schedule_pdf(schedule_data, title=title)
+
+            if req.channel == "download":
+                from fastapi.responses import FileResponse
+                append_audit({"action": "report_generated", "type": req.type, "channel": "download"})
+                return FileResponse(
+                    pdf_path,
+                    media_type="application/pdf",
+                    filename=f"{req.type}.pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{req.type}.pdf"'},
+                )
+
+            elif req.channel == "email":
+                recipient = req.recipient.strip()
+                if not recipient:
+                    sf = BASE_DIR / "data" / "settings.json"
+                    if sf.exists():
+                        settings = json.loads(sf.read_text())
+                        recipient = settings.get("SCHEDULE_EMAIL_RECIPIENT", settings.get("ADMIN_EMAIL", ""))
+                if not recipient:
+                    raise HTTPException(400, "recipient required and no default configured")
+
+                html_body = build_email_html("Colleague", title, schedule_data={"note": "Schedule report"})
+                try:
+                    from modules.google_workspace import GoogleWorkspace
+                    ws = GoogleWorkspace()
+                    ws.send_email(
+                        user_id="default",
+                        to=recipient,
+                        subject=f"Agentic OS — {title}",
+                        body=html_body,
+                        attachments=[pdf_path],
+                        is_html=True,
+                    )
+                except ImportError:
+                    raise HTTPException(500, "Email sending not configured — Google Workspace module unavailable")
+                except Exception as e:
+                    raise HTTPException(500, f"Email failed: {str(e)}")
+                finally:
+                    try:
+                        import os
+                        os.unlink(pdf_path)
+                    except Exception:
+                        pass
+
+                append_audit({"action": "report_generated", "type": req.type, "channel": "email", "recipient": recipient})
+                return {
+                    "status": "success",
+                    "type": req.type,
+                    "channel": "email",
+                    "message": f"PDF report emailed to {recipient}",
+                }
+            else:
+                raise HTTPException(400, f"Unknown channel: {req.channel}")
+
+        else:
+            raise HTTPException(400, f"Unknown report kind: {source['kind']}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+def escape_html(text: str) -> str:
+    """Minimal HTML escaping for report text rendering."""
+    import html as _html
+    return _html.escape(text or "")
+
 
 # ─── Routes: Chat ─────────────────────────────────────────────────
 
@@ -747,13 +1245,68 @@ def clean_hermes_output(raw: str) -> str:
     non_meta = [l.strip() for l in lines if l.strip() and not l.startswith(('Query:', 'Initializing', '──', 'Resume', 'Session:', 'Duration:', 'Messages:'))]
     return '\n'.join(non_meta[-5:]) or raw
 
+def _llm_fallback(agent: str, message: str) -> Optional[str]:
+    """OpenRouter fallback used when the selected CLI is unavailable.
+
+    Returns a labelled response string (clearly marked as produced by the
+    fallback model) on success, or ``None`` when the fallback itself is
+    unavailable (no OpenRouter key or request failure) so the caller can keep
+    the existing friendly error message.
+    """
+    settings = get_settings()
+    if not settings.OPENROUTER_API_KEY:
+        return None
+    try:
+        from modules import llm_client
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are Agentic OS, a helpful assistant. The primary agent "
+                    f"CLI ('{agent}') was unavailable, so this response was "
+                    "produced by the OpenRouter fallback model."
+                ),
+            },
+            {"role": "user", "content": message},
+        ]
+        data = llm_client.chat_completion(messages)
+        content = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+        if not content:
+            return None
+        labelled = (
+            f"*[Fallback: {settings.OPENROUTER_MODEL} — agent '{agent}' unavailable]*\n\n"
+            f"{content}"
+        )
+        try:
+            cost_tracker.record_agent_usage(
+                agent="fallback",
+                model=settings.OPENROUTER_MODEL,
+                message=message,
+                response_text=labelled,
+                provider="openrouter",
+            )
+        except Exception:
+            pass
+        return labelled
+    except Exception as e:
+        logger.warning("LLM fallback failed for agent '%s': %s", agent, str(e))
+        return None
+
+
+def _agent_unavailable(agent: str, message: str, friendly: str) -> str:
+    """Return the OpenRouter fallback response when the CLI is unavailable,
+    falling back to the existing friendly error when no OpenRouter key exists."""
+    fb = _llm_fallback(agent, message)
+    return fb if fb is not None else friendly
+
+
 def execute_agent(agent: str, message: str) -> str:
     try:
         if agent == "opencode":
             try:
                 code, out, err = run_cli(["opencode", "run", "--format", "json", message], timeout=30)
             except subprocess.TimeoutExpired:
-                return f"⏱ Agent 'opencode' timed out.\n\nOpenCode's model is taking too long. Try running `opencode run \"{message[:60]}\"` directly in your terminal.\n\n**Message:** {message[:100]}"
+                return _agent_unavailable("opencode", message, f"⏱ Agent 'opencode' timed out.\n\nOpenCode's model is taking too long. Try running `opencode run \"{message[:60]}\"` directly in your terminal.\n\n**Message:** {message[:100]}")
             if code == 0:
                 response_text = ""
                 for line in (out or "").split('\n'):
@@ -768,9 +1321,12 @@ def execute_agent(agent: str, message: str) -> str:
                                 response_text += text + "\n"
                     except (json.JSONDecodeError, KeyError):
                         continue
-                if response_text:
-                    return response_text.strip()
-                return f"**opencode**\n\nProcessed your message.\n\n**Message:** {message[:100]}"
+                result = response_text.strip() if response_text else f"**opencode**\n\nProcessed your message.\n\n**Message:** {message[:100]}"
+                try:
+                    cost_tracker.record_agent_usage(agent="opencode", model="opencode-go", message=message, response_text=result, provider="opencode")
+                except Exception:
+                    pass
+                return result
             err_msg = (err or "").strip()
             return err_msg or f"opencode returned exit code {code}"
 
@@ -778,17 +1334,19 @@ def execute_agent(agent: str, message: str) -> str:
             # Resolve hermes binary path
             hermes_bin = _resolve_hermes_bin()
             if not hermes_bin or not os.path.isfile(hermes_bin):
-                return "⚠ Hermes Agent CLI not found. Run `pip install hermes-agent` or check the install."
+                return _agent_unavailable("hermes", message, "⚠ Hermes Agent CLI not found. Run `pip install hermes-agent` or check the install.")
             try:
                 code, out, err = run_cli([hermes_bin, "chat", "-q", message], timeout=180)
             except subprocess.TimeoutExpired:
-                return f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}"
+                return _agent_unavailable("hermes", message, f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}")
             if code == 0:
                 cleaned = clean_hermes_output(out or "")
-                if cleaned:
-                    return cleaned
-                # Empty response from model - return useful fallback
-                return f"**Hermes**\n\nReceived your message but the model returned an empty response. Try rephrasing your query.\n\n**Message:** {message}"
+                result = cleaned if cleaned else f"**Hermes**\n\nReceived your message but the model returned an empty response. Try rephrasing your query.\n\n**Message:** {message}"
+                try:
+                    cost_tracker.record_agent_usage(agent="hermes", model="hermes-agent", message=message, response_text=result)
+                except Exception:
+                    pass
+                return result
             err_msg = (err or "").strip()
             if "invalid choice" in err_msg or "usage:" in err_msg:
                 return f"**Hermes needs setup**\n\nRun `hermes setup` or check your config.\n\n**Details:** {err_msg[:200]}"
@@ -804,9 +1362,14 @@ def execute_agent(agent: str, message: str) -> str:
                 except subprocess.TimeoutExpired:
                     if attempt == 0:
                         continue
-                    return f"⏱ Gemini timed out.\n\nTry running `gemini \"{message[:60]}\"` directly.\n\n**Message:** {message[:100]}"
+                    return _agent_unavailable("gemini", message, f"⏱ Gemini timed out.\n\nTry running `gemini \"{message[:60]}\"` directly.\n\n**Message:** {message[:100]}")
                 if code == 0:
-                    return (out or "").strip() or f"**Gemini CLI**\n\nProcessed your query.\n\n**Message:** {message}"
+                    result = (out or "").strip() or f"**Gemini CLI**\n\nProcessed your query.\n\n**Message:** {message}"
+                    try:
+                        cost_tracker.record_agent_usage(agent="gemini", model=args[1] if len(args) > 1 else "gemini-flash", message=message, response_text=result, provider="gemini")
+                    except Exception:
+                        pass
+                    return result
                 err_msg = (err or "").strip()
                 if attempt == 0 and ("model" in err_msg.lower() or "not found" in err_msg.lower()):
                     continue
@@ -818,9 +1381,9 @@ def execute_agent(agent: str, message: str) -> str:
         else:
             return f"Unknown agent: {agent}"
     except subprocess.TimeoutExpired:
-        return f"⏱ Agent '{agent}' timed out.\n\nRun `{agent} --help` in your terminal for CLI usage.\n\n**Message:** {message[:100]}"
+         return _agent_unavailable(agent, message, f"⏱ Agent '{agent}' timed out.\n\nRun `{agent} --help` in your terminal for CLI usage.\n\n**Message:** {message[:100]}")
     except FileNotFoundError:
-        return f"⚠ Agent '{agent}' CLI not installed. Install it and try again."
+         return _agent_unavailable(agent, message, f"⚠ Agent '{agent}' CLI not installed. Install it and try again.")
     except Exception as e:
         return f"⚠ Error communicating with {agent}: {str(e)}"
 
@@ -850,7 +1413,14 @@ def chat(req: ChatRequest):
     }
     save_chat_message(agent_msg)
 
-    append_audit({"action": "chat_message", "agent": agent, "msg_preview": req.message[:50]})
+    # Record normalized agent run event
+    record_agent_run(
+        action="chat_message",
+        source="chat",
+        agent=agent,
+        status="success",
+        metadata={"msg_preview": req.message[:100], "response_preview": response_text[:100]}
+    )
 
     return {"status": "ok", "response": agent_msg}
 
@@ -863,33 +1433,6 @@ def get_chat_history():
 # ═══════════════════════════════════════════════════════════════════
 
 # ─── Models ─────────────────────────────────────────────────────
-
-class KanbanTaskCreate(BaseModel):
-    title: str
-    body: str = ""
-    status: str = "triage"
-    priority: str = "medium"
-    assignee: str = ""
-
-class KanbanTaskUpdate(BaseModel):
-    title: Optional[str] = None
-    body: Optional[str] = None
-    status: Optional[str] = None
-    priority: Optional[str] = None
-    assignee: Optional[str] = None
-
-class KanbanComplete(BaseModel):
-    summary: str = ""
-
-class KanbanBlock(BaseModel):
-    reason: str = ""
-
-class KanbanCommentCreate(BaseModel):
-    message: str
-
-class KanbanLinkCreate(BaseModel):
-    parent_id: str
-    child_id: str
 
 class GoalCreate(BaseModel):
     title: str
@@ -908,32 +1451,15 @@ class GoalUpdate(BaseModel):
 class JournalSave(BaseModel):
     content: str
 
-class RouterSuggest(BaseModel):
-    task: str
+# Note: RouterSuggest and RouterRoute models are defined earlier in the Models section
 
-class RouterRoute(BaseModel):
-    task: str
-    agent: str
+# ─── Data Helpers ────────────────────────────────────────────────
 
-# ─── Data Helpers ───────────────────────────────────────────────
-
-KANBAN_DIR = BASE_DIR / "data" / "kanban"
 GOALS_FILE = BASE_DIR / "data" / "goals.json"
 JOURNAL_DIR = BASE_DIR / "brain" / "journal"
 
 def ensure_dir(d: Path):
     d.mkdir(parents=True, exist_ok=True)
-
-def load_kanban_tasks():
-    ensure_dir(KANBAN_DIR)
-    tasks = []
-    for f in sorted(KANBAN_DIR.glob("*.json")):
-        tasks.append(json.loads(f.read_text()))
-    return tasks
-
-def save_kanban_task(task: dict):
-    ensure_dir(KANBAN_DIR)
-    (KANBAN_DIR / f"{task['id']}.json").write_text(json.dumps(task, indent=2))
 
 def load_goals():
     if GOALS_FILE.exists():
@@ -943,195 +1469,7 @@ def load_goals():
 def save_goals(goals: list):
     GOALS_FILE.write_text(json.dumps(goals, indent=2))
 
-# ─── Routes: Kanban Board (13 endpoints) ────────────────────────
-
-@app.get("/api/kanban/board")
-def kanban_board(status: Optional[str] = None):
-    try:
-        tasks = load_kanban_tasks()
-        if status:
-            tasks = [t for t in tasks if t.get("status") == status]
-        columns = {"triage": [], "todo": [], "ready": [], "in_progress": [], "blocked": [], "done": []}
-        for t in tasks:
-            s = t.get("status", "triage")
-            if s in columns:
-                columns[s].append(t)
-        return {"columns": columns, "total": len(tasks)}
-    except Exception as e:
-        return {"error": str(e), "columns": {}, "total": 0}
-
-@app.get("/api/kanban/tasks/{task_id}")
-def kanban_get_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    return json.loads(path.read_text())
-
-@app.post("/api/kanban/tasks")
-def kanban_create_task(data: KanbanTaskCreate):
-    try:
-        task = {
-            "id": str(uuid.uuid4())[:8],
-            "title": data.title,
-            "body": data.body,
-            "status": data.status,
-            "priority": data.priority,
-            "assignee": data.assignee,
-            "comments": [],
-            "links": [],
-            "created": get_timestamp(),
-            "updated": get_timestamp(),
-        }
-        save_kanban_task(task)
-        append_audit({"action": "kanban_task_created", "title": data.title})
-        return task
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-@app.patch("/api/kanban/tasks/{task_id}")
-def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    task = json.loads(path.read_text())
-    for field in ["title", "body", "status", "priority", "assignee"]:
-        val = getattr(data, field, None)
-        if val is not None:
-            task[field] = val
-    task["updated"] = get_timestamp()
-    save_kanban_task(task)
-    append_audit({"action": "kanban_task_updated", "task_id": task_id})
-    return task
-
-@app.post("/api/kanban/tasks/{task_id}/complete")
-def kanban_complete_task(task_id: str, data: KanbanComplete):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    task = json.loads(path.read_text())
-    task["status"] = "done"
-    task["summary"] = data.summary
-    task["completed_at"] = get_timestamp()
-    task["updated"] = get_timestamp()
-    save_kanban_task(task)
-    append_audit({"action": "kanban_task_completed", "task_id": task_id})
-    return task
-
-@app.post("/api/kanban/tasks/{task_id}/block")
-def kanban_block_task(task_id: str, data: KanbanBlock):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    task = json.loads(path.read_text())
-    task["status"] = "blocked"
-    task["block_reason"] = data.reason
-    task["updated"] = get_timestamp()
-    save_kanban_task(task)
-    append_audit({"action": "kanban_task_blocked", "task_id": task_id})
-    return task
-
-@app.post("/api/kanban/tasks/{task_id}/unblock")
-def kanban_unblock_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    task = json.loads(path.read_text())
-    task["status"] = "ready"
-    task["block_reason"] = ""
-    task["updated"] = get_timestamp()
-    save_kanban_task(task)
-    append_audit({"action": "kanban_task_unblocked", "task_id": task_id})
-    return task
-
-@app.post("/api/kanban/tasks/{task_id}/comments")
-def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    task = json.loads(path.read_text())
-    comment = {
-        "id": str(uuid.uuid4())[:8],
-        "message": data.message,
-        "timestamp": get_timestamp(),
-    }
-    task.setdefault("comments", []).append(comment)
-    task["updated"] = get_timestamp()
-    save_kanban_task(task)
-    return task
-
-@app.post("/api/kanban/links")
-def kanban_add_link(data: KanbanLinkCreate):
-    for tid in [data.parent_id, data.child_id]:
-        path = KANBAN_DIR / f"{tid}.json"
-        if not path.exists():
-            raise HTTPException(404, f"Task {tid} not found")
-        t = json.loads(path.read_text())
-        t.setdefault("links", [])
-        link = {"parent": data.parent_id, "child": data.child_id}
-        if link not in t["links"]:
-            t["links"].append(link)
-        t["updated"] = get_timestamp()
-        save_kanban_task(t)
-    append_audit({"action": "kanban_link_added", "parent": data.parent_id, "child": data.child_id})
-    return {"status": "linked"}
-
-@app.delete("/api/kanban/links")
-def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
-    for tid in [parent_id, child_id]:
-        path = KANBAN_DIR / f"{tid}.json"
-        if path.exists():
-            t = json.loads(path.read_text())
-            t.setdefault("links", [])
-            t["links"] = [l for l in t["links"] if not (l.get("parent") == parent_id and l.get("child") == child_id)]
-            t["updated"] = get_timestamp()
-            save_kanban_task(t)
-    return {"status": "unlinked"}
-
-@app.post("/api/kanban/dispatch")
-def kanban_dispatch():
-    append_audit({"action": "kanban_dispatch_triggered"})
-    return {"status": "dispatch_triggered", "message": "Dispatcher notified"}
-
-@app.post("/api/kanban/tasks/{task_id}/specify")
-def kanban_specify_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    task = json.loads(path.read_text())
-    if task.get("status") == "triage":
-        task["status"] = "todo"
-        task["updated"] = get_timestamp()
-        save_kanban_task(task)
-    return task
-
-@app.post("/api/kanban/tasks/{task_id}/decompose")
-def kanban_decompose_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    task = json.loads(path.read_text())
-    children = []
-    for i, subtask in enumerate(task.get("body", "").split("\n")):
-        subtask = subtask.strip().lstrip("-* ")
-        if subtask:
-            child = {
-                "id": str(uuid.uuid4())[:8],
-                "title": subtask[:80],
-                "body": subtask,
-                "status": "todo",
-                "priority": task.get("priority", "medium"),
-                "assignee": "",
-                "comments": [],
-                "links": [{"parent": task_id, "child": ""}],
-                "created": get_timestamp(),
-                "updated": get_timestamp(),
-            }
-            child["links"][0]["child"] = child["id"]
-            save_kanban_task(child)
-            children.append(child)
-    return {"parent": task_id, "children": children}
-
-# ─── Routes: Goals (4 endpoints) ─────────────────────────────────
+# ─── Routes: Goals (4 endpoints) ──────────────────────────────
 
 @app.get("/api/goals")
 def list_goals():
@@ -1218,10 +1556,14 @@ def list_journal_entries():
 @app.get("/api/journal/entries/{entry_date}")
 def get_journal_entry(entry_date: str):
     try:
-        path = JOURNAL_DIR / f"{entry_date}.md"
         ensure_dir(JOURNAL_DIR)
+        # Harden against path traversal: resolve {entry_date}.md and ensure it
+        # stays inside JOURNAL_DIR before any filesystem access.
+        path = _safe_path(JOURNAL_DIR, f"{entry_date}.md")
         content = path.read_text() if path.exists() else ""
         return {"date": entry_date, "content": content}
+    except HTTPException:
+        raise
     except Exception as e:
         return {"date": entry_date, "content": "", "error": str(e)}
 
@@ -1229,7 +1571,9 @@ def get_journal_entry(entry_date: str):
 def save_journal_entry(entry_date: str, data: JournalSave):
     try:
         ensure_dir(JOURNAL_DIR)
-        path = JOURNAL_DIR / f"{entry_date}.md"
+        # Harden against path traversal: resolve {entry_date}.md and ensure it
+        # stays inside JOURNAL_DIR before writing.
+        path = _safe_path(JOURNAL_DIR, f"{entry_date}.md")
         path.write_text(data.content)
         append_audit({"action": "journal_saved", "date": entry_date})
         return {"status": "saved", "date": entry_date}
@@ -1251,7 +1595,39 @@ def search_journal(q: str = Query("")):
     except Exception as e:
         return {"results": [], "error": str(e)}
 
-# ─── Routes: Agent Health (3 endpoints) ──────────────────────────
+# ─── Routes: Agent Health (3 endpoints) ─────────────────
+
+# Agent check caches for activity-based fields
+_agent_last_seen_cache = {}
+
+def _get_last_activity_from_artifacts(agent_name: str) -> Optional[str]:
+    """Derive last activity timestamp from existing artifacts (chat history, audit log)."""
+    try:
+        # Check chat history for agent activity
+        chat_file = BASE_DIR / "data" / "chat-history.json"
+        if chat_file.exists():
+            history = json.loads(chat_file.read_text())
+            messages = history.get("messages", [])
+            for msg in reversed(messages):
+                if msg.get("agent") == agent_name:
+                    return msg.get("timestamp")
+        
+        # Check audit log for agent activity
+        audit_file = BASE_DIR / "audit" / "audit.log"
+        if audit_file.exists():
+            lines = audit_file.read_text().strip().split("\n")
+            for line in reversed(lines):
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                    if entry.get("agent") == agent_name or agent_name in str(entry.get("action", "")):
+                        return entry.get("timestamp")
+                except:
+                    continue
+    except Exception:
+        pass
+    return None
 
 @app.get("/api/agents/health")
 def get_agent_health():
@@ -1259,10 +1635,34 @@ def get_agent_health():
         agents = []
         for name in ["opencode", "hermes", "gemini"]:
             info = check_agent(name)
-            info["uptime"] = 0
-            info["success_rate"] = 100
-            info["last_seen"] = get_timestamp()
-            agents.append(info)
+            availability = info["status"]  # online/offline/warning
+            
+            # Get real activity data from audit
+            runs = get_agent_runs_from_audit(name, limit=1000)
+            total_runs = len(runs)
+            last_run = runs[0] if runs else None
+            last_seen = last_run.get("timestamp") if last_run else None
+            
+            # Determine health label and reason
+            if availability == "offline":
+                health_label = "offline"
+                reason = "Agent CLI not available"
+            elif total_runs == 0:
+                health_label = "no_usage_yet"
+                reason = "Agent available but no recorded activity"
+            else:
+                health_label = "healthy"
+                reason = f"Online with {total_runs} recorded runs"
+            
+            agents.append({
+                "name": name,
+                "status": availability,
+                "health_label": health_label,
+                "health_reason": reason,
+                "total_runs": total_runs,
+                "last_seen": last_seen,
+                "availability": availability,
+            })
         return {"agents": agents, "updated": get_timestamp()}
     except Exception as e:
         return {"agents": [], "error": str(e), "updated": get_timestamp()}
@@ -1273,14 +1673,27 @@ def get_agent_stats(name: str):
         if name not in ["opencode", "hermes", "gemini"]:
             raise HTTPException(400, "Invalid agent")
         info = check_agent(name)
+        
+        # Get real activity data
+        runs = get_agent_runs_from_audit(name, limit=1000)
+        total_runs = len(runs)
+        last_run = runs[0] if runs else None
+        last_seen = last_run.get("timestamp") if last_run else None
+        
+        # Calculate success rate from recorded events
+        successful = sum(1 for r in runs if r.get("status") in ["success", None])
+        failed = sum(1 for r in runs if r.get("status") == "error")
+        success_rate = round(successful / total_runs * 100, 1) if total_runs > 0 else None
+        
         return {
             "name": name,
             "status": info["status"],
-            "total_runs": 0,
-            "successful_runs": 0,
-            "failed_runs": 0,
-            "avg_response_time": 0,
-            "last_seen": get_timestamp(),
+            "total_runs": total_runs,
+            "successful_runs": successful if total_runs > 0 else None,
+            "failed_runs": failed if total_runs > 0 else None,
+            "success_rate": success_rate,
+            "last_seen": last_seen,
+            "activity_source": "audit.log" if total_runs > 0 else "no recorded activity",
         }
     except HTTPException:
         raise
@@ -1293,55 +1706,125 @@ def refresh_agent_health():
         agents = []
         for name in ["opencode", "hermes", "gemini"]:
             info = check_agent(name)
-            agents.append(info)
+            runs = get_agent_runs_from_audit(name, limit=1000)
+            total_runs = len(runs)
+            last_run = runs[0] if runs else None
+            last_seen = last_run.get("timestamp") if last_run else None
+            
+            if info["status"] == "offline":
+                health_label = "offline"
+            elif total_runs == 0:
+                health_label = "no_usage_yet"
+            else:
+                health_label = "healthy"
+            
+            agents.append({
+                "name": name,
+                "status": info["status"],
+                "health_label": health_label,
+                "total_runs": total_runs,
+                "last_seen": last_seen,
+            })
         append_audit({"action": "agent_health_refreshed"})
         return {"agents": agents, "updated": get_timestamp()}
     except Exception as e:
         return {"agents": [], "error": str(e)}
 
-# ─── Routes: Smart Router (2 endpoints) ─────────────────────────
+# ─── Routes: Smart Router ────────────────────────────────────────────────
 
-ROUTER_RULES = {
-    "opencode": ["code", "devops", "deploy", "git", "file", "terraform", "docker", "test", "build", "infra", "script"],
-    "hermes": ["memory", "schedule", "channel", "skill", "cron", "reminder", "brain", "plugin", "backup"],
-    "gemini": ["research", "analyze", "search", "compare", "explain", "study", "learn", "document", "report", "review"],
-}
+@app.get("/api/router/config")
+def get_router_config():
+    """Get routing rules and capabilities from backend source-of-truth."""
+    try:
+        config = load_router_config()
+        return {
+            "routing_rules": config.get("routing_rules", []),
+            "agent_capabilities": config.get("agent_capabilities", {}),
+            "handoff_protocol": config.get("handoff_protocol", {"enabled": True}),
+        }
+    except Exception as e:
+        return {"error": str(e), "routing_rules": [], "agent_capabilities": {}}
 
 @app.post("/api/router/suggest")
 def router_suggest(data: RouterSuggest):
     try:
-        task_lower = data.task.lower()
-        scores = {}
-        for agent, keywords in ROUTER_RULES.items():
-            scores[agent] = sum(1 for k in keywords if k in task_lower)
-        best = max(scores, key=scores.get)
-        confidence = "high" if scores[best] >= 2 else "medium" if scores[best] == 1 else "low"
+        config = load_router_config()
+        scores, matched_rules, best, confidence = score_routing_rules(data.task, config)
+        
         return {
             "suggested_agent": best,
             "confidence": confidence,
             "scores": scores,
+            "matched_rules": matched_rules,
+            "capabilities": config.get("agent_capabilities", {}).get(best, []),
             "task": data.task,
         }
     except Exception as e:
-        return {"suggested_agent": "opencode", "confidence": "low", "error": str(e)}
+        return {"suggested_agent": "opencode", "confidence": "fallback", "error": str(e)}
 
 @app.post("/api/router/route")
 def router_route(data: RouterRoute):
     try:
+        route_id = str(uuid.uuid4())[:12]
+        
+        # Auto-resolve agent if not specified
         agent = data.agent.lower()
+        if agent == "auto":
+            config = load_router_config()
+            _, _, agent, _ = score_routing_rules(data.task, config)
+        
         if agent not in ["opencode", "hermes", "gemini"]:
             return {"status": "error", "message": f"Invalid agent: {agent}"}
-        append_audit({"action": "task_routed", "agent": agent, "task_preview": data.task[:50]})
+        
+        # Record the routing event
+        event_id = record_agent_run(
+            action="task_routed",
+            source="router",
+            agent=agent,
+            status="success",
+            metadata={"task_preview": data.task[:200], "route_id": route_id}
+        )
+        
+        # Dispatch to agent (using chat as the execution path)
+        dispatch_result = None
+        dispatch_error = None
+        try:
+            # Store in chat history for traceability
+            chat_file = BASE_DIR / "data" / "chat-history.json"
+            chat_history = {"messages": []}
+            if chat_file.exists():
+                chat_history = json.loads(chat_file.read_text())
+            
+            msg = {
+                "role": "user",
+                "content": data.task,
+                "agent": agent,
+                "timestamp": get_timestamp(),
+                "route_id": route_id,
+                "event_id": event_id,
+            }
+            chat_history["messages"].append(msg)
+            chat_file.write_text(json.dumps(chat_history, indent=2))
+            
+            dispatch_result = "Task queued for execution"
+        except Exception as e:
+            dispatch_error = str(e)
+        
         return {
             "status": "routed",
             "agent": agent,
             "task": data.task,
+            "route_id": route_id,
+            "event_id": event_id,
+            "dispatch_status": "queued" if dispatch_result else "failed",
+            "dispatch_result": dispatch_result,
+            "dispatch_error": dispatch_error,
             "message": f"Task routed to {agent}",
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# ─── Routes: Learning Analytics (2 endpoints) ───────────────────
+# ─── Routes: Learning Analytics (2 endpoints) ────────────────────────────────────────────────
 
 @app.get("/api/analytics/skills")
 def get_skill_analytics():
@@ -1354,15 +1837,23 @@ def get_skill_analytics():
                 score_path = d / "score-history.json"
                 scores = json.loads(score_path.read_text()) if score_path.exists() else []
                 eval_data = json.loads(eval_path.read_text()) if eval_path.exists() else {}
+                
+                # Calculate canonical fields
                 avg_score = sum(s.get("score", 0) for s in scores) / len(scores) if scores else 0
+                best_score = max([s.get("score", 0) for s in scores]) if scores else 0
+                
                 analytics.append({
                     "name": d.name,
+                    "score": round(avg_score / 100, 2) if avg_score > 1 else round(avg_score, 2),  # Normalize to 0-1
+                    "evals": len(scores),
+                    "best": round(best_score / 100, 2) if best_score > 1 else round(best_score, 2),  # Normalize to 0-1
+                    # Backward compatibility fields
                     "total_runs": len(scores),
                     "avg_score": round(avg_score, 1),
                     "last_score": scores[-1].get("score", 0) if scores else 0,
                     "trend": "up" if len(scores) >= 2 and scores[-1].get("score", 0) > scores[-2].get("score", 0) else "down" if len(scores) >= 2 else "stable",
                 })
-        return {"skills": sorted(analytics, key=lambda x: x["total_runs"], reverse=True)}
+        return {"skills": sorted(analytics, key=lambda x: x["evals"], reverse=True)}
     except Exception as e:
         return {"skills": [], "error": str(e)}
 
@@ -1370,22 +1861,25 @@ def get_skill_analytics():
 def get_trend_analytics():
     try:
         skills_dir = BASE_DIR / "skills"
-        trends = []
+        trends = {}  # Return as skill-keyed map
         for d in sorted(skills_dir.iterdir()):
             if d.is_dir() and not d.name.startswith("_"):
                 score_path = d / "score-history.json"
                 scores = json.loads(score_path.read_text()) if score_path.exists() else []
                 if scores:
-                    trends.append({
-                        "name": d.name,
-                        "scores": [s.get("score", 0) for s in scores[-10:]],
-                        "labels": [s.get("date", "") for s in scores[-10:]],
-                    })
+                    # Normalize scores to 0-1 range if they're percentages
+                    normalized_scores = []
+                    for s in scores[-10:]:
+                        score_val = s.get("score", 0)
+                        if score_val > 1:
+                            score_val = score_val / 100
+                        normalized_scores.append(score_val)
+                    trends[d.name] = normalized_scores
         return {"trends": trends}
     except Exception as e:
-        return {"trends": [], "error": str(e)}
+        return {"trends": {}, "error": str(e)}
 
-# ─── Routes: Session Replay (2 endpoints) ───────────────────────
+# ─── Routes: Session Replay (2 endpoints) ─────────────────
 
 @app.get("/api/sessions/list")
 def list_sessions():
@@ -1395,20 +1889,24 @@ def list_sessions():
         log_dir = sessions_dir / "log"
         if log_dir.exists():
             for f in sorted(log_dir.glob("*.log"), reverse=True)[:20]:
+                stat = f.stat()
                 sessions.append({
                     "id": f.stem,
                     "name": f.stem,
-                    "size": f.stat().st_size,
-                    "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+                    "size": stat.st_size,
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "date": datetime.fromtimestamp(stat.st_mtime).isoformat(),  # Canonical date field
                     "source": "opencode",
                 })
         hermes_sessions = Path.home() / ".hermes" / "sessions.json"
         if hermes_sessions.exists():
+            stat = hermes_sessions.stat()
             sessions.append({
                 "id": "hermes-sessions",
                 "name": "Hermes Session Archive",
-                "size": hermes_sessions.stat().st_size,
-                "modified": datetime.fromtimestamp(hermes_sessions.stat().st_mtime).isoformat(),
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "date": datetime.fromtimestamp(stat.st_mtime).isoformat(),  # Canonical date field
                 "source": "hermes",
             })
         return {"sessions": sessions}
@@ -1421,21 +1919,72 @@ def get_session_replay(session_id: str):
         sessions_dir = Path.home() / ".local" / "share" / "opencode"
         log_file = sessions_dir / "log" / f"{session_id}.log"
         if log_file.exists():
+            stat = log_file.stat()
             content = log_file.read_text()
             lines = content.split("\n")
             messages = []
             for line in lines:
-                if "user:" in line.lower() or "assistant:" in line.lower():
-                    messages.append(line)
+                line = line.strip()
+                if not line:
+                    continue
+                # Parse log lines into message objects
+                # Format: "timestamp - user: message" or "timestamp - assistant: message"
+                if " - user:" in line or " - assistant:" in line:
+                    parts = line.split(" - ", 1)
+                    timestamp = parts[0] if parts else datetime.now().isoformat()
+                    msg_part = parts[1] if len(parts) > 1 else line
+                    
+                    if msg_part.startswith("user:"):
+                        content_text = msg_part[5:].strip()
+                        messages.append({
+                            "role": "user",
+                            "content": content_text,
+                            "timestamp": timestamp
+                        })
+                    elif msg_part.startswith("assistant:"):
+                        content_text = msg_part[10:].strip()
+                        messages.append({
+                            "role": "assistant",
+                            "content": content_text,
+                            "timestamp": timestamp
+                        })
+                elif line.lower().startswith("user:"):
+                    messages.append({
+                        "role": "user",
+                        "content": line[5:].strip(),
+                        "timestamp": datetime.now().isoformat()
+                    })
+                elif line.lower().startswith("assistant:"):
+                    messages.append({
+                        "role": "assistant",
+                        "content": line[10:].strip(),
+                        "timestamp": datetime.now().isoformat()
+                    })
+            
             return {
                 "session_id": session_id,
+                "session": {
+                    "id": session_id,
+                    "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "source": "opencode",
+                },
                 "lines": len(lines),
                 "messages": messages[:100],
                 "content": content[:5000],
             }
-        return {"session_id": session_id, "messages": [], "content": "Session log not found"}
+        return {
+            "session_id": session_id,
+            "session": {"id": session_id, "created_at": None},
+            "messages": [],
+            "content": "Session log not found"
+        }
     except Exception as e:
-        return {"session_id": session_id, "messages": [], "error": str(e)}
+        return {
+            "session_id": session_id,
+            "session": {"id": session_id, "created_at": None},
+            "messages": [],
+            "error": str(e)
+        }
 
 # ─── Routes: Tools Integration (NotebookLM, Cron, KB) ──────────────
 
@@ -1595,274 +2144,7 @@ def tools_kb():
         entries.append({"title": title, "category": f.parent.name, "path": str(f)})
     return {"entries": entries[:100]}
 
-# ─── CRM: Contacts ─────────────────────────────────────────────
-# Data stored as JSON array at ~/.hermes/crm_contacts.json
-# Safe behind localhost — not exposed to internet
-
-CRM_FILE = Path("/home/hermeswebui/.hermes/crm_contacts.json")
-CRM_ACCESS_LOG = Path("/home/hermeswebui/.hermes/crm_access_log.json")
-CRM_ACCESS_LOG_DAYS = 30  # auto-prune entries older than this
-
-def _log_crm_access(action: str, contact_id: str = "", contact_name: str = "", endpoint: str = "", method: str = "", agent: str = "dashboard"):
-    """Log a CRM access entry with auto-pruning."""
-    import time as _time
-    now = _time.time()
-    dt = datetime.now(timezone.utc)
-    entry = {
-        "timestamp": now,
-        "datetime": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "action": action,
-        "contact_id": contact_id,
-        "contact_name": contact_name,
-        "endpoint": endpoint,
-        "method": method,
-        "agent": agent,
-    }
-    try:
-        CRM_ACCESS_LOG.parent.mkdir(parents=True, exist_ok=True)
-        entries = []
-        if CRM_ACCESS_LOG.exists():
-            try:
-                entries = json.loads(CRM_ACCESS_LOG.read_text())
-                if not isinstance(entries, list):
-                    entries = []
-            except:
-                entries = []
-        # Auto-prune entries older than 30 days
-        cutoff = now - (CRM_ACCESS_LOG_DAYS * 86400)
-        entries = [e for e in entries if e.get("timestamp", 0) >= cutoff]
-        entries.append(entry)
-        # Keep max 5000 entries
-        if len(entries) > 5000:
-            entries = entries[-5000:]
-        CRM_ACCESS_LOG.write_text(json.dumps(entries, indent=2))
-    except Exception as e:
-        print(f"CRM access log error: {e}")
-
-def _load_crm():
-    if CRM_FILE.exists():
-        try:
-            return json.loads(CRM_FILE.read_text())
-        except:
-            return []
-    return []
-
-def _save_crm(contacts):
-    CRM_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CRM_FILE.write_text(json.dumps(contacts, indent=2))
-
-# ─── CRM: Access Log ───────────────────────────────────────────
-
-@app.get("/api/crm/access-log")
-def crm_access_log():
-    """Return last 50 access log entries (newest first)."""
-    try:
-        if CRM_ACCESS_LOG.exists():
-            entries = json.loads(CRM_ACCESS_LOG.read_text())
-            if not isinstance(entries, list):
-                entries = []
-            entries.reverse()
-            return {"entries": entries[:50]}
-        return {"entries": []}
-    except Exception as e:
-        return {"entries": [], "error": str(e)}
-
-@app.post("/api/crm/access-log/clear")
-def crm_access_log_clear(confirm: bool = False):
-    """Clear the access log (requires confirm=true)."""
-    if not confirm:
-        return {"success": False, "error": "confirm=true parameter required"}
-    try:
-        CRM_ACCESS_LOG.write_text("[]")
-        return {"success": True, "message": "Access log cleared"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.get("/api/crm/contacts")
-def crm_list():
-    contacts = _load_crm()
-    for c in contacts:
-        _log_crm_access(
-            action="read",
-            contact_id=c.get("id", ""),
-            contact_name=f"{c.get('firstName', '')} {c.get('lastName', '')}".strip(),
-            endpoint="/api/crm/contacts",
-            method="GET",
-            agent="dashboard"
-        )
-    return {"contacts": contacts}
-
-@app.post("/api/crm/contacts")
-def crm_add(data: dict):
-    import uuid
-    contact = {k: (v.strip() if isinstance(v, str) else v) for k, v in data.items()}
-    contact["id"] = str(uuid.uuid4())[:8]
-    cid = contact["id"]
-    cname = f"{contact.get('firstName', '')} {contact.get('lastName', '')}".strip()
-    contacts = _load_crm()
-    contacts.append(contact)
-    _save_crm(contacts)
-    _log_crm_access(
-        action="add",
-        contact_id=cid,
-        contact_name=cname,
-        endpoint="/api/crm/contacts",
-        method="POST",
-        agent="dashboard"
-    )
-    return {"success": True, "id": contact["id"]}
-
-@app.put("/api/crm/contacts/{contact_id}")
-def crm_update(contact_id: str, data: dict):
-    contacts = _load_crm()
-    for c in contacts:
-        if c.get("id") == contact_id:
-            cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
-            for k, v in data.items():
-                if isinstance(v, str):
-                    c[k] = v.strip()
-                else:
-                    c[k] = v
-            _save_crm(contacts)
-            _log_crm_access(
-                action="write",
-                contact_id=contact_id,
-                contact_name=cname,
-                endpoint=f"/api/crm/contacts/{contact_id}",
-                method="PUT",
-                agent="dashboard"
-            )
-            return {"success": True}
-    return {"success": False, "error": "Contact not found"}, 404
-
-@app.delete("/api/crm/contacts/{contact_id}")
-def crm_delete(contact_id: str):
-    contacts = _load_crm()
-    deleted_name = ""
-    for c in contacts:
-        if c.get("id") == contact_id:
-            deleted_name = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
-            break
-    new_contacts = [c for c in contacts if c.get("id") != contact_id]
-    if len(new_contacts) == len(contacts):
-        return {"success": False, "error": "Contact not found"}, 404
-    _save_crm(new_contacts)
-    _log_crm_access(
-        action="delete",
-        contact_id=contact_id,
-        contact_name=deleted_name,
-        endpoint=f"/api/crm/contacts/{contact_id}",
-        method="DELETE",
-        agent="dashboard"
-    )
-    return {"success": True}
-
-
-# ─── CRM: GME Reimbursement Tracker ───────────────────────────
-
-GME_ANNUAL_LIMIT = 1250
-
-@app.get("/api/crm/gme/summary")
-def gme_summary():
-    contacts = _load_crm()
-    _log_crm_access(
-        action="read",
-        contact_id="",
-        contact_name="GME Summary",
-        endpoint="/api/crm/gme/summary",
-        method="GET",
-        agent="dashboard"
-    )
-    contacts = _load_crm()
-    residents = [c for c in contacts if c.get("category") == "Resident"]
-    total_pool = len(residents) * GME_ANNUAL_LIMIT
-    total_used = 0
-    residents_with_funds = 0
-    for r in residents:
-        used = sum(rem.get("amount", 0) for rem in (r.get("reimbursements") or []))
-        total_used += used
-        if used < GME_ANNUAL_LIMIT:
-            residents_with_funds += 1
-    total_remaining = total_pool - total_used
-    return {
-        "total_pool": total_pool,
-        "total_used": total_used,
-        "total_remaining": total_remaining,
-        "residents_with_funds": residents_with_funds,
-        "total_residents": len(residents),
-    }
-
-@app.get("/api/crm/gme/residents")
-def gme_residents():
-    contacts = _load_crm()
-    residents = [c for c in contacts if c.get("category") == "Resident"]
-    for r in residents:
-        cname = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
-        _log_crm_access(
-            action="read",
-            contact_id=r.get("id", ""),
-            contact_name=cname,
-            endpoint="/api/crm/gme/residents",
-            method="GET",
-            agent="dashboard"
-        )
-    result = []
-    for r in residents:
-        reimbursements = r.get("reimbursements") or []
-        total_used = sum(rem.get("amount", 0) for rem in reimbursements)
-        result.append({
-            "id": r.get("id"),
-            "firstName": r.get("firstName", ""),
-            "lastName": r.get("lastName", ""),
-            "pgy": r.get("pgy", ""),
-            "email": r.get("email", ""),
-            "total_used": total_used,
-            "reimbursements": sorted(reimbursements, key=lambda x: x.get("date", "")),
-        })
-    return {"residents": result}
-
-class ReimbursementRequest(BaseModel):
-    resident_id: str
-    date: str
-    amount: float
-    category: str
-    status: str = "paid"
-
-@app.post("/api/crm/gme/reimbursement")
-def gme_add_reimbursement(req: ReimbursementRequest):
-    contacts = _load_crm()
-    for c in contacts:
-        if c.get("id") == req.resident_id:
-            if c.get("category") != "Resident":
-                return {"success": False, "error": "Contact is not a resident"}, 400
-            reimbursements = c.get("reimbursements") or []
-            total_used = sum(rem.get("amount", 0) for rem in reimbursements)
-            if total_used + req.amount > GME_ANNUAL_LIMIT:
-                remaining = GME_ANNUAL_LIMIT - total_used
-                return {"success": False, "error": f"Amount exceeds remaining funds (${remaining:.2f})"}, 400
-            new_rem = {
-                "date": req.date,
-                "amount": req.amount,
-                "category": req.category,
-                "status": req.status,
-            }
-            reimbursements.append(new_rem)
-            c["reimbursements"] = reimbursements
-            _save_crm(contacts)
-            cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
-            _log_crm_access(
-                action="write",
-                contact_id=req.resident_id,
-                contact_name=cname,
-                endpoint="/api/crm/gme/reimbursement",
-                method="POST",
-                agent="dashboard"
-            )
-            return {"success": True, "reimbursement": new_rem}
-    return {"success": False, "error": "Contact not found"}, 404
-
-
-# ─── Call Schedule Integration ────────────────────────────────
+# ─── Call Schedule Integration ───────────────────────────────────────
 # Faculty call schedules for Moses, Wakefield, Weiler (Jul-Dec 2026)
 # Parsed from Google Drive Excel: Call Schedule Q3-Q4 2026.xlsx
 # File: ~/.hermes/call_schedule_faculty.json
@@ -2694,6 +2976,90 @@ prompt_tools_dir = BASE_DIR / "prompt-tools"
 if prompt_tools_dir.exists():
     app.mount("/prompt-tools", StaticFiles(directory=str(prompt_tools_dir)), name="prompt-tools")
 
+# Mount Hermes WebUI redirect — the chat.js expects this endpoint
+@app.get("/hermes-webui/", response_class=HTMLResponse)
+@app.get("/hermes-webui", response_class=HTMLResponse)
+def hermes_webui_redirect():
+    """Redirect to the actual Hermes WebUI or show embedded interface."""
+    return HTMLResponse(content="""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hermes WebUI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        .logo {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #6c5ce7;
+        }
+        p {
+            font-size: 14px;
+            color: #a0a0a0;
+            margin-bottom: 24px;
+            max-width: 400px;
+            line-height: 1.5;
+        }
+        .btn {
+            background: linear-gradient(135deg, #6c5ce7 0%, #a855f7 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3);
+        }
+        .note {
+            margin-top: 32px;
+            font-size: 12px;
+            color: #666;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            max-width: 360px;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">🧙‍♂️</div>
+    <h1>Hermes Agent WebUI</h1>
+    <p>You are accessing Hermes through the Agentic OS dashboard. Use this window to interact with Hermes directly.</p>
+    <a href="/dashboard/#chat" class="btn" onclick="window.parent.postMessage({type: 'hermes-ready'}, '*'); return false;">Back to AI Chat</a>
+    <div class="note">
+        💡 <strong>Note:</strong> The full Hermes WebUI runs separately. This embedded view provides basic Hermes access within Agentic OS.
+    </div>
+    <script>
+        // Notify parent that iframe loaded
+        window.parent.postMessage({type: 'hermes-ready'}, '*');
+    </script>
+</body>
+</html>
+""")
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     html_file = BASE_DIR / "dashboard" / "index.html"
@@ -2808,26 +3174,6 @@ async def fs_stat(path: str = ""):
         "is_dir": stat_mod.S_ISDIR(s.st_mode)
     }
 
-@app.get("/api/fs/list")
-async def fs_list(path: str = ""):
-    """List directory contents."""
-    if not path or not os.path.isdir(path):
-        return {"files": []}
-    files = []
-    for f in os.listdir(path):
-        fp = os.path.join(path, f)
-        files.append({"name": f, "size": os.path.getsize(fp), "is_dir": os.path.isdir(fp)})
-    return {"files": files}
-
-@app.get("/api/fs/read")
-async def fs_read(path: str = ""):
-    """Read a text file."""
-    if not path or not os.path.isfile(path):
-        return {"error": "File not found"}
-    with open(path) as f:
-        return {"content": f.read()}
-
-
 # ─── Routes: Unified Data Service Proxy ───────────────────────────
 
 DATA_SERVICE_BASE = "http://localhost:8086"
@@ -2867,37 +3213,7 @@ async def data_service_health():
         raise HTTPException(503, "Data service (port 8086) not running")
 
 
-# ─── Routes: GME Tracker (proxied from data service) ──────────────
-
-@app.get("/api/crm/gme/summary")
-async def gme_summary_proxy():
-    """GME summary proxied from data service."""
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            ds = await client.get(f"{DATA_SERVICE_BASE}/api/reimbursement/gme-summary")
-            data = ds.json()
-            return {
-                "total_pool": data["total_cap"],
-                "total_used": data["total_used"],
-                "total_remaining": data["total_remaining"],
-                "active_residents": data["total_residents"],
-                "cap_per_resident": data["annual_cap_per_resident"]
-            }
-    except httpx.ConnectError:
-        raise HTTPException(503, "Data service (port 8086) not running")
-
-@app.get("/api/crm/gme/residents")
-async def gme_residents_proxy():
-    """GME residents list proxied from data service."""
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            ds = await client.get(f"{DATA_SERVICE_BASE}/api/unified/residents")
-            return ds.json()
-    except httpx.ConnectError:
-        raise HTTPException(503, "Data service (port 8086) not running")
-
-
-# ─── Routes: Voice PIN Management ──────────────────────────────────
+# ─── Routes: Voice PIN Management ─────────────────────────────────
 
 PIN_DB_PATH = BASE_DIR / "data" / "user_pins.json"
 

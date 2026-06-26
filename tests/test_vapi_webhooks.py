@@ -99,6 +99,39 @@ def test_verify_caller_name_normalization(client):
     assert result["verified"] is True
 
 
+def test_verify_caller_by_ez_id_success(client):
+    """Test that a caller can authenticate using their EZ ID instead of name."""
+    # Nitya Abraham's EZ ID is 500364, PIN is 0605
+    payload = _function_call("verifyCaller", {"caller_ez_id": "500364", "caller_pin": "0605"})
+    r = client.post("/vapi", json=payload)
+    assert r.status_code == 200
+    result = json.loads(r.json()["result"])
+    assert result["verified"] is True
+    assert result["next_step"] == "proceed"
+    assert "greeting" in result
+    assert "Nitya" in result.get("greeting", "")
+
+
+def test_verify_caller_by_ez_id_wrong_pin(client):
+    """EZ ID authenitcation should fail with bad PIN."""
+    payload = _function_call("verifyCaller", {"caller_ez_id": "500364", "caller_pin": "9999"})
+    r = client.post("/vapi", json=payload)
+    assert r.status_code == 200
+    result = json.loads(r.json()["result"])
+    assert result["verified"] is False
+    assert result["next_step"] == "retry_pin"
+
+
+def test_verify_caller_by_ez_id_not_found(client):
+    """Non-existent EZ ID should return take_message."""
+    payload = _function_call("verifyCaller", {"caller_ez_id": "NONEXISTENT", "caller_pin": "1234"})
+    r = client.post("/vapi", json=payload)
+    assert r.status_code == 200
+    result = json.loads(r.json()["result"])
+    assert result["verified"] is False
+    assert result["next_step"] == "take_message"
+
+
 def test_knowledge_search_returns_results(client):
     payload = _function_call("knowledgeSearch", {"q": "Grand Rounds schedule"})
     r = client.post("/vapi", json=payload)

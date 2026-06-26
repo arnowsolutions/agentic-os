@@ -28,6 +28,9 @@ class KanbanTaskCreate(BaseModel):
     status: str = "triage"
     priority: str = "medium"
     assignee: str = ""
+    category: str = "general"
+    tags: list = []
+    target_date: str = ""
 
 class KanbanTaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -35,6 +38,9 @@ class KanbanTaskUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     assignee: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[list] = None
+    target_date: Optional[str] = None
 
 class KanbanComplete(BaseModel):
     summary: str = ""
@@ -82,9 +88,9 @@ def kanban_board(status: Optional[str] = None):
             s = t.get("status", "triage")
             if s in columns:
                 columns[s].append(t)
-        return {"columns": columns, "total": len(tasks)}
+        return {"columns": columns, "tasks": tasks, "total": len(tasks)}
     except Exception as e:
-        return {"error": str(e), "columns": {}, "total": 0}
+        return {"error": str(e), "columns": {}, "tasks": [], "total": 0}
 
 @router.get("/tasks/{task_id}")
 def kanban_get_task(task_id: str):
@@ -103,6 +109,9 @@ def kanban_create_task(data: KanbanTaskCreate):
             "status": data.status,
             "priority": data.priority,
             "assignee": data.assignee,
+            "category": data.category,
+            "tags": data.tags or [],
+            "target_date": data.target_date,
             "comments": [],
             "links": [],
             "created": get_timestamp(),
@@ -119,13 +128,31 @@ def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
-    for field in ["title", "body", "status", "priority", "assignee"]:
+    for field in ["title", "body", "status", "priority", "assignee", "category", "tags", "target_date"]:
         val = getattr(data, field, None)
         if val is not None:
             task[field] = val
     task["updated"] = get_timestamp()
     save_kanban_task(task)
     return task
+
+@router.delete("/tasks/{task_id}")
+def kanban_delete_task(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    # Remove the task file
+    path.unlink()
+    # Clean up links from other tasks that reference this task
+    for f in KANBAN_DIR.glob("*.json"):
+        t = json.loads(f.read_text())
+        if t.get("links"):
+            original_len = len(t["links"])
+            t["links"] = [l for l in t["links"] if l.get("parent") != task_id and l.get("child") != task_id]
+            if len(t["links"]) != original_len:
+                t["updated"] = get_timestamp()
+                f.write_text(json.dumps(t, indent=2))
+    return {"success": True, "id": task_id}
 
 @router.post("/tasks/{task_id}/complete")
 def kanban_complete_task(task_id: str, data: KanbanComplete):
@@ -233,14 +260,16 @@ def kanban_decompose_task(task_id: str):
     for i, subtask in enumerate(task.get("body", "").split("\n")):
         subtask = subtask.strip().lstrip("-* ")
         if subtask:
+            child_id = str(uuid.uuid4())[:8]
             child = {
-                "id": str(uuid.uuid4())[:8],
+                "id": child_id,
                 "title": subtask[:80],
                 "body": subtask,
                 "status": "todo",
                 "priority": task.get("priority", "medium"),
+                "assignee": "",
                 "comments": [],
-                "links": [{"parent": task_id, "child": str(uuid.uuid4())[:8]}],
+                "links": [{"parent": task_id, "child": child_id}],
                 "created": get_timestamp(),
                 "updated": get_timestamp(),
             }

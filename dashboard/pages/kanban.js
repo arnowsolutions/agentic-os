@@ -180,6 +180,9 @@ async function createKanbanTask() {
       status: document.getElementById('kanbanStatus').value,
       priority: document.getElementById('kanbanPriority').value,
       assignee: document.getElementById('kanbanAssigned').value.trim(),
+      category: document.getElementById('kanbanCategory').value,
+      tags: tags,
+      target_date: document.getElementById('kanbanDate').value,
     });
     showToast('Task added to kanban board!', 'success');
     closeModal();
@@ -207,7 +210,16 @@ async function onKanbanDrop(e, status) {
 }
 
 function showKanbanDetail(id) {
-  const task = kanbanData?.tasks?.find(t => t.id === id);
+  // Normalize lookup: check flat tasks array first, then fall back to columns
+  let task = null;
+  if (kanbanData?.tasks) {
+    task = kanbanData.tasks.find(t => t.id === id);
+  }
+  if (!task && kanbanData?.columns) {
+    // Flatten columns to find task
+    const allTasks = Object.values(kanbanData.columns).flat();
+    task = allTasks.find(t => t.id === id);
+  }
   if (!task) return;
   const modal = document.getElementById('modalContainer');
   modal.innerHTML = `

@@ -133,8 +133,18 @@ function updateAgentStatusText() {
   const el = document.getElementById('chatAgentStatus');
   if (el && window._currentAgent) {
     const agentEl = document.querySelector(`.chat-agent[data-agent="${window._currentAgent}"]`);
-    const dot = agentEl ? agentEl.querySelector('.agent-dot').className : 'offline';
-    el.textContent = `${window._currentAgent} • ${dot === 'agent-dot online' ? 'online' : 'offline'}`;
+    const dot = agentEl ? agentEl.querySelector('.agent-dot') : null;
+    let statusText = 'unknown';
+    if (dot) {
+      if (dot.classList.contains('online')) {
+        statusText = 'online';
+      } else if (dot.classList.contains('warning')) {
+        statusText = 'warning';
+      } else if (dot.classList.contains('offline')) {
+        statusText = 'offline';
+      }
+    }
+    el.textContent = `${window._currentAgent} • ${statusText}`;
   }
 }
 

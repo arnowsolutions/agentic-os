@@ -1857,3 +1857,311 @@ pre {
 .google-studio-open-btn:hover {
   background: rgba(52,168,83,0.25);
 }
+
+
+/* ─── Navigation refactoring (NAV_CONFIG) ─────────────────────────── */
+
+/* External links (VS Code, etc.) — rendered in a separate block with a
+   top border separator. They never get the data-page attribute, so they
+   can never become active. */
+.sidebar-external {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-external {
+  opacity: 0.78;
+}
+
+.nav-external:hover {
+  opacity: 1;
+}
+
+.nav-external-glyph {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
+  width: auto;
+  text-align: right;
+}
+
+/* Disabled menu item — muted but still clickable so it routes to the
+   "Coming soon" empty state. */
+.nav-item-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.nav-item-disabled:hover {
+  opacity: 0.55;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* Command-search dropdown — anchored below the search input. The
+   .topbar-search wrapper is positioned relative so the dropdown can be
+   absolutely positioned inside it. */
+.topbar-search {
+  position: relative;
+}
+
+.search-results {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.search-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s ease;
+}
+
+.search-result:last-child { border-bottom: none; }
+
+.search-result:hover,
+.search-result-active {
+  background: var(--bg-card-hover);
+}
+
+.search-result-icon {
+  font-size: 16px;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.search-result-label {
+  font-size: 13px;
+  flex: 1;
+}
+
+.search-result-flag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+|.search-result-empty {
+|  padding: 12px;
+|  font-size: 13px;
+|  color: var(--text-muted);
+|  text-align: center;
+|}
+|
+|/* Reuse existing .empty-state* classes for disabled/missing pages — no
+|   new empty-state CSS needed. */
+|
+|/* ─── People Page Styles ─── */
+|.people-page { display: flex; flex-direction: column; gap: 20px; }
+|.people-toolbar {
+|  display: flex; align-items: center; gap: 16px;
+|  flex-wrap: wrap;
+|}
+|.people-search {
+|  display: flex; align-items: center; gap: 10px;
+|  flex: 1; min-width: 280px;
+|  background: var(--bg-input); border: 1px solid var(--border);
+|  border-radius: var(--radius); padding: 8px 12px;
+|}
+|.people-search .search-icon { font-size: 14px; color: var(--text-muted); }
+|.people-search .form-input {
+|  flex: 1; background: none; border: none; padding: 0;
+|  box-shadow: none;
+|}
+|.people-search .form-input:focus { box-shadow: none; }
+|.people-filters {
+|  display: flex; align-items: center; gap: 10px;
+|}
+|.people-filters .form-select { min-width: 160px; }
+|.people-content { flex: 1; }
+|.people-grid {
+|  display: grid;
+|  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+|  gap: 16px;
+|}
+|.people-card {
+|  background: var(--bg-card); border: 1px solid var(--border);
+|  border-radius: var(--radius-lg); padding: 16px;
+|  cursor: pointer; transition: var(--transition);
+|}
+|.people-card:hover {
+|  border-color: var(--border-hover);
+|  transform: translateY(-2px);
+|  box-shadow: var(--shadow);
+|}
+|.people-card-header {
+|  display: flex; align-items: center; justify-content: space-between;
+|  margin-bottom: 12px;
+|}
+|.people-avatar {
+|  width: 48px; height: 48px; border-radius: 50%;
+|  background: var(--accent-glow); color: var(--accent-light);
+|  display: flex; align-items: center; justify-content: center;
+|  font-size: 18px; font-weight: 700;
+|}
+|.people-avatar-large {
+|  width: 80px; height: 80px; border-radius: 50%;
+|  background: var(--accent-glow); color: var(--accent-light);
+|  display: flex; align-items: center; justify-content: center;
+|  font-size: 28px; font-weight: 700;
+|}
+|.people-avatar-small {
+|  width: 32px; height: 32px; border-radius: 50%;
+|  background: var(--accent-glow); color: var(--accent-light);
+|  display: flex; align-items: center; justify-content: center;
+|  font-size: 12px; font-weight: 600;
+|}
+|.people-card-actions { opacity: 0; transition: opacity 0.2s; }
+|.people-card:hover .people-card-actions { opacity: 1; }
+|.people-name { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+|.people-meta {
+|  display: flex; flex-wrap: wrap; gap: 6px;
+|  margin-bottom: 8px;
+|}
+|.people-role { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+|.people-contact {
+|  font-size: 12px; color: var(--text-muted);
+|  display: flex; align-items: center; gap: 6px;
+|}
+|.people-contact-small { font-size: 11px; color: var(--text-muted); }
+|.people-gme-mini {
+|  margin-top: 12px; padding-top: 12px;
+|  border-top: 1px solid var(--border);
+|}
+|.people-gme-header {
+|  display: flex; align-items: center; justify-content: space-between;
+|  font-size: 11px; margin-bottom: 6px;
+|}
+|.people-gme-remaining { font-weight: 600; color: var(--green); }
+|.people-gme-remaining.low { color: var(--red); }
+|.people-stats {
+|  text-align: center; font-size: 12px; color: var(--text-muted);
+|  margin-top: 16px;
+|}
+|.people-table { width: 100%; }
+|.people-table-name {
+|  display: flex; align-items: center; gap: 10px;
+|}
+|.people-gme-cell { display: flex; align-items: center; gap: 10px; }
+|.people-gme-bar {
+|  flex: 1; height: 6px; background: var(--bg-primary);
+|  border-radius: 3px; overflow: hidden;
+|}
+|.people-gme-progress {
+|  height: 100%; background: var(--green);
+|  border-radius: 3px; transition: width 0.3s;
+|}
+|.people-gme-progress.warning { background: var(--red); }
+|.people-gme-text { font-size: 11px; white-space: nowrap; }
+|.people-gme-text.low { color: var(--red); }
+|.progress-fill.warning { background: var(--red); }
+|
+|/* Contact Detail Modal */
+|.people-detail { max-height: 60vh; overflow-y: auto; }
+|.people-detail-header {
+|  display: flex; align-items: center; gap: 16px;
+|  padding-bottom: 16px; border-bottom: 1px solid var(--border);
+|  margin-bottom: 16px;
+|}
+|.people-detail-info h2 { margin-bottom: 8px; }
+|.people-detail-meta {
+|  display: flex; flex-wrap: wrap; gap: 6px;
+|}
+|.people-detail-section { margin-bottom: 20px; }
+|.people-detail-section h4 {
+|  font-size: 13px; font-weight: 600;
+|  color: var(--text-secondary); margin-bottom: 12px;
+|}
+|.people-detail-grid {
+|  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+|  gap: 12px;
+|}
+|.people-detail-item {
+|  display: flex; flex-direction: column; gap: 4px;
+|}
+|.people-detail-label {
+|  font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+|}
+|.people-detail-value {
+|  font-size: 13px; color: var(--text-primary);
+|}
+|.people-notes {
+|  font-size: 13px; color: var(--text-secondary);
+|  line-height: 1.5; white-space: pre-wrap;
+|}
+|.people-gme-full { }
+|.people-gme-cards {
+|  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+|}
+|.people-gme-summary {
+|  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+|}
+|.people-gme-stat {
+|  text-align: center;
+|  padding: 12px; background: var(--bg-secondary);
+|  border-radius: var(--radius); border: 1px solid var(--border);
+|}
+|.people-gme-stat-value {
+|  font-size: 20px; font-weight: 700; color: var(--text-primary);
+|}
+|.people-gme-stat-value.low { color: var(--red); }
+|.people-gme-stat-label {
+|  font-size: 11px; color: var(--text-muted); margin-top: 4px;
+|}
+|.people-reimbursements {
+|  display: flex; flex-direction: column; gap: 8px;
+|}
+|.people-reimbursement-item {
+|  display: flex; align-items: center; justify-content: space-between;
+|  padding: 10px 12px; background: var(--bg-secondary);
+|  border-radius: var(--radius); border: 1px solid var(--border);
+|}
+|.people-reimbursement-main {
+|  display: flex; align-items: center; gap: 12px;
+|}
+|.people-reimbursement-date { font-size: 13px; }
+|.people-reimbursement-category {
+|  font-size: 11px; color: var(--text-muted);
+|  background: var(--bg-card); padding: 2px 8px;
+|  border-radius: var(--radius-sm);
+|}
+|.people-reimbursement-amount {
+|  font-weight: 600; color: var(--green);
+|}
+|.people-form .form-row { margin-bottom: 0; }
+|.people-form .form-group { margin-bottom: 16px; }
+|
+|@media (max-width: 900px) {
+|  .people-gme-cards { grid-template-columns: repeat(2, 1fr); }
+|  .people-gme-summary { grid-template-columns: repeat(2, 1fr); }
+|  .people-toolbar { flex-direction: column; align-items: stretch; }
+|  .people-search { min-width: auto; }
+|}
+|@media (max-width: 600px) {
+|  .people-grid { grid-template-columns: 1fr; }
+|  .people-gme-cards { grid-template-columns: 1fr; }
+|  .people-gme-summary { grid-template-columns: 1fr; }
+|  .people-detail-grid { grid-template-columns: 1fr; }
+|  .people-card-actions { opacity: 1; }
+|}
+

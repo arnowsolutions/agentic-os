@@ -68,6 +68,7 @@ const api = {
   dispatchKanban: () => api.post('/api/kanban/dispatch', {}),
   specifyKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/specify`, {}),
   decomposeKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/decompose`, {}),
+  deleteKanbanTask: (id) => api.del(`/api/kanban/tasks/${encodeURIComponent(id)}`),
   // Goals
   getGoals: () => api.get('/api/goals'),
   createGoal: (data) => api.post('/api/goals', data),
@@ -85,15 +86,82 @@ const api = {
   // Smart Router
   suggestRouter: (task) => api.post('/api/router/suggest', { task }),
   routeTask: (task, agent) => api.post('/api/router/route', { task, agent }),
-  // Learning Analytics
-  getSkillAnalytics: () => api.get('/api/analytics/skills'),
-  getTrendAnalytics: () => api.get('/api/analytics/trends'),
-  // Session Replay
-  listSessions: () => api.get('/api/sessions/list'),
-  getSessionReplay: (id) => api.get(`/api/sessions/${encodeURIComponent(id)}/replay`),
+  getRouterConfig: () => api.get('/api/router/config'),
+  // Learning Analytics - with normalization for canonical contract
+  getSkillAnalytics: async () => {
+    const data = await api.get('/api/analytics/skills');
+    // Normalize to canonical shape: { skills: [{ name, score, evals, best, ... }] }
+    const skills = (data.skills || []).map(s => ({
+      name: s.name || 'unknown',
+      score: typeof s.score === 'number' ? s.score : (typeof s.avg_score === 'number' ? s.avg_score / 100 : 0),
+      evals: typeof s.evals === 'number' ? s.evals : (typeof s.total_runs === 'number' ? s.total_runs : 0),
+      best: typeof s.best === 'number' ? s.best : (typeof s.last_score === 'number' ? s.last_score / 100 : 0),
+      // Pass through any extra fields
+      ...s
+    }));
+    return { skills, error: data.error };
+  },
+  getTrendAnalytics: async () => {
+    const data = await api.get('/api/analytics/trends');
+    // Normalize to canonical shape: { trends: { skillName: [scores...], ... } }
+    let trends = {};
+    if (Array.isArray(data.trends)) {
+      // Convert array to map
+      data.trends.forEach(t => {
+        if (t.name) {
+          trends[t.name] = t.scores || [];
+        }
+      });
+    } else if (data.trends && typeof data.trends === 'object') {
+      trends = data.trends;
+    }
+    return { trends, error: data.error };
+  },
+  // Session Replay - with normalization for canonical contract
+  listSessions: async () => {
+    const data = await api.get('/api/sessions/list');
+    // Normalize sessions to have a renderable date field
+    const sessions = (data.sessions || []).map(s => ({
+      ...s,
+      date: s.date || s.modified || new Date().toISOString()
+    }));
+    return { sessions, error: data.error };
+  },
+  getSessionReplay: async (id) => {
+    const data = await api.get(`/api/sessions/${encodeURIComponent(id)}/replay`);
+    // Normalize messages to objects with role/content/timestamp
+    let messages = [];
+    if (Array.isArray(data.messages)) {
+      messages = data.messages.map(m => {
+        if (typeof m === 'string') {
+          // Parse string messages like "user: ..." or "assistant: ..."
+          const match = m.match(/^(user|assistant|human|ai):\s*(.+)$/i);
+          if (match) {
+            return {
+              role: match[1].toLowerCase() === 'human' ? 'user' : match[1].toLowerCase(),
+              content: match[2],
+              timestamp: data.timestamp || new Date().toISOString()
+            };
+          }
+          return { role: 'unknown', content: m, timestamp: data.timestamp || new Date().toISOString() };
+        }
+        return {
+          role: m.role || 'unknown',
+          content: m.content || m.message || String(m),
+          timestamp: m.timestamp || data.timestamp || new Date().toISOString()
+        };
+      });
+    }
+    return {
+      session: data.session || { id, created_at: data.timestamp },
+      messages,
+      error: data.error
+    };
+  },
   // Tools Integration
   getToolsOverview: () => api.get('/api/tools/overview'),
   getToolsNotebooks: (profile = 'default') => api.get(`/api/tools/notebooks?profile=${encodeURIComponent(profile)}`),
+  refreshToolsNotebooks: () => api.post('/api/tools/notebooks/refresh', {}),
   getToolsCron: () => api.get('/api/tools/cron'),
   getToolsKB: () => api.get('/api/tools/kb'),
   getTelegramSessions: () => api.get('/api/tools/telegram'),
@@ -125,4 +193,9 @@ const api = {
   getDriveSyncStatus: () => api.get('/api/drive/sync/status'),
   // Voice Data Health
   getVapiDataHealth: () => api.get('/api/vapi/data-health'),
+  // Reports
+  getReportTypes: () => api.get('/api/reports/types'),
+  generateReport: (data) => api.post('/api/reports/generate', data),
+  // Selftest
+  selfTest: () => api.get('/api/selftest'),
 };

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "c1c992ef",
+    "title": "Test goal",
+    "description": "Example goal for testing purposes",
+    "category": "development",
+    "target_date": "",
+    "status": "active",
+    "progress": 25,
+    "created": "2026-06-05T09:50:30.334519+00:00",
+    "updated": "2026-06-09T16:18:28.321847+00:00"
+  }
+]

@@ -44,10 +44,39 @@ def main():
     current = resp.json()
     tools = current.get("model", {}).get("tools", [])
     print(f"Tools: {len(tools)}")
+
+    # Ensure verifyCaller tool has caller_ez_id parameter
+    updated = False
+    for tool in tools:
+        fn = tool.get("function", {})
+        if fn.get("name") == "verifyCaller":
+            props = fn.get("parameters", {}).get("properties", {})
+            if "caller_ez_id" not in props:
+                props["caller_ez_id"] = {
+                    "type": "string",
+                    "description": "The caller's EZ ID (employee/badge ID number). Optional — use instead of caller_name for direct lookup."
+                }
+                required = fn.get("parameters", {}).get("required", [])
+                fn["parameters"]["required"] = [r for r in required if r != "caller_ez_id"]
+                # Ensure caller_name is not required either (or caller_ez_id)
+                updated = True
+            if "caller_name" not in props:
+                props["caller_name"] = {
+                    "type": "string",
+                    "description": "The caller's full name. Optional if caller_ez_id is provided."
+                }
+                fn["parameters"]["required"] = [r for r in fn.get("parameters", {}).get("required", []) if r != "caller_name"]
+                updated = True
+            break
+    
+    if updated:
+        print("Updated verifyCaller tool definition (added caller_ez_id)")
+    else:
+        print("verifyCaller tool already has caller_ez_id")
     
     payload = {
         "name": "Big Reef Personal Assistant",
-        "firstMessage": current.get("firstMessage"),
+        "firstMessage": "Hey, thanks for calling Shareef's line at Montefiore Urology. I'm his assistant. Do you have your EZ ID number handy?",
         "server": {"url": f"{tunnel}/vapi", "timeoutSeconds": 20},
         "model": {
             "model": "gpt-4o",

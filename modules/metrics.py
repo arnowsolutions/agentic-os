@@ -4,6 +4,11 @@ Provides a `/metrics` endpoint and a few key counters/histograms for the
 voice webhook pipeline. The `prometheus-client` library is optional at runtime:
 if it is not installed, metrics are disabled and the endpoint returns a
 friendly 503 so the app keeps working with the base requirements.txt.
+
+This module handles **HTTP-level instrumentation** (request counts, durations,
+webhook counters, auth attempts).  It is intentionally separate from
+``modules/cost_tracker.py`` which owns per-agent token spend, dollar cost,
+free-tier quota, and cost analytics stored in ``data/cost-history.json``.
 """
 from __future__ import annotations
 

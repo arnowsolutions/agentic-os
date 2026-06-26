@@ -61,7 +61,30 @@ async function refreshAgentHealth() {
     if (!cards) return;
     const agentIcons = { opencode: '🔧', hermes: '⚡', gemini: '🧠' };
     const agentColors = { opencode: 'purple', hermes: 'green', gemini: 'blue' };
-    cards.innerHTML = agents.map(a => `
+    const healthLabels = {
+      not_configured: { label: 'Not Configured', color: 'var(--text-muted)', badge: 'badge-secondary' },
+      offline: { label: 'Offline', color: 'var(--red)', badge: 'badge-danger' },
+      no_usage_yet: { label: 'No Usage Yet', color: 'var(--yellow)', badge: 'badge-warning' },
+      healthy: { label: 'Healthy', color: 'var(--green)', badge: 'badge-success' }
+    };
+    
+    cards.innerHTML = agents.map(a => {
+      // Format last seen
+      let lastSeenDisplay = 'Never';
+      if (a.last_seen) {
+        try {
+          const date = new Date(a.last_seen);
+          lastSeenDisplay = date.toLocaleString();
+        } catch {
+          lastSeenDisplay = a.last_seen;
+        }
+      }
+      
+      // Get health display config
+      const health = healthLabels[a.health_label] || healthLabels.no_usage_yet;
+      const isOnline = a.availability === 'online';
+      
+      return `
       <div class="agent-health-card">
         <div class="agent-health-avatar" style="background:var(--${agentColors[a.name] || 'accent'}-dim);color:var(--${agentColors[a.name] || 'accent'})">
           ${agentIcons[a.name] || '🤖'}
@@ -69,41 +92,62 @@ async function refreshAgentHealth() {
         <div class="agent-health-info">
           <div class="agent-health-name" style="text-transform:capitalize">${a.name}</div>
           <div class="agent-health-status">
-            <span class="agent-dot ${a.status === 'online' ? 'online' : a.status === 'warning' ? 'warning' : 'offline'}"></span>
-            <span style="text-transform:capitalize;color:var(--text-secondary)">${a.status}</span>
+            <span class="agent-dot ${isOnline ? 'online' : 'offline'}"></span>
+            <span style="color:${health.color}">${health.label}</span>
           </div>
           <div class="agent-health-stats">
             <div class="agent-health-stat">
-              <div class="agent-health-stat-value" style="color:var(--green)">${a.status === 'online' ? '100' : '0'}%</div>
-              <div class="agent-health-stat-label">Uptime</div>
+              <div class="agent-health-stat-value" style="color:var(--text-secondary);font-size:13px">
+                ${a.total_runs !== undefined ? a.total_runs : '-'}
+              </div>
+              <div class="agent-health-stat-label">Runs</div>
             </div>
             <div class="agent-health-stat">
-              <div class="agent-health-stat-value" style="color:var(--accent-light)">${a.status === 'online' ? '✓' : '✗'}</div>
-              <div class="agent-health-stat-label">Reachable</div>
+              <div class="agent-health-stat-value" style="color:${isOnline ? 'var(--green)' : 'var(--red)'};font-size:13px">
+                ${isOnline ? 'online' : 'offline'}
+              </div>
+              <div class="agent-health-stat-label">Status</div>
             </div>
             <div class="agent-health-stat">
-              <div class="agent-health-stat-value text-sm" style="font-size:11px;color:var(--text-muted)">${new Date(data.updated).toLocaleTimeString()}</div>
-              <div class="agent-health-stat-label">Last Check</div>
+              <div class="agent-health-stat-value text-sm" style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px" title="${lastSeenDisplay}">
+                ${a.last_seen ? lastSeenDisplay : 'Never'}
+              </div>
+              <div class="agent-health-stat-label">Last Activity</div>
             </div>
           </div>
+          ${a.health_reason ? `<div style="font-size:10px;color:var(--text-muted);margin-top:6px">${a.health_reason}</div>` : ''}
         </div>
       </div>
-    `).join('');
+    `}).join('');
+    
+    // Update overview with real aggregation
     const overview = document.getElementById('healthOverviewCard');
     if (overview) {
-      const online = agents.filter(a => a.status === 'online').length;
+      const counts = {
+        not_configured: agents.filter(a => a.health_label === 'not_configured').length,
+        offline: agents.filter(a => a.health_label === 'offline').length,
+        no_usage_yet: agents.filter(a => a.health_label === 'no_usage_yet').length,
+        healthy: agents.filter(a => a.health_label === 'healthy').length,
+      };
       const total = agents.length;
+      
       overview.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div>
             <div style="font-size:14px;font-weight:600">System Status</div>
             <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">
-              ${online}/${total} agents online · Last updated: ${new Date(data.updated).toLocaleTimeString()}
+              <span class="badge badge-success">${counts.healthy} healthy</span>
+              <span class="badge badge-warning">${counts.no_usage_yet} no usage</span>
+              <span class="badge badge-danger">${counts.offline} offline</span>
+              ${counts.not_configured > 0 ? `<span class="badge badge-secondary">${counts.not_configured} not configured</span>` : ''}
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+              Last updated: ${new Date(data.updated).toLocaleTimeString()}
             </div>
           </div>
-          <div class="status-indicator ${online === total ? 'online' : online > 0 ? 'warning' : 'offline'}">
-            <span class="agent-dot ${online === total ? 'online' : online > 0 ? 'warning' : 'offline'}"></span>
-            ${online === total ? 'All Online' : online > 0 ? 'Partial' : 'Offline'}
+          <div class="status-indicator ${counts.healthy === total ? 'online' : counts.healthy > 0 ? 'warning' : 'offline'}">
+            <span class="agent-dot ${counts.healthy === total ? 'online' : counts.healthy > 0 ? 'warning' : 'offline'}"></span>
+            ${counts.healthy === total ? 'All Healthy' : counts.healthy > 0 ? 'Partial' : 'Issues'}
           </div>
         </div>
       `;

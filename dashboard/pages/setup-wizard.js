@@ -122,7 +122,25 @@ function prevWizardStep() {
   if (setupStep > 0) { setupStep--; renderWizardStep(); }
 }
 
-function finishSetup() {
-  showToast('Setup complete!', 'success');
-  navigate('dashboard');
+async function finishSetup() {
+  // Persist wizard preferences before completing
+  try {
+    const defaultAgent = document.getElementById('wizDefault')?.value || 'opencode';
+    const theme = document.getElementById('wizTheme')?.value || 'dark';
+    
+    const settings = {
+      default_agent: defaultAgent,
+      theme: theme,
+      setup_completed: true,
+      setup_completed_at: new Date().toISOString(),
+    };
+    
+    await api.updateSettings(settings);
+    showToast('Setup complete! Preferences saved.', 'success');
+    navigate('dashboard');
+  } catch (err) {
+    showToast('Setup complete, but failed to save preferences: ' + err.message, 'warning');
+    // Still navigate to dashboard even if save fails
+    navigate('dashboard');
+  }
 }

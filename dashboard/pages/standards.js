@@ -58,7 +58,11 @@ async function viewStandard(name) {
 async function runDiscovery() {
   try {
     const r = await api.discoverStandards();
-    showToast(r.message || 'Discovery started', 'success');
+    if (r.available === false || r.status === 'unavailable') {
+      showToast(r.message || 'Discovery not available', 'warning');
+    } else {
+      showToast(r.message || 'Discovery started', 'success');
+    }
   } catch (err) {
     showToast(`Error: ${err.message}`, 'error');
   }
