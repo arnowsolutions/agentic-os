@@ -125,6 +125,7 @@ const NAV_CONFIG = {
         { page: 'tools',           icon: '🔗', label: 'My Tools',        title: 'My Tools',        breadcrumb: 'NotebookLM, Cron, KB, Hermes & more' },
         { page: 'chat',            icon: '💬', label: 'AI Chat',         title: 'AI Chat',         breadcrumb: 'Multi-agent terminal' },
         { page: 'morning-briefing', icon: '🌅', label: 'Morning Briefing', title: '🌅 Morning Briefing', breadcrumb: 'Daily urology briefing — call, evals, events' },
+        { page: 'calendar',         icon: '📅', label: 'Calendar',          title: '📅 Calendar of Events', breadcrumb: 'Vacation dates, call schedule & department events' },
         { page: 'system-overview', icon: '🏥', label: 'System Overview', title: '🏥 System Overview', breadcrumb: 'Central services, cron health & monitoring' },
         { page: 'compliance',      icon: '📊', label: 'Compliance',      title: '📊 Compliance Dashboard', breadcrumb: 'Attendance, evals & GME — color-coded metrics' },
         { page: 'quick-actions',   icon: '⚡', label: 'Quick Actions',   title: '⚡ Quick Actions', breadcrumb: 'One-click operations for common workflows' },

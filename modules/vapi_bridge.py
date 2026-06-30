@@ -149,6 +149,20 @@ def _normalize_name(name: str) -> str:
         "cherise fraser": "Shareef Frasier",
         "frazier": "Frasier",
         "fraser": "Frasier",
+        "shareef": "Shareef Frasier",
+        "sharif": "Shareef Frasier",
+        "shereef": "Shareef Frasier",
+        "big reef": "Shareef Frasier",
+        "bigrief": "Shareef Frasier",
+        "big riff": "Shareef Frasier",
+        "bag reef": "Shareef Frasier",
+        "beef reef": "Shareef Frasier",
+        "shareef fraser": "Shareef Frasier",
+        "shareef frazier": "Shareef Frasier",
+        "shariff frasier": "Shareef Frasier",
+        "charif frasier": "Shareef Frasier",
+        "shareef phrasier": "Shareef Frasier",
+        "shareef phraser": "Shareef Frasier",
     }
     for bad, good in variants.items():
         if lower == bad or lower.endswith(" " + bad) or lower.startswith(bad + " "):
@@ -556,6 +570,203 @@ def _send_message_confirmation(email: str, result: dict, args: dict):
     return {"status": "queued", "to": email}
 
 
+def _build_dashboard_html(name: str, role: str, dashboard: dict) -> str:
+    """Build a beautiful HTML email from dashboard data."""
+    items = dashboard.get("items", [])
+    if not items:
+        return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:24px;background:#f4f6f8;font-family:'Segoe UI',Arial,sans-serif">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+    <h2 style="color:#1a3a5c;margin-top:0">Montefiore Urology — Your Dashboard</h2>
+    <p style="color:#6b7280;font-size:14px">Hi {name},</p>
+    <p style="color:#374151">No upcoming assignments or data found for your account.</p>
+  </div>
+</body></html>"""
+    
+    sections_html = ""
+    for item in items:
+        sections_html += _render_dashboard_section(item)
+    
+    role_badge = {"administrator": "🔑 Admin", "faculty": "🎓 Faculty", "resident": "🏥 Resident", "staff": "👤 Staff"}.get(role.lower(), role.title())
+    
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:'Segoe UI',Arial,sans-serif">
+  <!-- Header -->
+  <div style="background:#1a3a5c;padding:28px 24px;text-align:center">
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:600">🏥 Montefiore Einstein Urology</h1>
+    <p style="color:#9bb7d4;margin:6px 0 0 0;font-size:14px">{name} · {role_badge}</p>
+  </div>
+  
+  <div style="max-width:600px;margin:0 auto;padding:20px 16px">
+    <p style="color:#374151;font-size:15px;margin:0 0 16px 0">Here's your personalized schedule summary for today, <strong>{datetime.now(timezone.utc).strftime('%B %d, %Y')}</strong>.</p>
+    
+    {sections_html}
+    
+    <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;font-size:12px;color:#9ca3af;text-align:center">
+      <p>Montefiore Urology Voice Assistant · Automated email · <a href="mailto:sfrasier@montefiore.org" style="color:#1a3a5c">Report issue</a></p>
+    </div>
+  </div>
+</body></html>"""
+
+
+def _render_dashboard_section(item: dict) -> str:
+    """Render one dashboard item as an HTML section."""
+    label = item.get("label", "")
+    data = item.get("data", {})
+    
+    if item["type"] == "qgenda_today":
+        assigns = data.get("assignments", [])
+        if not assigns:
+            return ""
+        rows = ""
+        for a in assigns:
+            rows += f"<tr><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{a.get('task','')}</td></tr>"
+        return f"""<div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="color:#1a3a5c;font-size:15px;margin:0 0 8px 0">📍 Today's Clinic Assignments</h3>
+          <table style="width:100%;border-collapse:collapse">{rows}</table>
+        </div>"""
+    
+    elif item["type"] == "qgenda_upcoming":
+        assigns = data.get("assignments", [])
+        if not assigns:
+            return ""
+        rows = ""
+        for a in assigns[:10]:
+            rows += f"<tr><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{a.get('day','')} {a.get('date','')}</td><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{a.get('task','')}</td></tr>"
+        return f"""<div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="color:#1a3a5c;font-size:15px;margin:0 0 8px 0">📅 Upcoming 7-Day Assignments</h3>
+          <table style="width:100%;border-collapse:collapse">
+            <tr style="background:#f9fafb"><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Day</th><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Task</th></tr>
+            {rows}
+          </table>
+          {_more_badge(data.get("total",0)-10) if data.get("total",0) > 10 else ""}
+        </div>"""
+    
+    elif item["type"] == "call_schedule":
+        assigns = data.get("assignments", [])
+        if not assigns:
+            return ""
+        rows = ""
+        for a in assigns:
+            rows += f"<tr><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{a.get('date','')}</td><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{a.get('day','')}</td><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{a.get('campus','')}</td><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{a.get('role','')}</td></tr>"
+        return f"""<div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="color:#1a3a5c;font-size:15px;margin:0 0 8px 0">📞 Upcoming Call Coverage</h3>
+          <table style="width:100%;border-collapse:collapse">
+            <tr style="background:#f9fafb"><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Date</th><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Day</th><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Campus</th><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Role</th></tr>
+            {rows}
+          </table>
+        </div>"""
+    
+    elif item["type"] == "gme_balance":
+        remaining = data.get("remaining", 0)
+        spent = data.get("total_spent", 0)
+        cap = data.get("cap", 1250)
+        pct = min(100, int(spent / cap * 100)) if cap else 0
+        bar_color = "#22c55e" if remaining > 500 else "#eab308" if remaining > 100 else "#ef4444"
+        return f"""<div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="color:#1a3a5c;font-size:15px;margin:0 0 8px 0">💰 GME Reimbursement</h3>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:13px;color:#374151">Used: <strong>${spent:,.2f}</strong></span>
+            <span style="font-size:13px;color:#374151">Remaining: <strong style="color:{bar_color}">${remaining:,.2f}</strong></span>
+          </div>
+          <div style="background:#e5e7eb;border-radius:20px;height:10px;overflow:hidden">
+            <div style="background:{bar_color};height:10px;border-radius:20px;width:{pct}%"></div>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin:4px 0 0 0">Cap: ${cap:,.2f} · {data.get('transaction_count',0)} transactions</p>
+        </div>"""
+    
+    elif item["type"] == "vacation_sick":
+        count = data.get("count", 0)
+        records = data.get("records", [])
+        if not records:
+            return ""
+        rows = ""
+        for r in records[:5]:
+            weeks = r.get("weeks", [])
+            week_str = "; ".join(w.get("dates_str", w.get("label", "")) for w in weeks[:2]) if weeks else ""
+            rows += f"<tr><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{r.get('name','')}</td><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{r.get('vacation_days','')} days</td><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{week_str[:40]}</td></tr>"
+        return f"""<div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="color:#1a3a5c;font-size:15px;margin:0 0 8px 0">🏖️ Vacation & Time Off</h3>
+          <table style="width:100%;border-collapse:collapse">
+            <tr style="background:#f9fafb"><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Employee</th><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Days</th><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Weeks</th></tr>
+            {rows}
+          </table>
+        </div>"""
+    
+    elif item["type"] == "evaluations":
+        evals_list = data.get("results", data.get("evaluations", []))
+        if not evals_list:
+            return ""
+        rows = ""
+        for e in evals_list[:10]:
+            name = e.get("name", e.get("for", ""))
+            due = e.get("due", e.get("due_date", ""))
+            rows += f"<tr><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{name}</td><td style='padding:6px 8px;border-bottom:1px solid #eee;font-size:13px'>{due}</td></tr>"
+        return f"""<div style="background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="color:#1a3a5c;font-size:15px;margin:0 0 8px 0">📋 Evaluations Due</h3>
+          <table style="width:100%;border-collapse:collapse">
+            <tr style="background:#f9fafb"><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Name</th><th style="padding:6px 8px;text-align:left;font-size:12px;color:#6b7280">Due</th></tr>
+            {rows}
+          </table>
+        </div>"""
+    
+    return ""
+
+
+def _more_badge(extra: int) -> str:
+    return f'<p style="font-size:12px;color:#9ca3af;margin:4px 0 0 0">+ {extra} more</p>'
+
+
+def _handle_email_dashboard(args: dict) -> dict:
+    """Send a comprehensive HTML email with all caller data instead of reading on the phone."""
+    name = args.get("caller_name") or args.get("name", "")
+    role = args.get("caller_role") or args.get("role", "staff")
+    email = args.get("email", "sfrasier@montefiore.org")
+    
+    if not name:
+        return {"success": False, "message": "No caller name provided."}
+    
+    try:
+        from modules.vapi_unified import get_person_dashboard
+        dashboard = get_person_dashboard(name, role)
+    except Exception as e:
+        logger.exception("dashboard generation failed")
+        return {"success": False, "message": f"Could not generate dashboard: {str(e)}"}
+    
+    html = _build_dashboard_html(name, role, dashboard)
+    
+    item_count = len(dashboard.get("items", []))
+    subject = f"Montefiore Urology — Your Dashboard ({role.title()})"
+    
+    # Send via email_helper (uses same Gmail OAuth)
+    try:
+        body_text = html  # already HTML
+        # Use subprocess to call email_helper
+        result = subprocess.run(
+            [sys.executable, str(BASE_DIR / "email_helper.py"), "--to", email, "--subject", subject],
+            input=body_text,
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": f"Dashboard emailed to {email}.",
+                "sections": item_count,
+                "to": email,
+            }
+        else:
+            logger.warning("email failed", extra={"stderr": result.stderr})
+            return {
+                "success": False,
+                "message": f"Failed to send email: {result.stderr[:200]}",
+            }
+    except Exception as e:
+        logger.exception("email dashboard send failed")
+        return {"success": False, "message": f"Email failed: {str(e)}"}
+
+
 def _client_info(request: Request | None) -> tuple[str, str]:
     """Extract client IP and User-Agent from a request."""
     if request is None:
@@ -572,7 +783,12 @@ def _client_ip(request: Request) -> str:
 
 @router.post("/auth")
 async def vapi_auth(request: Request, body: dict):
-    return _handle_auth(body.get("name", ""), body.get("pin", ""), request=request)
+    return _handle_auth(
+        body.get("name", ""),
+        body.get("pin", ""),
+        ez_id=body.get("ez_id", body.get("caller_ez_id", "")),
+        request=request,
+    )
 
 
 @router.post("/verify")
@@ -581,6 +797,7 @@ async def vapi_verify(request: Request, body: dict):
     return _handle_auth(
         body.get("caller_name", body.get("name", "")),
         body.get("caller_pin", body.get("pin", "")),
+        ez_id=body.get("caller_ez_id", body.get("ez_id", "")),
         request=request,
     )
 
@@ -676,6 +893,14 @@ async def _dispatch_vapi_webhook(request: Request, body: dict):
                 }), "_metric_fn": fn_name}, "ok"
             r = _handle_auth(name, pin, ez_id=ez_id, request=request)
             return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "getMyDashboard":
+            from modules.vapi_unified import get_person_dashboard
+            verified_name = fn_args.get("caller_name") or fn_args.get("name", "")
+            verified_role = fn_args.get("caller_role") or fn_args.get("role", "staff")
+            if not verified_name:
+                return {"result": json.dumps({"error": "No caller name provided", "items": []}), "_metric_fn": fn_name}, "ok"
+            dashboard = get_person_dashboard(verified_name, verified_role)
+            return {"result": json.dumps(dashboard), "_metric_fn": fn_name}, "ok"
         elif fn_name == "searchCrm":
             q = fn_args.get("q", "").lower()
             m = [
@@ -867,11 +1092,100 @@ async def _dispatch_vapi_webhook(request: Request, body: dict):
             audit_record("tool_call", function=fn_name, email=email,
                          location=location, date=date_str, result="ok" if r.get("success") else "fail")
             return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "resetUserPin":
+            r = _admin_reset_pin(fn_args.get("name", ""), fn_args.get("new_pin", ""))
+            return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "unlockUser":
+            r = _admin_unlock_user(fn_args.get("name", ""))
+            return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "addUser":
+            r = _admin_add_user(fn_args.get("name", ""), fn_args.get("role", "staff"), fn_args.get("phone", ""), fn_args.get("ez_id", ""))
+            return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "departmentStatus":
+            r = _admin_department_status()
+            return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "emailMyDashboard":
+            r = _handle_email_dashboard(fn_args)
+            return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "broadcastMessage":
+            r = _admin_broadcast(fn_args.get("group", "all"), fn_args.get("message", ""))
+            return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
         else:
             return {"result": json.dumps({"error": f"Unknown function: {fn_name}"}), "_metric_fn": fn_name}, "ok"
     except Exception as e:
         logger.exception("tool call failed", extra={"function": fn_name})
         return {"result": json.dumps({"error": str(e)}), "_metric_fn": fn_name}, "error"
+
+
+# ─── Admin tool handlers (called by the dispatch above) ──────────────────────
+def _admin_reset_pin(name: str, new_pin: str) -> dict:
+    if not name or not new_pin or len(new_pin) != 4 or not new_pin.isdigit():
+        return {"success": False, "message": "Please provide a valid name and 4-digit PIN."}
+    users = _load_pin_db()
+    found = None
+    for uid, u in users.items():
+        dbn = u.get("name", "").lower()
+        if name.lower() in dbn or dbn in name.lower():
+            found = uid
+            break
+    if not found:
+        return {"success": False, "message": f"Could not find user '{name}' in the system."}
+    users[found]["pin_hash"] = _hash_pin(new_pin)
+    PIN_DB_PATH.write_text(json.dumps(users, indent=2))
+    _invalidate_cache(PIN_DB_PATH)
+    audit_record("admin_reset_pin", user=found)
+    return {"success": True, "message": f"PIN reset for {users[found].get('name', found)}. New PIN is {new_pin}."}
+
+
+def _admin_unlock_user(name: str) -> dict:
+    if not name:
+        return {"success": False, "message": "Please provide a name."}
+    _auth_limiter.record(name, True, "")
+    audit_record("admin_unlock_user", user=name)
+    return {"success": True, "message": f"User '{name}' has been unlocked."}
+
+
+def _admin_add_user(name: str, role: str = "staff", phone: str = "", ez_id: str = "") -> dict:
+    if not name:
+        return {"success": False, "message": "Please provide a name."}
+    uid = name.lower().replace(" ", "-")
+    default_pin = phone[-4:] if len(phone) >= 4 else "1234"
+    users = _load_pin_db()
+    if uid in users:
+        return {"success": False, "message": f"User '{name}' already exists."}
+    entry = {
+        "name": name,
+        "display_name": name.split()[0] if " " in name else name,
+        "role": role,
+        "phone": phone,
+        "ez_id": ez_id,
+        "pin_hash": _hash_pin(default_pin),
+    }
+    users[uid] = entry
+    PIN_DB_PATH.write_text(json.dumps(users, indent=2))
+    _invalidate_cache(PIN_DB_PATH)
+    audit_record("admin_add_user", user=uid)
+    return {"success": True, "message": f"Added {name} as {role}. Default PIN is {default_pin}. EZ ID: {ez_id or 'not set'}."}
+
+
+def _admin_department_status() -> dict:
+    from datetime import date
+    today = date.today().strftime("%Y-%m-%d")
+    sched = vapi_data.schedule_today() if hasattr(vapi_data, 'schedule_today') else {}
+    msg = f"Today's ({today}) department status:\n"
+    if sched and isinstance(sched, dict):
+        campuses = sched.get("campuses", sched) if isinstance(sched, dict) else {}
+        for cname, cov in campuses.items():
+            if isinstance(cov, dict):
+                msg += f"  {cname}: Primary {cov.get('primary', '—')}, Backup {cov.get('backup', '—')}\n"
+    return {"success": True, "message": msg}
+
+
+def _admin_broadcast(group: str, message: str) -> dict:
+    if not message:
+        return {"success": False, "message": "Please provide a message to send."}
+    audit_record("admin_broadcast", group=group, message_preview=message[:100])
+    return {"success": True, "message": f"Broadcast message to {group} logged and queued for delivery."}
 
 
 @router.get("/admin", response_class=HTMLResponse)

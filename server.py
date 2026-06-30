@@ -21,7 +21,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -32,6 +32,7 @@ from modules import crm as crm_module
 from modules import kanban as kanban_module
 from modules import vapi_bridge as vapi_module
 from modules import schedule as schedule_module
+from modules import auth as auth_module
 from modules import skill_runner
 from modules import cost_tracker
 from modules.logging_config import setup_logging
@@ -45,6 +46,42 @@ app = FastAPI(title="Agentic OS", version="1.1.0")
 @app.middleware("http")
 async def _metrics_middleware(request: Request, call_next):
     return await metrics_middleware(request, call_next)
+
+# ─── Session enforcement middleware ──────────────────────────────────────────
+
+@app.middleware("http")
+async def session_enforcement(request: Request, call_next):
+    """Require a valid session for all dashboard routes except allowlisted paths."""
+    path = request.url.path
+
+    # Allowlist paths that don't need auth
+    if path.startswith(_settings.VAPI_ENDPOINT_PATH) or path.startswith("/vapi/"):
+        return await call_next(request)
+    if path in {"/api/auth/login", "/api/auth/logout", "/api/status", "/login", "/favicon.svg", "/favicon.ico"}:
+        return await call_next(request)
+    if path.startswith("/dashboard/login"):
+        return await call_next(request)
+    if path.startswith("/api/_boot_error"):
+        return await call_next(request)
+    if path.startswith("/api/oncall/"):
+        return await call_next(request)
+    if path.startswith("/api/staff-schedule"):
+        return await call_next(request)
+    if path.startswith("/api/calendar/"):
+        return await call_next(request)
+
+    # Check session cookie
+    token = request.cookies.get(_settings.SESSION_COOKIE_NAME, "")
+    session = getattr(auth_module, "get_session")(token) if token else None
+
+    if not session:
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "Unauthenticated"}, status_code=401)
+        return RedirectResponse(url="/login")
+
+    getattr(auth_module, "touch_session")(token)
+    request.state.user = session
+    return await call_next(request)
 
 # Load API keys from .env
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -107,6 +144,7 @@ app.include_router(crm_module.router)
 app.include_router(kanban_module.router)
 app.include_router(vapi_module.router)
 app.include_router(schedule_module.router)
+app.include_router(auth_module.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2146,10 +2184,12 @@ def tools_kb():
 
 # ─── Call Schedule Integration ───────────────────────────────────────
 # Faculty call schedules for Moses, Wakefield, Weiler (Jul-Dec 2026)
-# Parsed from Google Drive Excel: Call Schedule Q3-Q4 2026.xlsx
-# File: ~/.hermes/call_schedule_faculty.json
+# Source: Call Schedule Q3-Q4 2026.xlsx (canonical Excel in data/oncall_schedule.xlsx)
+# Parsed JSON: data/oncall_schedule.json (canonical)
+# Compat JSON: ~/.hermes/call_schedule_faculty.json (legacy schema for existing endpoints)
 
 FACULTY_SCHEDULE_FILE = Path("/home/hermeswebui/.hermes/call_schedule_faculty.json")
+ONCALL_CANONICAL_FILE = BASE_DIR / "data" / "oncall_schedule.xlsx"
 
 def _load_faculty_schedule():
     """Load the real faculty call schedule from parsed Drive data."""
@@ -2909,17 +2949,64 @@ def notifications_clear():
     NOTIF_FILE.write_text(json.dumps({"notifications": []}))
     return {"success": True}
 
-# ─── Staff Schedule ────────────────────────────────────────────
+# ─── Calendar of Events ─────────────────────────────────────
 
-STAFF_FILE = BASE_DIR / "data" / "staff_schedule.json"
+CALENDAR_DATA_FILE = BASE_DIR / "data" / "calendar_events.json"
+
+@app.get("/api/calendar/events")
+def calendar_events(days: int = Query(90, description="Number of days to look ahead")):
+    """Return calendar events pulled from Google Calendar."""
+    from datetime import datetime, timezone, timedelta
+    
+    if not CALENDAR_DATA_FILE.exists():
+        return {"events": [], "source": "no_data"}
+    
+    data = json.loads(CALENDAR_DATA_FILE.read_text())
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=days)
+    
+    events = data.get("events", [])
+    filtered = []
+    for ev in events:
+        start_str = ev.get("start", {}).get("date") or ev.get("start", {}).get("dateTime", "")
+        if start_str:
+            try:
+                ev_date = datetime.fromisoformat(start_str)
+                if ev_date.tzinfo is None:
+                    ev_date = ev_date.replace(tzinfo=timezone.utc)
+                if ev_date <= cutoff:
+                    filtered.append(ev)
+            except (ValueError, TypeError):
+                filtered.append(ev)
+        else:
+            filtered.append(ev)
+    
+    return {"events": sorted(filtered, key=lambda e: e.get("start", {}).get("date") or e.get("start", {}).get("dateTime", "")), "count": len(filtered), "total": len(events)}
+
+# ─── Staff Schedule (from canonical on-call source) ─────────────
 
 @app.get("/api/staff-schedule")
-def staff_schedule(hospital: str = "Moses"):
-    """Return staff schedule for a given hospital."""
-    if STAFF_FILE.exists():
-        data = json.loads(STAFF_FILE.read_text())
-        return {"staff": data.get(hospital, [])}
-    return {"staff": []}
+def staff_schedule(hospital: str = Query("Moses")):
+    """Return attending schedule for a hospital from canonical oncall data."""
+    data = _load_faculty_schedule()
+    sheet = data.get("sheets", {}).get(hospital, {})
+    entries = sheet.get("entries", [])
+
+    seen = set()
+    staff = []
+    for e in entries:
+        for field, role in [("primary", "Attending"), ("backup", "Backup Attending"), ("peds", "PEDS Attending")]:
+            name = e.get(field, "")
+            if name and name not in seen:
+                seen.add(name)
+                staff.append({
+                    "name": name,
+                    "role": role,
+                    "detail": f"On-call rotation — {hospital}",
+                    "schedule": "Q3-Q4 2026 rotation"
+                })
+
+    return {"staff": staff, "hospital": hospital, "total": len(staff)}
 
 # ─── PDF Archive ────────────────────────────────────────────────
 
@@ -3060,8 +3147,19 @@ def hermes_webui_redirect():
 </html>
 """)
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    # If already authenticated, redirect to dashboard
+    token = request.cookies.get(_settings.SESSION_COOKIE_NAME, "")
+    if token and auth_module.get_session(token):
+        return RedirectResponse(url="/")
+    login_file = BASE_DIR / "dashboard" / "login.html"
+    if login_file.exists():
+        return HTMLResponse(content=login_file.read_text())
+    return HTMLResponse(content="<h1>Login page not found</h1>", status_code=404)
+
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(request: Request):
     html_file = BASE_DIR / "dashboard" / "index.html"
     if html_file.exists():
         content = html_file.read_text()

@@ -253,6 +253,11 @@ const themes = [
   { id:'dreamy-soft', emoji:'🌅', name:'Dreamy & Soft', desc:'Soft, romantic, ethereal look', lens:'85mm', angle:'threeq', light:'golden', style:'vintage', kw:'dreamy soft ethereal photography, backlit golden hour, soft focus, warm glow, romantic atmosphere, lens flare, pastel tones'},
   { id:'edgy-urban', emoji:'🏙️', name:'Edgy Urban', desc:'Street, gritty, city atmosphere', lens:'35mm', angle:'dutch', light:'neon', style:'gritty-bw', kw:'edgy urban street photography, gritty city atmosphere, neon lights, hard shadows, candid, raw urban energy, high contrast'},
   { id:'luxury-premium', emoji:'💎', name:'Luxury Premium', desc:'High-end, elegant, expensive look', lens:'85mm', angle:'threeq', light:'golden', style:'cinematic', kw:'luxury premium photography, elegant composition, warm golden light, rich colors, sophisticated atmosphere, high end branded, polished'},
+
+  // DESIGN PRESETS — Reverse-engineered from reference images using JSON Image Profiler
+  { id:'gorilla-glue', emoji:'🦍', name:'Gorilla Glue', desc:'Street-art packaging, hyper-real subject, neon contrast, bold & loud', lens:'85mm', angle:'eye', light:'rim', style:'hyperreal', kw:'hyper-realistic product packaging photography, photorealistic main subject with museum-grade texture fidelity, aggressive street-art graphic design aesthetic, deep solid black background with subtle grunge spray-paint texture overlay, bright yellow-green dramatic rim lighting with neon-pop contrast, deep saturated shadows, straight-on eye-level perspective looking directly at viewer, centered symmetrical vertical composition, wet glossy highlight detail, paint-spatter and distressed texture overlay on graphic elements, premium retail packaging quality, 8K'},
+  { id:'blue-sushi', emoji:'🍣', name:'Blue Sushi', desc:'Japanese ukiyo-e fusion, neon-noir, premium nightlife', lens:'50mm', angle:'threeq', light:'neon', style:'cinematic', kw:'hyper-realistic packaging photography, photorealistic main subject with museum-grade texture fidelity, electric blue and midnight black neon-noir aesthetic, dramatic backlighting with internal luminescence on elements, three-quarter high-angle perspective, Japanese woodblock print motifs in background, spray-paint grunge texture overlay, wet glossy highlights on surfaces, premium retail packaging quality, 8K'},
+  { id:'toad-venom', emoji:'🐸', name:'Toad Venom', desc:'Dark psychedelic, vintage apothecary, toxic fantasy', lens:'100mm', angle:'eye', light:'chiaro', style:'moody', kw:'hyper-realistic dark fantasy packaging photography, photorealistic main subject with museum-grade texture fidelity, warm desaturated parchment background, dramatic chiaroscuro lighting with localized bioluminescent glow effects, heavy saturated shadows, straight-on eye-level perspective, distressed paper and vintage texture overlay, sumi-e ink wash background motifs, spray-paint splatter effects on graphic elements, premium retail packaging quality, 8K'},
 ];
 
 const selections = { lens: null, angle: null, light: null, style: null, model: 'Nano Banana 2 (~$0.03)', subject: 'a product or scene' };
@@ -342,6 +347,9 @@ function applyTheme(themeId) {
     'dreamy-soft':'a couple in a sunflower field',
     'edgy-urban':'a person walking down a rainy street',
     'luxury-premium':'a luxury watch on marble surface',
+    'gorilla-glue':'a powerful urologist crushing a kidney stone',
+    'blue-sushi':'a premium cannabis strain on a sushi platter',
+    'toad-venom':'a mysterious figure in a dark apothecary',
   };
   
   if (suggestions[themeId]) {

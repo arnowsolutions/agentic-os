@@ -87,7 +87,7 @@ def qgenda_today(name=None):
         return data
     
     today = date.today()
-    qfmt = f"{today.month}-{today.day}-{str(today.year)[-2:]}"
+    qfmt = f"{today.month:02d}-{today.day:02d}-{str(today.year)[-2:]}"
     
     if name:
         return qgenda_person_day(name, qfmt)
@@ -117,7 +117,7 @@ def qgenda_person_day(name: str, date_str: str = None):
     
     if date_str is None:
         today = date.today()
-        date_str = f"{today.month}-{today.day}-{str(today.year)[-2:]}"
+        date_str = f"{today.month:02d}-{today.day:02d}-{str(today.year)[-2:]}"
     
     name_lower = name.lower().strip()
     results = []
@@ -409,3 +409,148 @@ def staff_by_location(location: str):
     results = [s for s in staff if loc_lower in s["location"].lower()]
     
     return {"location": location, "staff": [s["display_name"] for s in results], "count": len(results)}
+
+
+# ============================================================================
+# UNIFIED DASHBOARD — All data for a verified caller, merged by role
+# ============================================================================
+
+def get_person_dashboard(name: str, role: str = "staff", email: str = "") -> dict:
+    """Return ALL relevant data for a verified caller in one shot.
+    
+    This merges: QGenda (daily assignments), call schedule, GME balance,
+    evaluations, deadlines, and staff roster — all keyed to the person's role.
+    """
+    result = {
+        "person": name,
+        "role": role,
+        "items": [],
+    }
+    name_lower = name.lower().strip()
+    name_words = name_lower.split()
+    first_name = name_words[0] if name_words else ""
+    last_name = name_words[-1] if len(name_words) > 1 else ""
+    
+    # 1. QGenda — today's clinic assignments (everyone)
+    try:
+        qgenda = _load_qgenda()
+        if not isinstance(qgenda, dict) or "error" not in qgenda:
+            today = date.today()
+            qfmt = f"{today.month:02d}-{today.day:02d}-{str(today.year)[-2:]}"
+            qgenda_results = []
+            for key in [name_lower, first_name.lower(), last_name.lower()]:
+                for e in qgenda["by_person"].get(key, []):
+                    if e["date"] == qfmt:
+                        qgenda_results.append(e)
+            if qgenda_results:
+                result["items"].append({
+                    "type": "qgenda_today",
+                    "label": "Today's Clinic Assignments",
+                    "data": {"assignments": qgenda_results, "count": len(qgenda_results)},
+                })
+            
+            # Also get upcoming 7 days
+            upcoming = []
+            end = today + timedelta(days=7)
+            for key in [name_lower, first_name.lower(), last_name.lower()]:
+                for e in qgenda["by_person"].get(key, []):
+                    parts = e["date"].split("-")
+                    if len(parts) == 3:
+                        try:
+                            d = date(2000 + int(parts[2]), int(parts[0]), int(parts[1]))
+                            if today < d <= end:
+                                upcoming.append({"date": e["date"], "day": d.strftime("%A"), "task": e["task"]})
+                        except:
+                            pass
+            if upcoming:
+                upcoming.sort(key=lambda x: x["date"])
+                result["items"].append({
+                    "type": "qgenda_upcoming",
+                    "label": "Upcoming 7-Day Assignments",
+                    "data": {"assignments": upcoming[:20], "total": len(upcoming)},
+                })
+    except Exception:
+        pass
+    
+    # 2. Call schedule — attending call coverage (faculty only)
+    if role in ("administrator", "faculty"):
+        try:
+            sched = _load_schedule()
+            today_str = date.today().strftime("%Y-%m-%d")
+            cutoff = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+            call_results = []
+            for campus, rows in sched.items():
+                for row in rows:
+                    if row["date"] < today_str or row["date"] > cutoff:
+                        continue
+                    for role_key in ["primary_clean", "backup_clean", "peds_clean"]:
+                        val = row[role_key]
+                        if val and name_lower in val.lower():
+                            call_results.append({
+                                "campus": campus.title(), "date": row["date"],
+                                "day": row["day"], "role": role_key.replace("_clean", ""),
+                            })
+                            break
+            if call_results:
+                call_results.sort(key=lambda x: x["date"])
+                result["items"].append({
+                    "type": "call_schedule",
+                    "label": "Upcoming Call Coverage",
+                    "data": {"assignments": call_results[:10], "total": len(call_results)},
+                })
+        except Exception:
+            pass
+    
+    # 3. GME balance (residents only)
+    if role in ("administrator", "resident"):
+        try:
+            gme = gme_balance(name)
+            if "error" not in gme:
+                result["items"].append({
+                    "type": "gme_balance",
+                    "label": "GME Reimbursement",
+                    "data": gme,
+                })
+        except Exception:
+            pass
+    
+    # 4. Vacation/sick requests — from roster data
+    try:
+        from modules.roster_parser import query_vacation
+        vac = query_vacation(employee_name=name)
+        if vac and isinstance(vac, dict) and vac.get("count", 0) > 0:
+            result["items"].append({
+                "type": "vacation_sick",
+                "label": "Vacation & Time Off",
+                "data": vac,
+            })
+    except (ImportError, Exception):
+        pass
+    
+    # 5. Pending evaluations (residents)
+    if role in ("administrator", "resident"):
+        try:
+            from modules import vapi_concierge
+            evals = vapi_concierge.get_evaluations_due(name)
+            if isinstance(evals, dict) and evals.get("count", 0) > 0:
+                result["items"].append({
+                    "type": "evaluations",
+                    "label": "Evaluations Due",
+                    "data": evals,
+                })
+        except Exception:
+            pass
+        
+        try:
+            from modules import vapi_concierge
+            deadlines = vapi_concierge.get_deadlines(role)
+            if isinstance(deadlines, dict) and deadlines.get("count", 0) > 0:
+                result["items"].append({
+                    "type": "deadlines",
+                    "label": "Program Deadlines",
+                    "data": deadlines,
+                })
+        except Exception:
+            pass
+    
+    return result

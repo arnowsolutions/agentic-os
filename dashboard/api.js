@@ -198,4 +198,9 @@ const api = {
   generateReport: (data) => api.post('/api/reports/generate', data),
   // Selftest
   selfTest: () => api.get('/api/selftest'),
+  // Auth
+  login:          (email, password)           => api.post('/api/auth/login',           { email, password }),
+  logout:         ()                          => api.post('/api/auth/logout',           {}),
+  getMe:          ()                          => api.get('/api/auth/me'),
+  changePassword: (current_password, new_password) => api.post('/api/auth/change-password', { current_password, new_password }),
 };

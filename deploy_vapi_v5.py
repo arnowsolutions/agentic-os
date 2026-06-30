@@ -74,6 +74,70 @@ def main():
     else:
         print("verifyCaller tool already has caller_ez_id")
     
+    # Ensure getMyDashboard tool exists
+    dashboard_tool_name = "getMyDashboard"
+    has_dashboard = any(
+        t.get("function", {}).get("name") == dashboard_tool_name
+        for t in tools
+    )
+    if not has_dashboard:
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": dashboard_tool_name,
+                "description": "Return ALL schedule data for a verified caller — clinic assignments, call coverage, GME balance, vacation time, evaluations, and deadlines — merged into one comprehensive result. Call this when the caller says 'my schedule', 'show me everything', 'what's going on', or wants a complete picture of their data. Arguments: caller_name (the verified caller's name) and caller_role (their role: administrator/faculty/resident/staff).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "caller_name": {
+                            "type": "string",
+                            "description": "The verified caller's full name (from verification)"
+                        },
+                        "caller_role": {
+                            "type": "string",
+                            "description": "The caller's role: administrator, faculty, resident, or staff"
+                        }
+                    },
+                    "required": ["caller_name", "caller_role"]
+                }
+            }
+        })
+        print("Added getMyDashboard tool")
+
+    # Ensure emailMyDashboard tool exists
+    email_dash_tool = "emailMyDashboard"
+    has_email_dash = any(
+        t.get("function", {}).get("name") == email_dash_tool
+        for t in tools
+    )
+    if not has_email_dash:
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": email_dash_tool,
+                "description": "SEND a comprehensive HTML email with ALL the caller's schedule data — clinic assignments, call coverage, GME balance, vacation, evaluations, and deadlines. Use THIS instead of reading data aloud on the phone. After verifying a caller, ask if they want it emailed, then call this with their name, role, and email. Saves phone time and credits by sending data to their inbox instead of speaking it.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "caller_name": {
+                            "type": "string",
+                            "description": "The verified caller's full name"
+                        },
+                        "caller_role": {
+                            "type": "string",
+                            "description": "The caller's role: administrator, faculty, resident, or staff"
+                        },
+                        "email": {
+                            "type": "string",
+                            "description": "Email address to send to. Use the caller's email from their profile if available."
+                        }
+                    },
+                    "required": ["caller_name", "caller_role", "email"]
+                }
+            }
+        })
+        print("Added emailMyDashboard tool")
+    
     payload = {
         "name": "Big Reef Personal Assistant",
         "firstMessage": "Hey, thanks for calling Shareef's line at Montefiore Urology. I'm his assistant. Do you have your EZ ID number handy?",

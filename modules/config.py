@@ -71,6 +71,17 @@ class Settings:
     AUTH_MAX_ATTEMPTS: int = int(os.environ.get("AUTH_MAX_ATTEMPTS", "5"))
     AUTH_LOCKOUT_SECONDS: int = int(os.environ.get("AUTH_LOCKOUT_SECONDS", "300"))
 
+    # Central Auth (SSO IdP) — web session management
+    SESSION_COOKIE_NAME: str = "aos_session"
+    SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "")
+    SESSION_TTL_HOURS: int = int(os.environ.get("SESSION_TTL_HOURS", "8"))
+    SESSIONS_PATH: Path = Path(
+        os.environ.get("SESSIONS_PATH", DATA_DIR / "sessions.json")
+    )
+    WEB_AUTH_LOCKOUTS_PATH: Path = Path(
+        os.environ.get("WEB_AUTH_LOCKOUTS_PATH", DATA_DIR / "auth_lockouts_web.json")
+    )
+
     # Cache
     CACHE_TTL_SECONDS: int = int(os.environ.get("CACHE_TTL_SECONDS", "60"))
 
