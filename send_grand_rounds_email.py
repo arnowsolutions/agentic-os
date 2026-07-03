@@ -18,10 +18,9 @@ PROGRESS_FILE = "/workspace/agentic-os/data/grand_rounds_progress.json"
 # TEST MODE — only send to this address until we go live
 TEST_MODE = True
 TEST_EMAIL = "sfrasier@montefiore.org"
-PROD_RECIPIENTS = ["sfrasier@montefiore.org"]  # Update when going live
+PROD_RECIPIENTS = ["sfrasier@montefiore.org"]  # ⚠️ TEST MODE — only sends to test email
 
 DAILY_LIMIT = 10
-
 # ── Parse GR data ─────────────────────────────────────────
 def parse_gr_data():
     with open("/workspace/agentic-os/dashboard/pages/grand-rounds.js") as f:
@@ -73,30 +72,34 @@ def get_all_grand_rounds():
 
 
 def _build_friday_title(event):
-    """Build descriptive summary + description from event data.
-    Returns (summary, description) tuple."""
-    meeting_type = event['type']
+    """Build summary from the actual session topics.
+    Peds → 'PEDS: Urology Grand Rounds - Peds / Peds Multidisciplinary'
+    Faculty → 'Faculty Meeting'
+    Journal → 'Journal Club'
+    Regular → 'Urology Grand Rounds - {topics}'"""
     topic_7 = event['topic_7_8']
     topic_8 = event['topic_8_9']
+    meeting_type = event['type']
+    
+    # Build topic string from what's actually on the schedule
+    parts = []
+    if topic_7:
+        parts.append(topic_7)
+    if topic_8 and topic_8 != topic_7:
+        parts.append(topic_8)
+    topics = " / ".join(parts) if parts else ""
     
     if "Peds" in meeting_type:
-        return ("PEDS — Urology Grand Rounds / Peds Multidisciplinary",
-                "Grand Rounds — Peds / Peds Multidisciplinary")
+        summary = f"PEDS: Urology Grand Rounds - {topics}" if topics else "PEDS: Urology Grand Rounds"
     elif "Faculty" in meeting_type:
-        return ("FACULTY MEETING — Urology",
-                "Faculty Meeting")
+        summary = "Faculty Meeting"
     elif "Journal" in meeting_type:
-        return ("JOURNAL CLUB — Urology Grand Rounds",
-                "Grand Rounds — Journal Club")
+        summary = "Journal Club"
     else:
-        t7_short = topic_7.replace(" - ", ": ")[:45] if topic_7 else ""
-        t8_short = topic_8.replace(" - ", ": ")[:45] if topic_8 else ""
-        if t7_short and t8_short:
-            return (f"Urology Grand Rounds — {t7_short} / {t8_short}", "Grand Rounds")
-        elif t7_short:
-            return (f"Urology Grand Rounds — {t7_short}", "Grand Rounds")
-        else:
-            return ("Urology Grand Rounds", "Grand Rounds")
+        summary = f"Urology Grand Rounds - {topics}" if topics else "Urology Grand Rounds"
+    
+    description = "Urology Grand Rounds"
+    return (summary, description)
 
 
 def send_ics_invite(event, friday_date):
@@ -108,7 +111,7 @@ def send_ics_invite(event, friday_date):
         formatted = dt.strftime("%A, %B %d, %Y")
         
         to = TEST_EMAIL if TEST_MODE else ", ".join(PROD_RECIPIENTS)
-        subject = f"Invitation: {summary} @ Fri {formatted} 7am - 9am (EDT)"
+        subject = f"Invitation: {summary}"
         
         mid = send_calendar_invite(
             to=to,
@@ -125,6 +128,8 @@ def send_ics_invite(event, friday_date):
             passcode=PASSCODE,
             session_7_8=event['topic_7_8'],
             session_8_9=event['topic_8_9'],
+            session_7_8_label="Grand Rounds",
+            session_8_9_label="Grand Rounds Conference",
         )
         return True, ""
     except Exception as e:
@@ -185,9 +190,33 @@ def save_progress(progress):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", type=str, default="", help="Single date to send for (YYYY-MM-DD)")
+    args = parser.parse_args()
+
     all_events = get_all_grand_rounds()
     progress = load_progress()
     today = date.today()
+
+    # ── Mode: Single-date resend ──
+    if args.date:
+        target_date = args.date
+        # Override test mode from env if set
+        recipients_env = os.environ.get("PROD_RECIPIENTS", "")
+        test_mode_env = os.environ.get("TEST_MODE", "")
+        global TEST_MODE, TEST_EMAIL, PROD_RECIPIENTS
+        if test_mode_env == "false" and recipients_env:
+            TEST_MODE = False
+            PROD_RECIPIENTS = recipients_env.split(",")
+        for event in all_events:
+            if event["date"] == target_date:
+                print(f"📅 Resending invite for {target_date} ({event['type']})")
+                ok, err = send_ics_invite(event, target_date)
+                print(f"  {'✅' if ok else '❌'} (err: {err[:60] if err else 'none'})")
+                return
+        print(f"No event found for {target_date}")
+        return
 
     # ── Mode: Wednesday Reminder ──
     if today.weekday() == 2:  # Wednesday

@@ -95,7 +95,9 @@ class Settings:
     )
 
     # Data
-    CRM_PATH: Path = Path(os.environ.get("CRM_PATH", DATA_DIR / "crm_contacts.json"))
+    CRM_PATH: Path = Path(os.environ.get(
+        "CRM_PATH", str(DATA_DIR / "crm_contacts.fallback.json")
+    ))  # CRM JSON file path
     PIN_DB_PATH: Path = Path(os.environ.get("PIN_DB_PATH", DATA_DIR / "user_pins.json"))
     KNOWLEDGE_DIR: Path = Path(
         os.environ.get("KNOWLEDGE_DIR", BASE_DIR / "knowledge-base")

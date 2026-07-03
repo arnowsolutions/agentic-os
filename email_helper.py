@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from modules.google_workspace import GoogleWorkspace
+from modules.smtp_sender import send_email_smart
 
 
 def _html_wrap(text: str, subject: str) -> str:
@@ -34,8 +35,7 @@ def main():
     body_text = sys.stdin.read()
     html = _html_wrap(body_text, args.subject)
     try:
-        result = GoogleWorkspace().send_email(
-            user_id="default",
+        result = send_email_smart(
             to=args.to,
             subject=args.subject,
             body=html,

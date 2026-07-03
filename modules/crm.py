@@ -3,6 +3,8 @@ Agentic OS — CRM Module
 CRM contacts management, access logging, and GME reimbursement tracking.
 Extracted from server.py for maintainability.
 """
+import csv as _csv_module
+import io as _io
 import json
 import uuid as _uuid
 import time as _time
@@ -105,6 +107,14 @@ def _log_crm_access(action: str, contact_id: str = "", contact_name: str = "",
         print(f"CRM access log error: {e}")
 
 def _load_crm():
+    """Load contacts from Supabase Postgres, fall back to JSON file."""
+    try:
+        from modules.crm_db import get_contacts as _db_contacts
+        db_contacts = _db_contacts()
+        if db_contacts:
+            return db_contacts
+    except Exception:
+        pass
     crm_file, _ = _get_crm_paths()
     if crm_file.exists():
         try:
@@ -295,3 +305,196 @@ def gme_add_reimbursement(req: ReimbursementRequest):
             )
             return {"success": True, "remaining": GME_ANNUAL_LIMIT - total_used - req.amount}
     raise HTTPException(status_code=404, detail="Resident not found")
+
+
+# ─── Email Groups (Grand Rounds / Resident Conference) ────────────
+
+EMAIL_GROUPS_FILE = Path(__file__).resolve().parent.parent / "data" / "email_groups.json"
+
+DEFAULT_EMAIL_GROUPS = {
+    "grand_rounds": {
+        "label": "Grand Rounds (Fridays)",
+        "emails": [],
+        "test_mode": True,
+        "test_email": "sfrasier@montefiore.org",
+    },
+    "resident_conference": {
+        "label": "Resident Conference (Mondays)",
+        "emails": [],
+        "test_mode": True,
+        "test_email": "sfrasier@montefiore.org",
+    },
+}
+
+
+def _load_email_groups():
+    if EMAIL_GROUPS_FILE.exists():
+        with open(EMAIL_GROUPS_FILE) as f:
+            return json.load(f)
+    _save_email_groups(DEFAULT_EMAIL_GROUPS)
+    return dict(DEFAULT_EMAIL_GROUPS)
+
+
+def _save_email_groups(data):
+    EMAIL_GROUPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(EMAIL_GROUPS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+class EmailGroupUpdate(BaseModel):
+    emails: list[str] | None = None
+    test_mode: bool | None = None
+    test_email: str | None = None
+    attendance_link: str | None = None
+
+
+@router.get("/email-groups")
+def get_email_groups():
+    return _load_email_groups()
+
+
+@router.put("/email-groups/{group_key}")
+def update_email_group(group_key: str, update: EmailGroupUpdate):
+    if group_key not in DEFAULT_EMAIL_GROUPS:
+        raise HTTPException(404, f"Unknown group: {group_key}")
+    data = _load_email_groups()
+    if update.emails is not None:
+        data[group_key]["emails"] = update.emails
+    if update.test_mode is not None:
+        data[group_key]["test_mode"] = update.test_mode
+    if update.test_email is not None:
+        data[group_key]["test_email"] = update.test_email
+    if update.attendance_link is not None:
+        data[group_key]["attendance_link"] = update.attendance_link
+    _save_email_groups(data)
+    return data[group_key]
+
+
+# ─── Archive ───────────────────────────────────────────────────
+
+@router.patch("/contacts/{contact_id}/archive")
+def archive_contact(contact_id: str, archived: bool = True):
+    contacts = _load_crm()
+    for c in contacts:
+        if c.get("id") == contact_id:
+            cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
+            c["archived"] = archived
+            _save_crm(contacts)
+            _log_crm_access(
+                action="archive" if archived else "unarchive",
+                contact_id=contact_id, contact_name=cname,
+                endpoint=f"/api/crm/contacts/{contact_id}/archive",
+                method="PATCH", agent="dashboard"
+            )
+            return {"success": True, "archived": archived}
+    raise HTTPException(status_code=404, detail="Contact not found")
+
+@router.post("/contacts/bulk-archive")
+def bulk_archive_contacts(graduation_year: str = "", category: str = "Resident"):
+    """Archive all contacts matching graduation_year and category.
+    Default: archives Residents whose graduationYear matches the current year (2026).
+    Pass graduation_year='all' to archive all Residents regardless of year."""
+    from datetime import datetime as _dt
+    contacts = _load_crm()
+    if not graduation_year:
+        graduation_year = str(_dt.now().year)
+    archived = []
+    for c in contacts:
+        if c.get("archived"):
+            continue
+        if category and c.get("category") != category:
+            continue
+        if graduation_year != "all":
+            gy = str(c.get("graduationYear", "")).strip()
+            if gy != graduation_year:
+                continue
+        c["archived"] = True
+        cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
+        archived.append({"id": c.get("id"), "name": cname})
+    if archived:
+        _save_crm(contacts)
+        for a in archived:
+            _log_crm_access(
+                action="bulk_archive", contact_id=a["id"], contact_name=a["name"],
+                endpoint="/api/crm/contacts/bulk-archive", method="POST", agent="dashboard"
+            )
+    return {"success": True, "archived_count": len(archived), "archived": archived}
+
+# ─── CSV Export ────────────────────────────────────────────────
+
+@router.get("/contacts/export/csv")
+def export_contacts_csv(include_archived: bool = False):
+    """Export all contacts as CSV."""
+    contacts = _load_crm()
+    if not include_archived:
+        contacts = [c for c in contacts if not c.get("archived")]
+    if not contacts:
+        return {"error": "No contacts to export"}
+    fieldnames = ["id", "firstName", "lastName", "category", "pgy", "email",
+                  "mobile", "pager", "ezid", "npi", "address", "proximity",
+                  "birthday", "programStart", "urologyStart", "graduationYear",
+                  "parkingChip", "archived"]
+    output = _io.StringIO()
+    writer = _csv_module.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    for c in contacts:
+        writer.writerow({k: c.get(k, "") for k in fieldnames})
+    csv_text = output.getvalue()
+    return {"csv": csv_text, "count": len(contacts)}
+
+# ─── Resend Invite ─────────────────────────────────────────────
+
+class ResendInviteRequest(BaseModel):
+    date: str  # YYYY-MM-DD
+    group: str = "grand_rounds"  # grand_rounds or resident_conference
+    test_mode: bool = True  # True = send only to test_email
+
+@router.post("/email-groups/{group_key}/resend")
+def resend_invite(group_key: str, req: ResendInviteRequest):
+    """Queue a calendar invite resend for a specific conference date.
+    Triggers the existing send script for the given date.
+    Supports test_mode and passes attendance_link from email_groups.json."""
+    import subprocess, sys
+    if group_key not in ("grand_rounds", "resident_conference"):
+        raise HTTPException(400, f"Unknown group: {group_key}")
+    data = _load_email_groups()
+    group = data.get(group_key)
+    if not group:
+        raise HTTPException(400, "Group not configured")
+    if not group.get("emails") and not req.test_mode:
+        raise HTTPException(400, "No recipients configured for this group")
+    
+    # Pick the right script
+    if group_key == "resident_conference":
+        script_path = Path(__file__).resolve().parent.parent / "send_monday_sasp_email.py"
+    else:
+        script_path = Path(__file__).resolve().parent.parent / "send_grand_rounds_email.py"
+    
+    if not script_path.exists():
+        raise HTTPException(500, f"{script_path.name} not found")
+    
+    recipients = group["emails"]
+    test_email = group.get("test_email", "sfrasier@montefiore.org")
+    
+    env = {**__import__("os").environ,
+           "TEST_MODE": "true" if req.test_mode else "false",
+           "TEST_EMAIL": test_email,
+           "PROD_RECIPIENTS": ",".join(recipients),
+           "SINGLE_DATE": req.date}
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script_path), "--date", req.date],
+            capture_output=True, text=True, timeout=60, env=env
+        )
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout.strip()[-500:],
+            "error": result.stderr.strip()[-200:] if result.returncode != 0 else "",
+            "recipients": 1 if req.test_mode else len(recipients),
+            "test_mode": req.test_mode,
+            "attendance_link": group.get("attendance_link", ""),
+        }
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Resend timed out after 60s")
+    except Exception as e:
+        raise HTTPException(500, str(e))

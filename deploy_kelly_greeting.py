@@ -24,33 +24,57 @@ with open('/workspace/agentic-os/data/user_pins.json', 'w') as f:
 
 print("✅ PIN DB updated for Kelly")
 
-# ── 2. Update CRM ────────────────────────────────────────────
-with open('/workspace/agentic-os/data/crm_contacts.json') as f:
-    crm = json.load(f)
+# ── 2. Update CRM (Supabase Postgres + JSON fallback) ────────
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from modules.crm_db import get_contacts
+
+crm = get_contacts()
+if not crm:
+    # Fallback to JSON
+    json_path = '/workspace/agentic-os/data/crm_contacts.fallback.json'
+    if os.path.exists(json_path):
+        with open(json_path) as f:
+            crm = json.load(f)
 
 for c in crm:
-    if c.get('id') == 'contact-kelly-bottger':
+    if c.get('id') == 'contact-kelly-bottger' or (c.get('ezId') == '36368'):
         c['category'] = 'Manager'
         c['ezId'] = '36368'
-        print(f"✅ CRM updated for Kelly: {c['firstName']} {c['lastName']} → Manager")
+        print(f"✅ CRM updated for Kelly: {c.get('firstName')} {c.get('lastName')} → Manager")
         break
 
-with open('/workspace/agentic-os/data/crm_contacts.json', 'w') as f:
+# Write back to JSON fallback
+json_path = '/workspace/agentic-os/data/crm_contacts.fallback.json'
+with open(json_path, 'w') as f:
     json.dump(crm, f, indent=2)
 
+# Write to Supabase Postgres
+try:
+    import subprocess as _sp
+    pw = os.environ.get("POSTGRES_PASSWORD", "")
+    if not pw:
+        r = _sp.run(['grep', 'POSTGRES_PASSWORD', '/workspace/projects/unified/app/.env'],
+            capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            pw = r.stdout.strip().split('=', 1)[1].strip()
+    if pw:
+        import psycopg2
+        conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="postgres", user="postgres", password=pw, connect_timeout=3)
+        cur = conn.cursor()
+        cur.execute("UPDATE public.contacts SET category = %s, ez_id = %s WHERE id = %s OR ez_id = %s",
+            ('Manager', '36368', 'contact-kelly-bottger', '36368'))
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("✅ Supabase PG updated for Kelly")
+except Exception as e:
+    print(f"⚠️ Could not update Supabase PG: {e}")
+
 # ── 3. Update Vapi assistant system prompt ──────────────────
-with open('/home/hermeswebui/.hermes/.env') as f:
-    env = f.read()
-
-api_key = ""
-for line in env.split('\n'):
-    if line.startswith('VAPI_API_KEY=***        parts = line.split('=', 1)
-        if len(parts) > 1:
-            api_key = parts[1].strip().strip("'\"")
-
+api_key = os.environ.get('VAPI_API_KEY', '')
 ASSISTANT_ID = "9b00342e-1951-4bd0-b4a5-5ca4c9827bd0"
 headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
-
 req = urllib.request.Request(f"https://api.vapi.ai/assistant/{ASSISTANT_ID}", headers=headers)
 with urllib.request.urlopen(req, timeout=15) as r:
     d = json.loads(r.read())

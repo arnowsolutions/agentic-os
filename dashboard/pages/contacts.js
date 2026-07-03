@@ -8,6 +8,8 @@ async function renderContacts() {
       </div>
       <div class="btn-group">
         <button class="btn" onclick="renderContactForm()">➕ Add Contact</button>
+        <button class="btn" onclick="exportContactsCSV()">📥 Export CSV</button>
+        <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="showBulkArchive()">📦 Bulk Archive</button>
         <button class="btn" onclick="renderContacts()">🔄 Refresh</button>
       </div>
     </div>
@@ -40,14 +42,20 @@ async function loadContacts() {
 function renderFilters() {
   const cats = {};
   allContacts.forEach(c => {
+    if (c.archived) return;
     const cat = c.category || 'Uncategorized';
     cats[cat] = (cats[cat] || 0) + 1;
   });
   const container = document.getElementById('crmFilters');
-  let html = `<button class="tag" style="cursor:pointer;padding:4px 12px" onclick="filterByCategory('')">All (${allContacts.length})</button>`;
+  const activeCount = allContacts.filter(c => !c.archived).length;
+  const archivedCount = allContacts.filter(c => c.archived).length;
+  let html = `<button class="tag" style="cursor:pointer;padding:4px 12px" onclick="filterByCategory('')">All (${activeCount})</button>`;
   Object.entries(cats).sort().forEach(([cat, count]) => {
     html += `<button class="tag" style="cursor:pointer;padding:4px 12px" onclick="filterByCategory('${escapeHtml(cat)}')">${escapeHtml(cat)} (${count})</button>`;
   });
+  if (archivedCount > 0) {
+    html += `<button class="tag" style="cursor:pointer;padding:4px 12px;background:var(--red-dim);color:var(--red);border-color:var(--red)" onclick="filterByCategory('__archived__')">📦 Archived (${archivedCount})</button>`;
+  }
   container.innerHTML = html;
   container.dataset.activeFilter = '';
 }
@@ -63,7 +71,13 @@ function filterContacts() {
   const q = (document.getElementById('crmSearch').value || '').toLowerCase();
   const activeCat = document.getElementById('crmFilters').dataset.activeFilter || '';
   let filtered = allContacts;
-  if (activeCat) filtered = filtered.filter(c => (c.category || 'Uncategorized') === activeCat);
+  if (activeCat === '__archived__') {
+    filtered = filtered.filter(c => c.archived);
+  } else if (activeCat) {
+    filtered = filtered.filter(c => (c.category || 'Uncategorized') === activeCat && !c.archived);
+  } else {
+    filtered = filtered.filter(c => !c.archived);
+  }
   if (q) {
     filtered = filtered.filter(c => 
       `${c.firstName||''} ${c.lastName||''}`.toLowerCase().includes(q) ||
@@ -86,12 +100,13 @@ function renderTable(contacts) {
   contacts.forEach(c => {
     const name = `${escapeHtml(c.firstName||'')} ${escapeHtml(c.lastName||'')}`.trim() || 'Unknown';
     const cat = escapeHtml(c.category || 'Uncategorized');
-    const badgeColor = cat === 'Resident' ? '#6c5ce7' : cat === 'Faculty' ? '#0984e3' : cat === 'Staff' ? '#00b894' : '#636e72';
+    const badgeColor = cat === 'Resident' ? '#6c5ce7' : cat === 'Faculty' ? '#0984e3' : cat === 'Staff' ? '#00b894' : cat === 'Manager' ? '#e17055' : '#636e72';
+    const isArchived = c.archived;
     html += `
-      <div class="card" style="margin-bottom:8px;cursor:pointer" onclick="showContactDetail('${c.id}')">
+      <div class="card" style="margin-bottom:8px;cursor:pointer;${isArchived ? 'opacity:0.6;border-left:3px solid var(--red)' : ''}" onclick="showContactDetail('${c.id}')">
         <div style="display:flex;justify-content:space-between;align-items:start">
           <div>
-            <div style="font-weight:600;font-size:15px">${name}</div>
+            <div style="font-weight:600;font-size:15px">${name}${isArchived ? ' <span style="font-size:11px;color:var(--red)">📦 Archived</span>' : ''}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
               ${c.email ? `📧 ${escapeHtml(c.email)}` : ''}
               ${c.email && c.mobile ? ' · ' : ''}
@@ -105,6 +120,11 @@ function renderTable(contacts) {
             </div>
           </div>
           <span class="tag" style="background:${badgeColor}20;color:${badgeColor};border:1px solid ${badgeColor}40;flex-shrink:0">${cat}</span>
+          <button class="tag" style="cursor:pointer;flex-shrink:0;font-size:11px;background:transparent;border:1px solid var(--border)"
+            onclick="event.stopPropagation();archiveContact('${c.id}', ${!isArchived})"
+            title="${isArchived ? 'Unarchive' : 'Archive'}">
+            ${isArchived ? '↩️ Unarchive' : '📦 Archive'}
+          </button>
         </div>
       </div>
     `;
@@ -165,6 +185,7 @@ function renderContactForm(editId) {
           <option value="Resident" ${val('category')==='Resident'?'selected':''}>Resident</option>
           <option value="Faculty" ${val('category')==='Faculty'?'selected':''}>Faculty</option>
           <option value="Staff" ${val('category')==='Staff'?'selected':''}>Staff</option>
+          <option value="Manager" ${val('category')==='Manager'?'selected':''}>Manager</option>
           <option value="Vendor" ${val('category')==='Vendor'?'selected':''}>Vendor</option>
           <option value="AI/Tech" ${val('category')==='AI/Tech'?'selected':''}>AI/Tech</option>
           <option value="Personal" ${val('category')==='Personal'?'selected':''}>Personal</option>
@@ -212,6 +233,20 @@ async function saveContact(editId) {
     graduationYear: document.getElementById('gradYear').value,
     parkingChip: document.getElementById('parking').value,
   };
+
+  // Duplicate detection for new contacts
+  if (!editId && data.email) {
+    const existing = allContacts.find(c =>
+      (c.email || '').toLowerCase() === data.email.toLowerCase() && !c.archived
+    );
+    if (existing) {
+      const name = [existing.firstName, existing.lastName].filter(Boolean).join(' ') || existing.email;
+      if (!confirm(`⚠️ A contact with email "${data.email}" already exists:\n\n${name}\n\nDo you want to create a duplicate anyway?`)) {
+        return;
+      }
+    }
+  }
+
   try {
     if (editId) {
       await api.updateContact(editId, data);
@@ -244,5 +279,87 @@ async function deleteContact(id) {
     await loadContacts();
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function archiveContact(id, archive) {
+  try {
+    await api.patch(`/api/crm/contacts/${encodeURIComponent(id)}/archive?archived=${archive}`);
+    showToast(archive ? 'Contact archived' : 'Contact unarchived', 'success');
+    await loadContacts();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+// ─── CSV Export ─────────────────────────────────────────────
+
+async function exportContactsCSV() {
+  try {
+    showToast('Exporting contacts...', 'info');
+    const data = await api.get('/api/crm/contacts/export/csv');
+    if (!data.csv) {
+      showToast('No contacts to export', 'warning');
+      return;
+    }
+    const blob = new Blob([data.csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crm_contacts_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`✅ Exported ${data.count} contacts`, 'success');
+  } catch (err) {
+    showToast('Export failed: ' + err.message, 'error');
+  }
+}
+
+// ─── Bulk Archive ───────────────────────────────────────────
+
+function showBulkArchive() {
+  const residents = allContacts.filter(c => c.category === 'Resident' && !c.archived);
+  const gradYears = [...new Set(residents.map(c => c.graduationYear).filter(Boolean))].sort();
+  const currentYear = new Date().getFullYear().toString();
+
+  let options = gradYears.map(y =>
+    `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y} (${residents.filter(c => c.graduationYear === y).length} residents)</option>`
+  ).join('');
+  options += `<option value="all">All years (${residents.length} residents)</option>`;
+
+  const body = `
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Archive all Residents graduating in:</label>
+        <select id="bulkArchiveYear" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px">
+          ${options}
+        </select>
+      </div>
+      <div style="padding:12px;background:var(--red-dim);border:1px solid var(--red);border-radius:8px">
+        <p style="margin:0;font-size:13px;color:var(--red);font-weight:600">⚠️ This will ARCHIVE all selected residents.</p>
+        <p style="margin:4px 0 0 0;font-size:12px;color:var(--text-muted)">Archived contacts are hidden from the main list but can be unarchived later.</p>
+      </div>
+    </div>
+  `;
+  const footer = `
+    <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="executeBulkArchive()">📦 Archive Selected</button>
+    <button class="btn" onclick="closeModal()">Cancel</button>
+  `;
+  showModal('📦 Bulk Archive Graduating Residents', body, footer);
+}
+
+async function executeBulkArchive() {
+  const year = document.getElementById('bulkArchiveYear').value;
+  closeModal();
+  showToast(`Archiving residents graduating in ${year}...`, 'info');
+  try {
+    const data = await api.post('/api/crm/contacts/bulk-archive', {
+      graduation_year: year,
+      category: 'Resident'
+    });
+    showToast(`✅ Archived ${data.archived_count} residents`, 'success');
+    await loadContacts();
+  } catch (err) {
+    showToast('Bulk archive failed: ' + err.message, 'error');
   }
 }

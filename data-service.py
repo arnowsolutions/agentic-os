@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse
 # ─── Config ───────────────────────────────────────────────────────
 
 REIMBURSEMENT_DB = "/workspace/repos/reimbursement/reimbursement.db"
-HERMES_CRM = Path.home() / ".hermes" / "crm_contacts.json"
+HERMES_CRM = Path(__file__).resolve().parent / "data" / "crm_contacts.fallback.json"
 
 # Supabase (sick-call) — the key is loaded automatically from /tmp/check_supa.py
 # or set the SUPA_SERVICE_KEY env var to override
@@ -139,10 +139,16 @@ def health():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-# ─── CRM (Hermes contacts) ────────────────────────────────────────
+# ─── CRM (Hermes contacts) — reads from Supabase Postgres ─────────
 
 @app.get("/api/crm/contacts")
 def crm_contacts():
+    try:
+        from modules.crm_db import get_contacts
+        return get_contacts()
+    except Exception as e:
+        print(f"[data-service] CRM DB error: {e}")
+    # Fallback
     if HERMES_CRM.exists():
         return json.loads(HERMES_CRM.read_text())
     return []

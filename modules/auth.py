@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 from modules import identity as identity_module
@@ -46,9 +46,12 @@ def _load_sessions() -> dict:
 
 
 def _save_sessions(data: dict):
-    """Atomically write sessions dict to disk."""
+    """Atomically save sessions to disk."""
     SESSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SESSIONS_PATH.write_text(json.dumps(data, indent=2))
+    try:
+        SESSIONS_PATH.write_text(json.dumps(data, indent=2))
+    except (PermissionError, OSError):
+        pass  # Non-fatal — sessions are volatile
 
 
 def purge_expired():
@@ -169,7 +172,10 @@ class _WebAuthLimiter:
         """Write current state to disk."""
         WEB_LOCKOUTS_PATH.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
-            WEB_LOCKOUTS_PATH.write_text(json.dumps(self._state, indent=2))
+            try:
+                WEB_LOCKOUTS_PATH.write_text(json.dumps(self._state, indent=2))
+            except (PermissionError, OSError):
+                pass  # Non-fatal — lockout state is advisory
 
     def _key(self, email: str, ip: str = "") -> str:
         return f"{email.lower().strip()}:{ip}"
@@ -276,6 +282,7 @@ def _hash_password(password: str) -> str:
 class LoginRequest(BaseModel):
     email: str
     password: str
+    redirect: str = ""  # Optional redirect URL after login
 
 
 class ChangePasswordRequest(BaseModel):
@@ -341,12 +348,17 @@ async def login(request: Request, body: LoginRequest):
     # 6. Create session
     token = create_session(crm_id, email, role)
 
-    # 7. Set cookie and return
-    response = JSONResponse({
-        "ok": True,
-        "role": role,
-        "must_reset": credential.get("must_reset", False),
-    })
+    # 7. Set cookie and return — redirect if requested, JSON otherwise
+    redirect_to = body.redirect if hasattr(body, 'redirect') and body.redirect else ""
+    
+    if redirect_to:
+        response = RedirectResponse(url=redirect_to, status_code=303)
+    else:
+        response = JSONResponse({
+            "ok": True,
+            "role": role,
+            "must_reset": credential.get("must_reset", False),
+        })
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=token,

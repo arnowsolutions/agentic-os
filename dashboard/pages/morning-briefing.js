@@ -40,6 +40,7 @@ async function renderMorningBriefing() {
     const pendingEvals = res.pending_evals || 0;
     const cronStatus = res.cron_status || {ok: 0, failed: 0};
     const upcoming = res.upcoming_events || [];
+    const commute = res.commute || [];
 
     const greet = now.getHours() < 12 ? 'Good Morning' : now.getHours() < 17 ? 'Good Afternoon' : 'Good Evening';
 
@@ -84,6 +85,19 @@ async function renderMorningBriefing() {
           <a href="#eval-portal" class="btn btn-ghost btn-sm" style="font-size:11px">📝 Evals</a>
           <a href="#oncall" class="btn btn-ghost btn-sm" style="font-size:11px">📅 Schedule</a>
         </div>
+      </div>
+
+
+      <div class="mb-card">
+        <h3> Commute</h3>
+        ${commute.length > 0 ? commute.map(r => `
+          <div class="mb-row">
+            <span>${r.name === 'shareef' ? ' Shareef' : r.name.charAt(0).toUpperCase() + r.name.slice(1)}</span>
+            <span>${r.error ? ' No address' : r.distance + '  ' + r.duration + ', now <strong>' + r.duration_in_traffic + '</strong>' + (r.delta_text || '')}</span>
+          </div>
+        `).join('') : `
+          <div style="color:var(--text-muted);font-size:12px;padding:8px 0"> Commute loading...</div>
+        `}
       </div>
 
       <div class="mb-card">

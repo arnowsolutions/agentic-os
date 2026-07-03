@@ -18,6 +18,7 @@ from reportlab.platypus import (
 
 from modules import vapi_unified
 from modules.config import get_settings
+from modules.smtp_sender import send_email_smart
 
 NAVY = colors.HexColor("#1a3a5c")
 LIGHT_GRAY = colors.HexColor("#f4f6f9")
@@ -337,9 +338,12 @@ def email_schedule(
 ) -> dict:
     """Called from Vapi bridge. Takes pre-fetched schedule entries, generates PDF, emails it."""
     try:
-        from google_workspace import GoogleWorkspace
+        from modules.google_workspace import GoogleWorkspace
     except ImportError:
-        return {"success": False, "message": "Email sending not configured"}
+        try:
+            from google_workspace import GoogleWorkspace
+        except ImportError:
+            return {"success": False, "message": "Email sending not configured"}
 
     if not schedule_data:
         return {"success": False, "message": "No schedule data provided"}
@@ -364,9 +368,7 @@ def email_schedule(
     recipient_name = person_name or "Colleague"
     try:
         html_body = build_email_html(recipient_name, title, schedule_data=display_data)
-        ws = GoogleWorkspace()
-        result = ws.send_email(
-            user_id="default",
+        result = send_email_smart(
             to=email,
             subject=f"Montefiore Urology — {title}",
             body=html_body,
@@ -513,9 +515,12 @@ def email_staff_roster(
 ) -> dict:
     """Fetch location staff roster, generate PDF, and email it. Called from Vapi bridge."""
     try:
-        from google_workspace import GoogleWorkspace
+        from modules.google_workspace import GoogleWorkspace
     except ImportError:
-        return {"success": False, "message": "Email sending is not configured."}
+        try:
+            from google_workspace import GoogleWorkspace
+        except ImportError:
+            return {"success": False, "message": "Email sending is not configured."}
 
     from modules import roster_parser
 
@@ -588,9 +593,7 @@ def email_staff_roster(
 </body>
 </html>"""
 
-        ws = GoogleWorkspace()
-        result = ws.send_email(
-            user_id="default",
+        result = send_email_smart(
             to=email,
             subject=f"Montefiore Urology — {location} Staff Roster — {date_str}",
             body=html_body,
@@ -623,9 +626,12 @@ def email_schedule_pdf(
 ) -> dict:
     """Generate and email a professional schedule PDF. Called from Vapi bridge."""
     try:
-        from google_workspace import GoogleWorkspace
+        from modules.google_workspace import GoogleWorkspace
     except ImportError:
-        return {"success": False, "message": "Email sending is not configured."}
+        try:
+            from google_workspace import GoogleWorkspace
+        except ImportError:
+            return {"success": False, "message": "Email sending is not configured."}
 
     # Determine what data to fetch
     schedule_data = {}
@@ -702,9 +708,7 @@ def email_schedule_pdf(
     # Build email
     try:
         html_body = build_email_html(recipient_name or "Colleague", title, schedule_data=schedule_data)
-        ws = GoogleWorkspace()
-        result = ws.send_email(
-            user_id="default",
+        result = send_email_smart(
             to=recipient_email,
             subject=f"Montefiore Urology — {title}",
             body=html_body,

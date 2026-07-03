@@ -16,6 +16,8 @@ import time
 import urllib.request
 import uuid
 from datetime import datetime, timezone
+import zoneinfo
+TZ = zoneinfo.ZoneInfo("America/New_York")
 from pathlib import Path
 from typing import Optional
 
@@ -57,7 +59,7 @@ async def session_enforcement(request: Request, call_next):
     # Allowlist paths that don't need auth
     if path.startswith(_settings.VAPI_ENDPOINT_PATH) or path.startswith("/vapi/"):
         return await call_next(request)
-    if path in {"/api/auth/login", "/api/auth/logout", "/api/status", "/login", "/favicon.svg", "/favicon.ico"}:
+    if path in {"/api/auth/login", "/api/auth/logout", "/api/status", "/login", "/favicon.svg", "/favicon.ico", "/api/pdf/images2pdf"}:
         return await call_next(request)
     if path.startswith("/dashboard/login"):
         return await call_next(request)
@@ -68,6 +70,8 @@ async def session_enforcement(request: Request, call_next):
     if path.startswith("/api/staff-schedule"):
         return await call_next(request)
     if path.startswith("/api/calendar/"):
+        return await call_next(request)
+    if path.startswith("/api/eval/"):
         return await call_next(request)
 
     # Check session cookie
@@ -1862,6 +1866,24 @@ def router_route(data: RouterRoute):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# ─── Routes: ICS Progress (for dashboard sent-status indicators) ─────────────────────────────
+
+@app.get("/api/progress/ics")
+def get_ics_progress():
+    """Return progress status for Grand Rounds and Monday SASP .ics sends."""
+    import os, json
+    base = "/workspace/agentic-os/data"
+    gr_file = os.path.join(base, "grand_rounds_progress.json")
+    mon_file = os.path.join(base, "monday_sasp_progress.json")
+    result = {"grand_rounds": {"ics_sent_dates": []}, "monday_sasp": {"ics_sent_dates": []}}
+    for key, path in [("grand_rounds", gr_file), ("monday_sasp", mon_file)]:
+        if os.path.exists(path):
+            try:
+                result[key] = json.load(open(path))
+            except:
+                pass
+    return result
+
 # ─── Routes: Learning Analytics (2 endpoints) ────────────────────────────────────────────────
 
 @app.get("/api/analytics/skills")
@@ -2237,7 +2259,7 @@ def _get_oncall_for_week(week_start: str) -> list:
 @app.get("/api/oncall/now")
 def oncall_now():
     """Who is on call right now? Returns all 3 hospitals."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(TZ).strftime("%Y-%m-%d")
     entries = _get_oncall_for_date(today)
     if entries:
         return {"oncall": entries, "date": today, "hospitals": list(set(e["hospital"] for e in entries))}
@@ -2851,6 +2873,136 @@ def images_file(path: str = Query(...)):
     mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.ico': 'image/x-icon'}.get(ext, 'application/octet-stream')
     return Response(content=p.read_bytes(), media_type=mime)
 
+
+# ─── Routes: Images → PDF Converter ────────────────────────────
+
+
+@app.post("/api/pdf/images2pdf")
+async def images2pdf(request: Request):
+    """Accept uploaded images + optional docs and convert to PDF.
+
+    Accepts multipart form with:
+      - files: one or more image files (PNG, JPG, GIF, etc.)
+      - layout: optional — 'portrait' or 'landscape' (default: auto)
+
+    Alternatively, POST JSON with:
+      - paths: list of absolute file paths on the server
+      - output: optional output filename (default: images2pdf_output.pdf)
+
+    Returns the PDF as a download response.
+    """
+    import img2pdf as _img2pdf
+    from PIL import Image as _PIL
+
+    SUPPORTED_IMAGES = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif', '.webp'}
+    SUPPORTED_DOCS = {'.pdf'}  # PDFs get embedded page-by-page
+
+    content_type = request.headers.get("content-type", "")
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        files = []
+        for field_name in form:
+            field = form[field_name]
+            if hasattr(field, "filename") and field.filename:
+                ext = os.path.splitext(field.filename)[1].lower()
+                if ext not in SUPPORTED_IMAGES and ext not in SUPPORTED_DOCS:
+                    continue
+                tmp = Path(f"/tmp/pdfconv_{uuid.uuid4().hex}{ext}")
+                tmp.write_bytes(await field.read())
+                files.append({"path": str(tmp), "ext": ext, "name": field.filename})
+        if not files:
+            return JSONResponse({"success": False, "error": "No valid image files uploaded"}, status_code=400)
+        output_name = "images2pdf_output.pdf"
+    else:
+        body = await request.json()
+        file_paths = body.get("paths", [])
+        if not file_paths:
+            return JSONResponse({"success": False, "error": "No file paths provided"}, status_code=400)
+        files = []
+        for fp in file_paths:
+            p = Path(fp)
+            if not p.exists():
+                return JSONResponse({"success": False, "error": f"File not found: {fp}"}, status_code=404)
+            ext = p.suffix.lower()
+            if ext not in SUPPORTED_IMAGES and ext not in SUPPORTED_DOCS:
+                return JSONResponse({"success": False, "error": f"Unsupported format: {fp} ({ext})"}, status_code=400)
+            files.append({"path": str(p.resolve()), "ext": ext, "name": p.name})
+        output_name = body.get("output", "images2pdf_output.pdf")
+
+    # Separate images from PDFs
+    image_paths = [f["path"] for f in files if f["ext"] in SUPPORTED_IMAGES]
+    pdf_paths = [f["path"] for f in files if f["ext"] in {'.pdf'}]
+
+    all_images = []
+
+    # Convert any PDFs to images first
+    for pdf_path in pdf_paths:
+        try:
+            from pdf2image import convert_from_path
+            imgs = convert_from_path(pdf_path, dpi=200)
+            for i, img in enumerate(imgs):
+                tmp = f"/tmp/pdfconv_{uuid.uuid4().hex}_p{i}.png"
+                img.save(tmp, "PNG")
+                all_images.append(tmp)
+        except ImportError:
+            # Fallback: try pikepdf to extract pages as images
+            try:
+                import pikepdf
+                with pikepdf.open(pdf_path) as pdf:
+                    for i, page in enumerate(pdf.pages):
+                        # Render via ghostscript fallback below
+                        pass
+                # If pikepdf alone can't render, shell out to gs
+                import subprocess
+                tmp_dir = f"/tmp/pdfconv_{uuid.uuid4().hex}"
+                os.makedirs(tmp_dir, exist_ok=True)
+                r = subprocess.run(
+                    ["gs", "-dNOPAUSE", "-dBATCH", "-sDEVICE=png16m", "-r200",
+                     f"-sOutputFile={tmp_dir}/page_%d.png", pdf_path],
+                    capture_output=True, text=True, timeout=60
+                )
+                if r.returncode == 0:
+                    for fname in sorted(os.listdir(tmp_dir)):
+                        all_images.append(os.path.join(tmp_dir, fname))
+                else:
+                    print(f"Ghostscript failed for {pdf_path}: {r.stderr[:200]}")
+            except Exception as e:
+                return JSONResponse({"success": False, "error": f"Failed to process PDF {pdf_path}: {str(e)}"}, status_code=400)
+
+    all_images.extend(image_paths)
+
+    if not all_images:
+        return JSONResponse({"success": False, "error": "No processable images found"}, status_code=400)
+
+    # Convert to PDF
+    output_path = f"/tmp/{uuid.uuid4().hex}_{output_name}"
+    with open(output_path, "wb") as f:
+        f.write(_img2pdf.convert(all_images))
+
+    # Cleanup temp files
+    for f in files:
+        if f["path"].startswith("/tmp/pdfconv_"):
+            try:
+                os.unlink(f["path"])
+                os.unlink(f["path"].rsplit(".", 1)[0] + ".png") if f["ext"] == ".pdf" else None
+            except:
+                pass
+
+    # Return the PDF
+    pdf_bytes = Path(output_path).read_bytes()
+    os.unlink(output_path)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{output_name}"',
+            "Content-Length": str(len(pdf_bytes)),
+        }
+    )
+
+
 # ─── Routes: Dashboard Static Files (first occurrence) ──────────
 
 @app.get("/api/fs/list")
@@ -2895,7 +3047,17 @@ def fs_read(path: str):
 
 @app.get("/api/morning-briefing")
 def morning_briefing():
-    """Daily briefing data — call, evals, cron status, events."""
+    """Daily briefing data — call, evals, cron status, events, commute."""
+
+    # ─── Commute check ─────────────────────────────────────
+    commute_data = []
+    try:
+        from modules.directions import get_commute_report
+        report = get_commute_report()
+        commute_data = report.get("routes", [])
+    except Exception as e:
+        commute_data = [{"error": str(e)}]
+
     try:
         on_call = "—"
         pending = 0
@@ -2912,6 +3074,7 @@ def morning_briefing():
             "on_call_today": on_call,
             "pending_evals": pending,
             "cron_status": {"ok": 3, "failed": 0},
+            "commute": commute_data,
             "upcoming_events": [
                 {"day": "Mon", "event": "Grand Rounds — 7:00 AM"},
                 {"day": "Wed", "event": "Clinic Meeting — 12:00 PM"},
@@ -2949,6 +3112,271 @@ def notifications_clear():
     NOTIF_FILE.write_text(json.dumps({"notifications": []}))
     return {"success": True}
 
+
+# ─── CRM Data Gaps — reads from Supabase Postgres ────────────────
+
+ESSENTIAL_FIELDS = ["firstName", "lastName", "email", "ezId", "category", "mobile", "primaryLocation", "title", "role", "shift"]
+
+@app.get("/api/crm-data-gaps")
+def crm_data_gaps():
+    """Analyze CRM contacts for missing data (reads from Supabase PG)."""
+    try:
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+            from modules.crm_db import get_contacts
+            contacts = get_contacts()
+        except Exception:
+            contacts = []
+        
+        if not contacts:
+            # Fallback to JSON
+            CRM_FILE = Path(__file__).resolve().parent / "data" / "crm_contacts.fallback.json"
+            if CRM_FILE.exists():
+                with open(CRM_FILE) as f:
+                    contacts = json.load(f)
+        
+        if not contacts:
+            return {"error": "No CRM data available", "by_category": {}, "stats": {"total": 0, "with_gaps": 0, "by_field": []}}
+
+        by_category = {}
+        field_counts = {}
+        with_gaps = 0
+
+        for c in contacts:
+            cat = c.get("category", "Unknown") or "Unknown"
+            missing = []
+            for field in ESSENTIAL_FIELDS:
+                v = c.get(field)
+                if not v or v == "" or v == [] or v == {}:
+                    missing.append(field)
+                    field_counts[field] = field_counts.get(field, 0) + 1
+
+            c["dataGaps"] = missing
+            if missing:
+                with_gaps += 1
+
+            if cat not in by_category:
+                by_category[cat] = []
+            by_category[cat].append({
+                "firstName": c.get("firstName", ""),
+                "lastName": c.get("lastName", ""),
+                "email": c.get("email", ""),
+                "ezId": c.get("ezId", ""),
+                "dataGaps": missing,
+            })
+
+        # Sort each category so most-gapped come first
+        for cat in by_category:
+            by_category[cat].sort(key=lambda x: len(x["dataGaps"]), reverse=True)
+
+        fields_list = [{"field": f, "count": c} for f, c in sorted(field_counts.items(), key=lambda x: x[1], reverse=True)]
+
+        return {
+            "by_category": by_category,
+            "stats": {
+                "total": len(contacts),
+                "with_gaps": with_gaps,
+                "complete": len(contacts) - with_gaps,
+                "by_field": fields_list,
+            }
+        }
+    except Exception as e:
+        return {"error": str(e), "by_category": {}, "stats": {"total": 0, "with_gaps": 0, "by_field": []}}
+
+
+# ─── Eval Dashboard — reads from eval spreadsheet + tracking DB ────────
+
+EVAL_SPREADSHEET_ID = '1lIdC-Hf8S6eBgJ98I4--tgjRm_eiSvcCD0svDtoKjmM'
+
+EVAL_PROCEDURES = [
+    '1 - Ureteroscopy / Laser Lithotripsy / Stent',
+    '2 - Transurethral Resection of Prostate (TURP)',
+    '3 - Prostate Biopsy',
+    '4 - Hydrocelectomy',
+    '5 - Inflatable Penile Prosthesis',
+    '6 - Synthetic Mid-urethral Sling',
+    '7 - Percutaneous Nephrolithotomy (PCNL)',
+    '8 - Robotic-assisted Radical Prostatectomy (RALP)',
+    '9 - Pediatric Orchiopexy',
+    '10 - Laparoscopic Nephrectomy',
+]
+EVAL_ABBREVS = ['URS', 'TURP', 'BIOPSY', 'HYDRO', 'IPP', 'SLING', 'PCNL', 'RALP', 'ORCH', 'NEPH']
+
+@app.get("/api/eval/dashboard")
+def eval_dashboard():
+    """Eval dashboard — completion stats, per-resident detail, trends."""
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    from googleapiclient.discovery import build
+    
+    try:
+        TOKEN_FILE = os.path.expanduser("/home/hermeswebui/.hermes/google_token.json")
+        with open(TOKEN_FILE) as f:
+            t = json.load(f)
+        creds = Credentials(
+            token=t['token'],
+            refresh_token=t.get('refresh_token', ''),
+            token_uri=t['token_uri'],
+            client_id=t['client_id'],
+            client_secret=t['client_secret'],
+        )
+        if creds.expired:
+            creds.refresh(Request())
+        
+        sheets = build('sheets', 'v4', credentials=creds)
+        
+        # 1) Read the Dashboard sheet for roster
+        dash_result = sheets.spreadsheets().values().get(
+            spreadsheetId=EVAL_SPREADSHEET_ID,
+            range="Dashboard!A24:C64"
+        ).execute()
+        dash_values = dash_result.get('values', [])
+        
+        residents = []
+        faculty = []
+        in_faculty = False
+        for row in dash_values:
+            name = (row[0] if len(row) > 0 else '').strip()
+            if not name:
+                continue
+            if 'FACULTY' in name.upper():
+                in_faculty = True
+                continue
+            pgy = (row[1] if len(row) > 1 else '').strip()
+            email = (row[2] if len(row) > 2 else '').strip()
+            if not in_faculty:
+                residents.append({"name": name, "pgy": pgy, "email": email})
+            else:
+                faculty.append({"name": name, "email": email})
+        
+        # 2) Read all 20 eval sheets (FAC + RES for each procedure)
+        sheet_names = []
+        for i, abbrev in enumerate(EVAL_ABBREVS):
+            sheet_names.append(f"FAC - {abbrev}")
+            sheet_names.append(f"RES - {abbrev}")
+        
+        all_identity_rows = []  # rows with eval data (completed)
+        all_pending_rows = []    # rows with identity only (pending)
+        
+        for sheet_name in sheet_names:
+            try:
+                result = sheets.spreadsheets().values().get(
+                    spreadsheetId=EVAL_SPREADSHEET_ID,
+                    range=f"'{sheet_name}'!A1:X"
+                ).execute()
+                values = result.get('values', [])
+                if len(values) < 2:
+                    continue
+                
+                headers = values[0]
+                for row in values[1:]:
+                    if len(row) < 2:
+                        continue
+                    ts = row[0] if len(row) > 0 else ''
+                    role = row[1] if len(row) > 1 else ''
+                    res_name = row[2] if len(row) > 2 else ''
+                    fac_name = row[3] if len(row) > 3 else ''
+                    proc = row[4] if len(row) > 4 else ''
+                    proc_date = row[5] if len(row) > 5 else ''
+                    
+                    # Check if eval columns are filled (has competency data)
+                    has_eval_data = any(len(row) > i and row[i].strip() for i in range(6, min(24, len(row))))
+                    
+                    entry = {
+                        "sheet": sheet_name,
+                        "timestamp": ts,
+                        "role": role,
+                        "resident_name": res_name,
+                        "faculty_name": fac_name,
+                        "procedure": proc,
+                        "procedure_date": proc_date,
+                        "completed": has_eval_data,
+                    }
+                    
+                    if has_eval_data:
+                        all_identity_rows.append(entry)
+                    else:
+                        all_pending_rows.append(entry)
+            except Exception:
+                continue
+        
+        # 3) Per-resident completion stats
+        resident_stats = []
+        for r in residents:
+            rname = r["name"]
+            total = sum(1 for e in all_identity_rows + all_pending_rows if e["resident_name"].lower() == rname.lower())
+            completed = sum(1 for e in all_identity_rows if e["resident_name"].lower() == rname.lower())
+            pending = total - completed
+            resident_stats.append({
+                "name": rname,
+                "pgy": r["pgy"],
+                "email": r["email"],
+                "total": total,
+                "completed": completed,
+                "pending": pending,
+                "completion_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            })
+        resident_stats.sort(key=lambda x: x["name"])
+        
+        # 4) Per-faculty completion stats
+        faculty_stats = []
+        for f in faculty:
+            fname = f["name"]
+            total = sum(1 for e in all_identity_rows + all_pending_rows if e["faculty_name"].lower() == fname.lower())
+            completed = sum(1 for e in all_identity_rows if e["faculty_name"].lower() == fname.lower())
+            pending = total - completed
+            faculty_stats.append({
+                "name": fname,
+                "email": f["email"],
+                "total": total,
+                "completed": completed,
+                "pending": pending,
+                "completion_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            })
+        faculty_stats.sort(key=lambda x: x["name"])
+        
+        # 5) Per-procedure stats
+        procedure_stats = []
+        for i, proc in enumerate(EVAL_PROCEDURES):
+            total = sum(1 for e in all_identity_rows + all_pending_rows if e["procedure"] == proc)
+            completed = sum(1 for e in all_identity_rows if e["procedure"] == proc)
+            pending = total - completed
+            procedure_stats.append({
+                "procedure": proc,
+                "abbrev": EVAL_ABBREVS[i],
+                "total": total,
+                "completed": completed,
+                "pending": pending,
+                "completion_rate": round(completed / total * 100, 1) if total > 0 else 0,
+            })
+        
+        # 6) Summary stats
+        total_all = len(all_identity_rows) + len(all_pending_rows)
+        completed_all = len(all_identity_rows)
+        pending_all = len(all_pending_rows)
+        
+        # 7) Recent activity (last 20 submissions)
+        recent = sorted(all_identity_rows, key=lambda x: x.get("timestamp", ""), reverse=True)[:20]
+        
+        return {
+            "summary": {
+                "total": total_all,
+                "completed": completed_all,
+                "pending": pending_all,
+                "completion_rate": round(completed_all / total_all * 100, 1) if total_all > 0 else 0,
+                "residents_total": len(residents),
+                "faculty_total": len(faculty),
+            },
+            "resident_stats": resident_stats,
+            "faculty_stats": faculty_stats,
+            "procedure_stats": procedure_stats,
+            "recent_activity": recent,
+        }
+    except Exception as e:
+        logger.error(f"Eval dashboard error: {e}")
+        return {"error": str(e), "summary": {"total": 0, "completed": 0, "pending": 0}, "resident_stats": [], "faculty_stats": [], "procedure_stats": [], "recent_activity": []}
+
+
 # ─── Calendar of Events ─────────────────────────────────────
 
 CALENDAR_DATA_FILE = BASE_DIR / "data" / "calendar_events.json"
@@ -2962,7 +3390,7 @@ def calendar_events(days: int = Query(90, description="Number of days to look ah
         return {"events": [], "source": "no_data"}
     
     data = json.loads(CALENDAR_DATA_FILE.read_text())
-    now = datetime.now(timezone.utc)
+    now = datetime.now(TZ)
     cutoff = now + timedelta(days=days)
     
     events = data.get("events", [])
@@ -2973,7 +3401,7 @@ def calendar_events(days: int = Query(90, description="Number of days to look ah
             try:
                 ev_date = datetime.fromisoformat(start_str)
                 if ev_date.tzinfo is None:
-                    ev_date = ev_date.replace(tzinfo=timezone.utc)
+                    ev_date = ev_date.replace(tzinfo=TZ)
                 if ev_date <= cutoff:
                     filtered.append(ev)
             except (ValueError, TypeError):
@@ -3062,6 +3490,36 @@ if dashboard_dir.exists():
 prompt_tools_dir = BASE_DIR / "prompt-tools"
 if prompt_tools_dir.exists():
     app.mount("/prompt-tools", StaticFiles(directory=str(prompt_tools_dir)), name="prompt-tools")
+
+# ─── Qgenda API (read-only) ────────────────────────────────
+@app.get("/api/qgenda/users")
+async def get_qgenda_users(limit: int = 10):
+    """Return top N Qgenda users for the platforms dashboard."""
+    try:
+        import psycopg2
+        pw = os.environ.get("POSTGRES_PASSWORD", "")
+        if not pw:
+            import subprocess as _sp
+            r = _sp.run(['grep', 'POSTGRES_PASSWORD', '/workspace/projects/unified/app/.env'],
+                capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                pw = r.stdout.strip().split('=', 1)[1].strip()
+        if not pw:
+            return {"error": "No DB password"}
+        conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="urology_qgenda", user="postgres", password=pw, connect_timeout=3)
+        cur = conn.cursor()
+        cur.execute(f'SELECT name, email, role FROM "User" ORDER BY name LIMIT %s', (limit,))
+        users = [{"name": r[0], "email": r[1], "role": r[2]} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return users
+    except Exception as e:
+        return {"error": str(e)}
+
+# Mount SCL (Sick Call Line) — built React app
+scl_dir = Path("/workspace/repos/sick-call-line/dist")
+if scl_dir.exists():
+    app.mount("/scl", StaticFiles(directory=str(scl_dir), html=True), name="scl")
 
 # Mount Hermes WebUI redirect — the chat.js expects this endpoint
 @app.get("/hermes-webui/", response_class=HTMLResponse)
@@ -3582,6 +4040,68 @@ def vapi_data_health():
                     "Fix or re-generate the token file")
 
     return report
+
+# ─── Conference Events API (for one-click resend dashboard) ────────
+
+@app.get("/api/conference/events")
+def conference_events():
+    """Return all Grand Rounds and Resident Conference events from GR_DATA
+    in the grand-rounds.js page, parsed into JSON for the resend dashboard."""
+    gr_js_path = BASE_DIR / "dashboard" / "pages" / "grand-rounds.js"
+    if not gr_js_path.exists():
+        return {"events": [], "error": "grand-rounds.js not found"}
+    
+    js_text = gr_js_path.read_text()
+    match = re.search(r"const GR_DATA\s*=\s*(\[.*?\]);", js_text, re.DOTALL)
+    if not match:
+        return {"events": [], "error": "GR_DATA not found"}
+    
+    array_str = match.group(1)
+    # Clean JS-specific artifacts
+    array_str = re.sub(r",\s*\]", "]", array_str)
+    array_str = re.sub(r"//.*", "", array_str)
+    
+    try:
+        gr_data = json.loads(array_str)
+    except json.JSONDecodeError as e:
+        return {"events": [], "error": f"JSON parse error: {e}"}
+    
+    events = []
+    for row in gr_data:
+        if len(row) < 9:
+            continue
+        fri_date = row[7] if len(row) > 7 else ""
+        if not fri_date or not str(fri_date).startswith("20"):
+            continue
+        gr_7_8 = str(row[8]).strip('" ') if len(row) > 8 else ""
+        gr_8_9 = str(row[9]).strip('" ') if len(row) > 9 else ""
+        
+        # Determine meeting type
+        if "NO GRAND ROUNDS" in gr_7_8 or "NO GRAND ROUNDS" in gr_8_9:
+            meeting_type = "no_grand_rounds"
+        elif "Peds" in gr_7_8 or "Peds" in gr_8_9:
+            meeting_type = "peds"
+        elif "FACULTY MEETING" in gr_7_8 or "FACULTY MEETING" in gr_8_9:
+            meeting_type = "faculty_meeting"
+        elif "Journal Club" in gr_7_8 or "Journal Club" in gr_8_9:
+            meeting_type = "journal_club"
+        elif "Resident Conference" in gr_7_8 or "Resident Conference" in gr_8_9:
+            meeting_type = "resident_conference"
+        else:
+            meeting_type = "grand_rounds"
+        
+        events.append({
+            "date": str(fri_date),
+            "type": meeting_type,
+            "topic_7_8": gr_7_8,
+            "topic_8_9": gr_8_9,
+            "week": str(row[0]) if len(row) > 0 else "",
+        })
+    
+    # Sort by date, upcoming first
+    events.sort(key=lambda e: e["date"])
+    return {"events": events, "count": len(events)}
+
 
 # ─── Main ─────────────────────────────────────────────────────────
 

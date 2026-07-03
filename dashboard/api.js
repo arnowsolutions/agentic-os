@@ -203,4 +203,6 @@ const api = {
   logout:         ()                          => api.post('/api/auth/logout',           {}),
   getMe:          ()                          => api.get('/api/auth/me'),
   changePassword: (current_password, new_password) => api.post('/api/auth/change-password', { current_password, new_password }),
+  // Images → PDF
+  imagesToPdf:    (formData)                  => fetch('/api/pdf/images2pdf', { method: 'POST', body: formData }),
 };

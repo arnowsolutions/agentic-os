@@ -266,20 +266,142 @@ def call_month(name: str):
     return {"results": results, "total": len(results)}
 
 
+import re as _re
+
+_MONTH_MAP = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10, "october": 10,
+    "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+
+
+def _normalize_date(date_str: str) -> str | None:
+    """Convert any date string the LLM might pass into YYYY-MM-DD.
+
+    Handles: 'today', 'tomorrow', 'yesterday', 'next Monday',
+    'July 2', 'Jul 2', '7/2/2026', '2026-7-2', '07-02-26', etc.
+    Returns None if it cannot parse the input.
+    """
+    if not date_str or not date_str.strip():
+        return None
+    raw = date_str.strip()
+    low = raw.lower()
+
+    # Relative keywords
+    today = date.today()
+    if low in ("today", "todays", "tonight"):
+        return today.strftime("%Y-%m-%d")
+    if low in ("tomorrow", "tomorrows", "tmrw"):
+        return (today + timedelta(days=1)).strftime("%Y-%m-%d")
+    if low in ("yesterday",):
+        return (today - timedelta(days=1)).strftime("%Y-%m-%d")
+    if low in ("day after tomorrow",):
+        return (today + timedelta(days=2)).strftime("%Y-%m-%d")
+
+    # "next <weekday>" — upcoming occurrence of that weekday
+    weekday_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+                   "friday": 4, "saturday": 5, "sunday": 6}
+    for wname, wnum in weekday_map.items():
+        if low == f"next {wname}" or low == wname:
+            days_ahead = (wnum - today.weekday()) % 7
+            if days_ahead == 0:
+                days_ahead = 7
+            return (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+        if low == f"this {wname}":
+            days_ahead = (wnum - today.weekday()) % 7
+            return (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    # Already correct format: YYYY-MM-DD (padded or not)
+    m = _re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", raw)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        try:
+            return date(y, mo, d).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+
+    # M/D/YYYY or M-D-YYYY or MM/DD/YYYY
+    m = _re.match(r"^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$", raw)
+    if m:
+        mo, d, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        try:
+            return date(y, mo, d).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+
+    # MM-DD-YY (2-digit year, QGenda style)
+    m = _re.match(r"^(\d{1,2})-(\d{1,2})-(\d{2})$", raw)
+    if m:
+        mo, d, yr = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        y = 2000 + yr if yr < 50 else 1900 + yr
+        try:
+            return date(y, mo, d).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+
+    # "July 2", "Jul 2", "July 2 2026", "Jul 2 2026"
+    m = _re.match(r"^([A-Za-z]+)\s+(\d{1,2})(?:\s*,?\s*(\d{4}))?", raw)
+    if m:
+        month_name = m.group(1).lower()
+        if month_name in _MONTH_MAP:
+            mo = _MONTH_MAP[month_name]
+            d = int(m.group(2))
+            y = int(m.group(3)) if m.group(3) else today.year
+            try:
+                return date(y, mo, d).strftime("%Y-%m-%d")
+            except ValueError:
+                return None
+
+    # "2 July", "2 Jul 2026"
+    m = _re.match(r"^(\d{1,2})\s+([A-Za-z]+)(?:\s*,?\s*(\d{4}))?", raw)
+    if m:
+        d = int(m.group(1))
+        month_name = m.group(2).lower()
+        if month_name in _MONTH_MAP:
+            mo = _MONTH_MAP[month_name]
+            y = int(m.group(3)) if m.group(3) else today.year
+            try:
+                return date(y, mo, d).strftime("%Y-%m-%d")
+            except ValueError:
+                return None
+
+    # Could not parse
+    return None
+
+
 def schedule_by_date(date_str: str) -> dict:
-    """Get call coverage for a specific date across all campuses."""
+    """Get call coverage for a specific date across all campuses.
+
+    Accepts any date format the LLM might pass: 'today', 'tomorrow',
+    'July 2', '2026-7-2', '7/2/2026', '07-02-26', etc.
+    Normalizes to YYYY-MM-DD before matching against the Excel data.
+    """
     sched = _load_schedule()
-    result = {"date": date_str, "campuses": {}}
+    normalized = _normalize_date(date_str)
+    if normalized is None:
+        return {
+            "date": date_str,
+            "note": (
+                f"I couldn't understand the date '{date_str}'. "
+                "Please say it as a month and day, like 'July 2' or 'July 2 2026', "
+                "or use YYYY-MM-DD format."
+            ),
+        }
+    result = {"date": normalized, "campuses": {}}
     for campus, rows in sched.items():
         for row in rows:
-            if row["date"] == date_str:
+            if row["date"] == normalized:
                 result["campuses"][campus.title()] = {
                     "primary": row["primary"] or "—",
                     "backup": row["backup"] or "—",
                     "peds": row["peds"] or "—",
                 }
                 break
-    return result if result["campuses"] else {"date": date_str, "note": "No data for this date. Schedule covers July 2026 through January 2027."}
+    return result if result["campuses"] else {
+        "date": normalized,
+        "note": "No data for this date. Schedule covers July 2026 through January 2027.",
+    }
 
 
 # ============================================================================

@@ -130,6 +130,7 @@ const NAV_CONFIG = {
         { page: 'compliance',      icon: '📊', label: 'Compliance',      title: '📊 Compliance Dashboard', breadcrumb: 'Attendance, evals & GME — color-coded metrics' },
         { page: 'quick-actions',   icon: '⚡', label: 'Quick Actions',   title: '⚡ Quick Actions', breadcrumb: 'One-click operations for common workflows' },
         { page: 'notifications',   icon: '🔔', label: 'Notifications',   title: '🔔 Notification Feed', breadcrumb: 'Cron, eval & system events feed' },
+        { page: 'images-to-pdf',   icon: '📄', label: 'Images → PDF',    title: '🖼️ Images → PDF',    breadcrumb: 'Combine images into a single PDF' },
       ],
     },
     {
@@ -137,6 +138,7 @@ const NAV_CONFIG = {
       items: [
         // Urology-specific pages
         { page: 'unified-dashboard',      icon: '🏥', label: 'Unified Dashboard',      title: '🏥 Unified Dashboard',      breadcrumb: 'Montefiore Urology — all systems in one view' },
+        { page: 'platforms',             icon: '🔌', label: 'Platforms',             title: '🔌 Platform Connections', breadcrumb: 'Connected systems — SCL, Reimbursement, Qgenda' },
         { page: 'manager',                icon: '📋', label: 'Manager Command Center', title: '📋 Manager Command Center', breadcrumb: 'Schedule, coverage & approvals at a glance' },
         { page: 'oncall',                 icon: '📅', label: 'Call Schedule',          title: 'Call Schedule',             breadcrumb: 'Weekly resident call rotation' },
         { page: 'grand-rounds',           icon: '📋', label: 'Grand Rounds',           title: 'Grand Rounds',              breadcrumb: 'Urology academic schedule & Outlook invites' },
@@ -144,6 +146,7 @@ const NAV_CONFIG = {
         { page: 'call-schedule-pdf',      icon: '📄', label: 'Call Schedule PDF',      title: '📄 Call Schedule PDF',      breadcrumb: 'Generate and email call schedule PDFs' },
         { page: 'gme-tracker',            icon: '💰', label: 'GME Tracker',            title: 'GME Reimbursement Tracker', breadcrumb: 'Resident education fund management' },
         { page: 'eval-portal',            icon: '📝', label: 'Eval Portal',            title: '📝 Eval Portal',            breadcrumb: 'CMS evaluation forms — track & remind' },
+        { page: 'eval-dashboard',         icon: '📊', label: 'Eval Dashboard',        title: '📊 Eval Dashboard',        breadcrumb: 'Completion stats, charts, and activity feed' },
         { page: 'gme-detail',             icon: '📈', label: 'GME Deep Dive',          title: '📈 GME Deep Dive',          breadcrumb: 'Resident fund usage breakdown with charts' },
         { page: 'staff-schedule',         icon: '👥', label: 'Staff Schedule',         title: '👥 Staff Schedule',         breadcrumb: 'NP/PA/coordinator schedules by hospital' },
         { page: 'pdf-archive',            icon: '📄', label: 'PDF Archive',            title: '📄 PDF Archive',            breadcrumb: 'All generated PDFs in one place' },
@@ -192,6 +195,7 @@ const NAV_CONFIG = {
         { page: 'contacts',        icon: '📇', label: 'CRM',             title: 'CRM',             breadcrumb: 'Contact management system' },
         { page: 'crm-audit',       icon: '🔍', label: 'CRM Audit',       title: 'CRM Audit',       breadcrumb: 'Access log for CRM operations' },
         { page: 'email-templates', icon: '📋', label: 'Email Templates', title: 'Email Templates', breadcrumb: 'Pre-built email templates for quick sending' },
+        { page: 'conference-email', icon: '📤', label: 'One-Click Resend', title: '📤 One-Click Email Resend', breadcrumb: 'Grand Rounds & Conference invite resend' },
         { page: 'telegram',        icon: '✈️', label: 'Telegram',        title: 'Telegram Sessions', breadcrumb: 'Messaging conversations from state.db', badgeId: 'telegramCount' },
         { page: 'telegram-logs',   icon: '📋', label: 'Telegram Logs',   title: '✈️ Telegram Logs', breadcrumb: 'Recent messages, gateway status & log viewer' },
         { page: 'prompts',         icon: '📝', label: 'Prompts',         title: 'Prompt Library',  breadcrumb: 'Reusable templates' },

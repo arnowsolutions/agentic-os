@@ -18,7 +18,6 @@ from pathlib import Path
 
 # ── Configuration ──────────────────────────────────────────
 DATA_SERVICE_URL = os.environ.get("DATA_SERVICE_URL", "http://localhost:8086")
-CRM_PATH = Path(os.environ.get("CRM_PATH", "/workspace/agentic-os/data/crm_contacts.json"))
 GME_CACHE = Path("/workspace/agentic-os/reports/gme_cache.json")
 SCHEDULE_CACHE = Path("/workspace/agentic-os/reports/call_schedule_cache.json")
 
