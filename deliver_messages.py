@@ -25,7 +25,6 @@ try:
         f"Voice Messages - {len(msgs)} pending",
         html,
         prefer_composio=False,
-        is_html=True,
     )
     if result.get("successful"):
         for m in msgs:

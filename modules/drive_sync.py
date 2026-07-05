@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 _THIS_DIR = Path(__file__).resolve().parent
 _WORKSPACE = os.environ.get("WORKSPACE") or str(_THIS_DIR.parent)
 _CONFIG_PATH = os.path.join(_WORKSPACE, "data", "drive_sync_config.json")
-_CACHE_ROOT = os.path.join(_WORKSPACE, "data", "location_rosters")
+_CACHE_ROOT = os.path.join(os.path.expanduser("~/.hermes/data"), "location_rosters")
 
 # ── Initialize GoogleWorkspace (lazy) ─────────────────────────────────
 _gw = None

@@ -165,6 +165,7 @@ const NAV_CONFIG = {
         { page: 'skills',        icon: '⚡', label: 'Skills',        title: 'Skills Hub',      breadcrumb: 'Browse & execute skills',    badgeId: 'skillCount' },
         { page: 'memory',        icon: '🧠', label: 'Memory',        title: 'Memory',          breadcrumb: 'Shared brain context' },
         { page: 'smart-router',  icon: '🧭', label: 'Smart Router',  title: 'Smart Router',    breadcrumb: 'Task routing intelligence' },
+        { page: 'omniroute',     icon: '🌐', label: 'OmniRoute',     title: '🌐 OmniRoute AI Gateway', breadcrumb: 'Free LLM routing · 237 providers · Claude Code integration' },
         { page: 'agent-health',  icon: '🏥', label: 'Agent Health',  title: 'Agent Health',    breadcrumb: 'Real-time agent monitoring', badgeId: 'agentHealthCount' },
         { page: 'health',        icon: '📈', label: 'System Health', title: '🏥 System Health', breadcrumb: 'Central services & cron health monitor' },
         { page: 'ai-builder',    icon: '🤖', label: 'AI Builder',    title: 'AI Builder',      breadcrumb: 'Google Antigravity — build with Gemini' },
@@ -212,6 +213,7 @@ const NAV_CONFIG = {
     { page: 'learning-analytics', icon: '📊', label: 'Learning Analytics', title: 'Learning Analytics', breadcrumb: 'Skill improvement tracking', hidden: true },
     { page: 'session-replay',     icon: '🔄', label: 'Session Replay',     title: 'Session Replay',     breadcrumb: 'Conversation history playback', hidden: true },
     { page: 'setup-wizard',       icon: '🚀', label: 'Setup Wizard',       title: 'Setup Wizard',       breadcrumb: 'Guided configuration', hidden: true },
+    { page: 'user',               icon: '👤', label: 'User Dashboard',     title: '👤 User Dashboard', breadcrumb: 'Resident self-service — EZ ID lookup', hidden: true },
   ],
 
   // External links — never get the `data-page` attribute, never become active.

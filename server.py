@@ -73,6 +73,10 @@ async def session_enforcement(request: Request, call_next):
         return await call_next(request)
     if path.startswith("/api/eval/"):
         return await call_next(request)
+    if path.startswith("/api/crm-data-gaps"):
+        return await call_next(request)
+    if path.startswith("/api/user/"):
+        return await call_next(request)
 
     # Check session cookie
     token = request.cookies.get(_settings.SESSION_COOKIE_NAME, "")
@@ -156,6 +160,7 @@ app.add_middleware(
         "http://127.0.0.1:8080", "http://localhost:8080",
         "http://127.0.0.1:8081", "http://localhost:8081",
         "http://127.0.0.1:8501", "http://localhost:8501",
+        "http://127.0.0.1:20128", "http://localhost:20128",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -4101,6 +4106,147 @@ def conference_events():
     # Sort by date, upcoming first
     events.sort(key=lambda e: e["date"])
     return {"events": events, "count": len(events)}
+
+
+# ─── Routes: Unified User Dashboard ────────────────────────────────
+
+@app.get("/api/user/{ez_id}")
+async def user_dashboard(ez_id: str, pin: str = Query(None, description="4-digit PIN for authentication")):
+    """Aggregate all data for a resident by EZ ID. Requires PIN for access."""
+    # Validate PIN
+    import hashlib
+    PIN_DB_PATH = BASE_DIR / "data" / "user_pins.json"
+    if PIN_DB_PATH.exists():
+        pin_db = json.loads(PIN_DB_PATH.read_text())
+        stored = pin_db.get(ez_id)
+        if stored:
+            # Accept both raw PIN and hashed
+            pin_hash = hashlib.sha256((pin or "").encode()).hexdigest()
+            if pin != stored.get("default_pin", "") and pin_hash != stored.get("pin_hash", ""):
+                return {"error": "Invalid PIN", "ez_id": ez_id}
+        # If no PIN stored for this EZ ID, allow without PIN (legacy)
+    elif not pin:
+        # No PIN DB at all — require PIN in query for new users
+        pass
+    try:
+        from modules.crm_db import get_contact_by_ezid
+    except ImportError:
+        return {"error": "CRM module not available", "ez_id": ez_id}
+
+    contact = get_contact_by_ezid(ez_id)
+    if not contact:
+        # Try stripping "EZ" prefix in case user typed EZ12345 vs 12345
+        clean = ez_id.upper().removeprefix("EZ")
+        if clean != ez_id:
+            contact = get_contact_by_ezid(clean)
+    if not contact:
+        return {"error": "Contact not found", "ez_id": ez_id}
+
+    result = {
+        "contact": contact,
+        "ez_id": ez_id,
+    }
+
+    # 1. On-call today
+    try:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        oncall = _get_oncall_for_date(today)
+        result["oncall_today"] = [
+            o for o in oncall
+            if contact.get("lastName", "").lower() in o.get("name", "").lower()
+        ]
+    except Exception:
+        result["oncall_today"] = []
+
+    # 2. Reimbursement balance via data service
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{DATA_SERVICE_BASE}/api/reimbursement/resident/{ez_id}")
+            if r.status_code == 200:
+                result["reimbursement"] = r.json()
+    except Exception:
+        result["reimbursement"] = None
+
+    # 3. EVAL forms — check if resident appears
+    try:
+        EVAL_FORMS_FILE = BASE_DIR / "data" / "eval_forms.json"
+        if EVAL_FORMS_FILE.exists():
+            eval_data = json.loads(EVAL_FORMS_FILE.read_text())
+            resident_evals = []
+            for entry in eval_data.get("residents", []):
+                if ez_id.lower() == entry.get("ez_id", "").lower():
+                    resident_evals.append(entry)
+            result["evals"] = resident_evals
+    except Exception:
+        result["evals"] = []
+
+    # 4. Sick call violations (recent)
+    try:
+        SICK_CALL_FILE = BASE_DIR / "data" / "sick_call_violations.json"
+        if SICK_CALL_FILE.exists():
+            violations = json.loads(SICK_CALL_FILE.read_text())
+            recent = [v for v in (violations if isinstance(violations, list) else violations.get("violations", []))
+                      if contact.get("lastName", "").lower() in v.get("name", "").lower()]
+            result["sick_calls"] = recent[-10:]  # last 10
+    except Exception:
+        result["sick_calls"] = []
+
+    # 5. Commute info (via directions module)
+    try:
+        from modules.directions import get_commute_for_resident
+        commute = get_commute_for_resident(ez_id)
+        if commute:
+            result["commute"] = commute
+    except (ImportError, Exception):
+        try:
+            addr = contact.get("homeAddress") or contact.get("address", "")
+            if addr:
+                result["commute"] = {"address": addr, "message": "Route not calculated"}
+            else:
+                result["commute"] = None
+        except Exception:
+            result["commute"] = None
+
+    return result
+
+
+# ─── Omniroute Proxy ──────────────────────────────────────────────
+
+import httpx
+
+OMNIROUTE_BASE = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128")
+
+@app.api_route("/api/omniroute/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+async def omniroute_proxy(path: str, request: Request):
+    """Proxy requests to Omniroute server, avoiding CORS issues for the dashboard."""
+    target_url = f"{OMNIROUTE_BASE}/{path}"
+    
+    # Forward query params
+    query = request.url.query
+    if query:
+        target_url += f"?{query}"
+    
+    # Forward body for POST/PUT
+    body = await request.body()
+    
+    headers = dict(request.headers)
+    # Remove hop-by-hop headers that cause issues
+    headers.pop("host", None)
+    
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            content=body,
+            follow_redirects=True,
+        )
+    
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        headers=dict(resp.headers),
+    )
 
 
 # ─── Main ─────────────────────────────────────────────────────────
