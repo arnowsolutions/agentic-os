@@ -170,6 +170,7 @@ const NAV_CONFIG = {
         { page: 'health',        icon: '📈', label: 'System Health', title: '🏥 System Health', breadcrumb: 'Central services & cron health monitor' },
         { page: 'ai-builder',    icon: '🤖', label: 'AI Builder',    title: 'AI Builder',      breadcrumb: 'Google Antigravity — build with Gemini' },
         // Development tools
+        { page: 'claude-code',          icon: '🤖', label: 'Claude Code',          title: '🤖 Claude Code',          breadcrumb: 'Free LLM terminal — powered by OmniRoute (Groq + Z.AI)' },
         { page: 'vs-coder',            icon: '💻', label: 'VS Coder',            title: '💻 VS Coder',            breadcrumb: 'Full code editor — edit, run, commit' },
         { page: 'google-studio',       icon: '🔷', label: 'Google Studio',       title: 'Google Dev Studio',      breadcrumb: 'Apps Script editor & project manager' },
         { page: 'prompt-tools-image',  icon: '🖼️', label: 'Image Builder',       title: '🖼️ Image Prompt Builder', breadcrumb: 'Build professional image prompts visually' },
