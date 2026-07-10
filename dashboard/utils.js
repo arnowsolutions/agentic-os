@@ -143,6 +143,7 @@ const NAV_CONFIG = {
         { page: 'oncall',                 icon: '📅', label: 'Call Schedule',          title: 'Call Schedule',             breadcrumb: 'Weekly resident call rotation' },
         { page: 'grand-rounds',           icon: '📋', label: 'Grand Rounds',           title: 'Grand Rounds',              breadcrumb: 'Urology academic schedule & Outlook invites' },
         { page: 'grand-rounds-attendance', icon: '📊', label: 'Attendance',            title: '📊 Grand Rounds Attendance', breadcrumb: 'Faculty compliance tracking & reports' },
+        { page: 'email-send-log',         icon: '📤', label: 'Email Send Log',         title: '📤 Email Send Log',         breadcrumb: 'Grand Rounds invite tracking — real vs test/pending' },
         { page: 'call-schedule-pdf',      icon: '📄', label: 'Call Schedule PDF',      title: '📄 Call Schedule PDF',      breadcrumb: 'Generate and email call schedule PDFs' },
         { page: 'gme-tracker',            icon: '💰', label: 'GME Tracker',            title: 'GME Reimbursement Tracker', breadcrumb: 'Resident education fund management' },
         { page: 'eval-portal',            icon: '📝', label: 'Eval Portal',            title: '📝 Eval Portal',            breadcrumb: 'CMS evaluation forms — track & remind' },

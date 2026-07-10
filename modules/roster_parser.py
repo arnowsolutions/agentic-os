@@ -228,9 +228,36 @@ def _parse_sheet(ws, sheet_name: str, file_name: str, date_range: dict) -> Optio
     }
 
 
+# Fallback directory for roster cache files that can't be written to the
+# Docker-volume parsed directory (root-owned). Written by import scripts.
+_ROSTER_FALLBACK_DIR = os.path.expanduser(
+    "~/.hermes/roster_cache"
+)
+
+def _load_roster_files(parsed_dir: str) -> list:
+    """Load all roster JSON files from a directory, returning (fname, data) pairs."""
+    results = []
+    if not os.path.isdir(parsed_dir):
+        return results
+    for fname in sorted(os.listdir(parsed_dir)):
+        if not fname.endswith(".json"):
+            continue
+        if "Contact" in fname:
+            continue
+        try:
+            data = json.loads(open(os.path.join(parsed_dir, fname)).read())
+            results.append((fname, data))
+        except (json.JSONDecodeError, IOError):
+            continue
+    return results
+
+
 def query_location_roster(location: str = "", date_str: str = "") -> dict:
     """
     Query the parsed roster cache for who's at a location on a given date.
+    
+    Checks the Docker-volume parsed directory first, then the fallback
+    ~/.hermes/roster_cache/ (writable by this profile's import scripts).
     
     location: optional filter (Nursing, Clerical, or empty for all)
     date_str: YYYY-MM-DD or empty for today
@@ -244,22 +271,21 @@ def query_location_roster(location: str = "", date_str: str = "") -> dict:
     target_date = date_str or datetime.now().strftime("%Y-%m-%d")
     
     records = []
-    for fname in sorted(os.listdir(parsed_dir)):
-        if not fname.endswith(".json"):
-            continue
-        if "Contact" in fname:
-            continue
-        
-        data = json.loads(open(os.path.join(parsed_dir, fname)).read())
-        
+    seen_keys = set()  # deduplicate: (fname, sheet, name, date)
+    
+    # Load from both directories — fallback files take precedence over
+    # Docker-volume ones (volume may be stale, fallback has updated data)
+    all_files = _load_roster_files(_ROSTER_FALLBACK_DIR)
+    all_files += _load_roster_files(parsed_dir)
+    
+    for fname, data in all_files:
         # Skip old-format files (pre-roster_parser — they have 'preview' key instead of 'sheets' list)
         if not isinstance(data.get("sheets"), list):
             continue
         
         # Skip if file doesn't cover the target date
         dr = data.get("date_range", {})
-        dr_start = dr.get("start", "")
-        dr_end = dr.get("end", "")
+        dr_start, dr_end = dr.get("start", ""), dr.get("end", "")
         if dr_start and dr_end:
             if target_date < dr_start or target_date > dr_end:
                 continue
@@ -273,6 +299,10 @@ def query_location_roster(location: str = "", date_str: str = "") -> dict:
             for staff_member in sheet.get("staff", []):
                 for assign in staff_member.get("assignments", []):
                     if assign.get("date") == target_date:
+                        key = (fname, sheet.get("name", ""), staff_member["name"], target_date)
+                        if key in seen_keys:
+                            continue  # fallback overrides volume
+                        seen_keys.add(key)
                         records.append({
                             "file": data.get("file", fname),
                             "sheet": sheet.get("name", ""),
@@ -483,7 +513,10 @@ def staff_at_location(location: str, date_str: str = "") -> dict:
 
     target_date = date_str or datetime.now().strftime("%Y-%m-%d")
 
-    if not os.path.isdir(parsed_dir) or not os.listdir(parsed_dir):
+    # Check if either roster directory has data
+    has_main = os.path.isdir(parsed_dir) and bool(os.listdir(parsed_dir))
+    has_fallback = os.path.isdir(_ROSTER_FALLBACK_DIR) and bool(os.listdir(_ROSTER_FALLBACK_DIR))
+    if not has_main and not has_fallback:
         return {
             "success": True,
             "data_status": "rosters_not_synced",
@@ -493,12 +526,9 @@ def staff_at_location(location: str, date_str: str = "") -> dict:
             "known_locations": [],
         }
 
-    # Collect known locations (unique sheet names from all parsed files)
+    # Collect known locations (unique sheet names from all parsed files + fallback)
     known_locations = set()
-    for fname in sorted(os.listdir(parsed_dir)):
-        if not fname.endswith(".json") or "Contact" in fname:
-            continue
-        data = json.loads(open(os.path.join(parsed_dir, fname)).read())
+    for _, data in _load_roster_files(parsed_dir) + _load_roster_files(_ROSTER_FALLBACK_DIR):
         if not isinstance(data.get("sheets"), list):
             continue
         for sheet in data.get("sheets", []):
@@ -524,10 +554,7 @@ def staff_at_location(location: str, date_str: str = "") -> dict:
     # Check if date falls within any loaded roster
     date_in_any_roster = False
     newest_period_end = ""
-    for fname in sorted(os.listdir(parsed_dir)):
-        if not fname.endswith(".json") or "Contact" in fname:
-            continue
-        data = json.loads(open(os.path.join(parsed_dir, fname)).read())
+    for _, data in _load_roster_files(parsed_dir) + _load_roster_files(_ROSTER_FALLBACK_DIR):
         dr = data.get("date_range", {})
         dr_start = dr.get("start", "")
         dr_end = dr.get("end", "")

@@ -18,7 +18,26 @@ PROGRESS_FILE = "/workspace/agentic-os/data/grand_rounds_progress.json"
 # TEST MODE — only send to this address until we go live
 TEST_MODE = True
 TEST_EMAIL = "sfrasier@montefiore.org"
-PROD_RECIPIENTS = ["sfrasier@montefiore.org"]  # ⚠️ TEST MODE — only sends to test email
+PROD_RECIPIENTS = []  # Loaded from email_groups.json below
+
+# ── Load production recipients ─────────────────────────────
+EMAIL_GROUPS_FILE = "/workspace/agentic-os/data/email_groups.json"
+def _load_prod_recipients(event_type=""):
+    """Load the right email list based on event type.
+    - "Faculty Meeting" -> faculty_meeting list
+    - Everything else -> grand_rounds list (residents + faculty)
+    """
+    try:
+        if os.path.exists(EMAIL_GROUPS_FILE):
+            with open(EMAIL_GROUPS_FILE) as f:
+                groups = json.load(f)
+            group_key = "faculty_meeting" if "Faculty" in event_type else "grand_rounds"
+            gr = groups.get(group_key, {})
+            emails = gr.get("emails", [])
+            return emails
+    except Exception:
+        pass
+    return []
 
 DAILY_LIMIT = 10
 # ── Parse GR data ─────────────────────────────────────────
@@ -72,11 +91,10 @@ def get_all_grand_rounds():
 
 
 def _build_friday_title(event):
-    """Build summary from the actual session topics.
-    Peds → 'PEDS: Urology Grand Rounds - Peds / Peds Multidisciplinary'
-    Faculty → 'Faculty Meeting'
-    Journal → 'Journal Club'
-    Regular → 'Urology Grand Rounds - {topics}'"""
+    """Build summary from the actual session topics with tag prefixes.
+    Tags: [ PEDS ], [FACULTY], [ GR ] (for all regular Grand Rounds including QI/JC/SASP).
+    Only [NO GR] omits Zoom — but those are filtered out before reaching here.
+    """
     topic_7 = event['topic_7_8']
     topic_8 = event['topic_8_9']
     meeting_type = event['type']
@@ -90,13 +108,14 @@ def _build_friday_title(event):
     topics = " / ".join(parts) if parts else ""
     
     if "Peds" in meeting_type:
-        summary = f"PEDS: Urology Grand Rounds - {topics}" if topics else "PEDS: Urology Grand Rounds"
+        tag = "[ PEDS ] "
+        summary = f"{tag}Urology Grand Rounds - {topics}" if topics else f"{tag}Urology Grand Rounds Peds"
     elif "Faculty" in meeting_type:
-        summary = "Faculty Meeting"
+        summary = "[FACULTY] Faculty Meeting"
     elif "Journal" in meeting_type:
-        summary = "Journal Club"
+        summary = f"[ GR ] Journal Club - {topics}" if topics else "[ GR ] Journal Club"
     else:
-        summary = f"Urology Grand Rounds - {topics}" if topics else "Urology Grand Rounds"
+        summary = f"[ GR ] Urology Grand Rounds - {topics}" if topics else "[ GR ] Urology Grand Rounds"
     
     description = "Urology Grand Rounds"
     return (summary, description)
@@ -110,7 +129,8 @@ def send_ics_invite(event, friday_date):
         dt = datetime.strptime(friday_date, "%Y-%m-%d")
         formatted = dt.strftime("%A, %B %d, %Y")
         
-        to = TEST_EMAIL if TEST_MODE else ", ".join(PROD_RECIPIENTS)
+        prod_emails = _load_prod_recipients(event.get("type", ""))
+        to = TEST_EMAIL if TEST_MODE else ", ".join(prod_emails + (["sfrasier@montefiore.org"] if "sfrasier@montefiore.org" not in prod_emails else []))
         subject = f"Invitation: {summary}"
         
         mid = send_calendar_invite(
@@ -170,7 +190,8 @@ def send_text_reminder(event, friday_date):
         
         html_body = _html_wrap(f"Reminder: {summary}", inner)
         
-        to = TEST_EMAIL if TEST_MODE else ", ".join(PROD_RECIPIENTS)
+        prod_emails = _load_prod_recipients(event.get("type", ""))
+        to = TEST_EMAIL if TEST_MODE else ", ".join(prod_emails + (["sfrasier@montefiore.org"] if "sfrasier@montefiore.org" not in prod_emails else []))
         subject = f"REMINDER: {summary} — This Friday!"
         
         send_reminder_email(to, subject, html_body)

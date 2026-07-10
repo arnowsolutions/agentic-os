@@ -57,11 +57,18 @@ async def session_enforcement(request: Request, call_next):
     path = request.url.path
 
     # Allowlist paths that don't need auth
+    print(f"[AUTH DEBUG] path={path}", flush=True)
     if path.startswith(_settings.VAPI_ENDPOINT_PATH) or path.startswith("/vapi/"):
+        print(f"[AUTH DEBUG] allowed: vapi", flush=True)
         return await call_next(request)
     if path in {"/api/auth/login", "/api/auth/logout", "/api/status", "/login", "/favicon.svg", "/favicon.ico", "/api/pdf/images2pdf"}:
         return await call_next(request)
-    if path.startswith("/dashboard/login"):
+    if path.startswith("/dashboard/login") or path == "/dashboard/omniroute-chat.html":
+        return await call_next(request)
+    if path.startswith("/chat"):
+        print(f"[AUTH DEBUG] allowed: chat prefix match", flush=True)
+        return await call_next(request)
+    if path == "/api/omniroute-chat":
         return await call_next(request)
     if path.startswith("/api/_boot_error"):
         return await call_next(request)
@@ -3491,6 +3498,20 @@ def get_boot_errors():
 dashboard_dir = BASE_DIR / "dashboard"
 if dashboard_dir.exists():
     app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir)), name="dashboard")
+
+# OmniRoute standalone chat (no auth needed)
+chat_dir = BASE_DIR / "dashboard"
+if chat_dir.exists():
+    app.mount("/chat", StaticFiles(directory=str(chat_dir), html=True), name="chat")
+
+# Serve chat page under /api/ path so the external reverse proxy forwards it
+from fastapi.responses import HTMLResponse
+@app.get("/api/omniroute-chat", response_class=HTMLResponse)
+async def _omniroute_chat_page():
+    chat_file = BASE_DIR / "dashboard" / "omniroute-chat.html"
+    if chat_file.exists():
+        return HTMLResponse(content=chat_file.read_text(), status_code=200)
+    return HTMLResponse(content="<h1>Chat page not found</h1>", status_code=404)
 
 prompt_tools_dir = BASE_DIR / "prompt-tools"
 if prompt_tools_dir.exists():

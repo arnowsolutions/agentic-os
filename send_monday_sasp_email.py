@@ -27,7 +27,23 @@ except ImportError:
 
 TEST_MODE = True
 TEST_EMAIL = "sfrasier@montefiore.org"
-PROD_RECIPIENTS = ["sfrasier@montefiore.org"]  # ⚠️ TEST MODE — only sends to test email
+PROD_RECIPIENTS = None  # Loaded from email_groups.json below
+
+# ── Load production recipients ─────────────────────────────
+EMAIL_GROUPS_FILE = "/workspace/agentic-os/data/email_groups.json"
+def _load_prod_recipients():
+    """Load resident conference email list from email_groups.json."""
+    try:
+        if os.path.exists(EMAIL_GROUPS_FILE):
+            with open(EMAIL_GROUPS_FILE) as f:
+                groups = json.load(f)
+            rc = groups.get("resident_conference", {})
+            emails = rc.get("emails", [])
+            test_email = rc.get("test_email", "sfrasier@montefiore.org")
+            return emails, test_email
+    except Exception:
+        pass
+    return [], "sfrasier@montefiore.org"
 
 # ── Resident Name Resolution ────────────────────────────────
 
@@ -190,14 +206,18 @@ def send_monday_ics(event, mon_date):
         # Session 7-8 only: Monday is a single 1-hour meeting
         session_7_8 = topic
 
-        # Recipients: base list + this week's attending
+        # Recipients: all residents + this week's attending + admin CC
+        SHAREEF_EMAIL = "sfrasier@montefiore.org"
         if TEST_MODE:
             to = TEST_EMAIL
         else:
-            recipients = list(PROD_RECIPIENTS)
+            prod_emails, _ = _load_prod_recipients()
+            recipients = list(prod_emails)
             att_email = event.get("attending_email", "")
             if att_email and att_email not in recipients:
                 recipients.append(att_email)
+            if SHAREEF_EMAIL not in recipients:
+                recipients.append(SHAREEF_EMAIL)
             to = ", ".join(recipients)
 
         # ── Premium format matching memory specs ──
@@ -247,6 +267,7 @@ def send_monday_ics(event, mon_date):
 def send_monday_reminder(event, mon_date):
     """Send HTML reminder for Monday meeting (1-hour: 7:00–8:00 AM)."""
     try:
+        prod_emails, _ = _load_prod_recipients()
         dt = datetime.strptime(mon_date, "%Y-%m-%d")
         formatted = dt.strftime("%A, %B %d, %Y")
         topic = event.get("topic", event["title"])
@@ -289,7 +310,7 @@ def send_monday_reminder(event, mon_date):
 
         html_body = _html_wrap(f"{prefix} WEEK: Urology Monday Conference", inner)
 
-        to = TEST_EMAIL if TEST_MODE else ", ".join(PROD_RECIPIENTS)
+        to = TEST_EMAIL if TEST_MODE else ", ".join(prod_emails + (["sfrasier@montefiore.org"] if "sfrasier@montefiore.org" not in prod_emails else []))
         subj_parts = [topic]
         if event.get("attending"):
             subj_parts.append(event["attending"])

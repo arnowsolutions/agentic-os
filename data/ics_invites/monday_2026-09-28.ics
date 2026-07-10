@@ -1,0 +1,50 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Montefiore Urology//Grand Rounds//EN
+METHOD:REQUEST
+BEGIN:VTIMEZONE
+TZID:America/New_York
+BEGIN:DAYLIGHT
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+TZNAME:EDT
+DTSTART:19700308T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+TZNAME:EST
+DTSTART:19701101T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:2026-09-28-monday-6490@montefiore-urology
+DTSTAMP:20260709T211217Z
+DTSTART;TZID=America/New_York:20260928T070000
+DTEND;TZID=America/New_York:20260928T080000
+SUMMARY:Invitation: Urology Monday Conference - SASP - UTUC, Dr. Small
+DESCRIPTION:Urology Department — Resident AM Conference
+
+Date: Monday, September 28, 2026
+Time: 7:00 - 8:00 AM (ET)
+
+Topic: SASP - UTUC
+Resident: Hordines
+Attending: Small
+
+Zoom Meeting:
+  Join: https://montefiore.zoom.us/j/92009850717?pwd=25ask1SzLX2SdSrTbbhzb159UsyDFY.1
+  Meeting ID: 920 0985 0717
+  Passcode: 808018
+
+---
+Montefiore Medical Center · Department of Urology
+LOCATION:Zoom
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+ORGANIZER;CN=Urology Residency Program:mailto:urologyresidencyprogram@gmail.com
+ATTENDEE;CN=sfrasier@montefiore.org;ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:sfrasier@montefiore.org
+END:VEVENT
+END:VCALENDAR
