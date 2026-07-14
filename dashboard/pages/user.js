@@ -27,6 +27,9 @@ async function renderUser() {
         </div>
         <button class="btn btn-primary" onclick="lookupUser()" style="width:100%;padding:10px;font-size:14px;">🔍 Look Up</button>
         <div id="userLoginError" style="color:var(--red);font-size:12px;margin-top:12px;display:none;"></div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--text-secondary);cursor:pointer;">
+          <input type="checkbox" id="rememberEzId" style="accent-color:var(--accent);"> Remember my EZ ID
+        </label>
       </div>
     </div>
     <div id="userDashboardContent" style="display:none;"></div>
@@ -59,6 +62,13 @@ async function renderUser() {
   // Enter key support
   document.getElementById('ezIdInput').addEventListener('keydown', e => { if (e.key === 'Enter') lookupUser(); });
   document.getElementById('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') lookupUser(); });
+  // Pre-fill remembered EZ ID
+  const savedEzId = localStorage.getItem('aos_ezid');
+  if (savedEzId) {
+    document.getElementById('ezIdInput').value = savedEzId;
+    document.getElementById('rememberEzId').checked = true;
+    document.getElementById('pinInput').focus();
+  }
 }
 
 async function lookupUser() {
@@ -93,6 +103,12 @@ async function lookupUser() {
     }
 
     renderUserDashboard(data, ezId);
+    // Remember EZ ID if checkbox checked
+    if (document.getElementById('rememberEzId').checked) {
+      localStorage.setItem('aos_ezid', ezId);
+    } else {
+      localStorage.removeItem('aos_ezid');
+    }
   } catch (e) {
     dashSection.innerHTML = `
       <div style="max-width:480px;margin:40px auto;text-align:center;">

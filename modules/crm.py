@@ -6,6 +6,7 @@ Extracted from server.py for maintainability.
 import csv as _csv_module
 import io as _io
 import json
+import os
 import uuid as _uuid
 import time as _time
 from datetime import datetime, timezone
@@ -102,7 +103,9 @@ def _log_crm_access(action: str, contact_id: str = "", contact_name: str = "",
         entries.append(entry)
         if len(entries) > 5000:
             entries = entries[-5000:]
-        crm_access_log.write_text(json.dumps(entries, indent=2))
+        tmp = crm_access_log.with_suffix('.tmp')
+        tmp.write_text(json.dumps(entries, indent=2))
+        os.replace(tmp, crm_access_log)  # atomic rename
     except Exception as e:
         print(f"CRM access log error: {e}")
 
@@ -124,9 +127,30 @@ def _load_crm():
     return []
 
 def _save_crm(contacts):
+    """Atomically save CRM contacts to disk — prevents corruption on crash."""
     crm_file, _ = _get_crm_paths()
     crm_file.parent.mkdir(parents=True, exist_ok=True)
-    crm_file.write_text(json.dumps(contacts, indent=2))
+    tmp = crm_file.with_suffix('.tmp')
+    tmp.write_text(json.dumps(contacts, indent=2))
+    os.replace(tmp, crm_file)  # atomic rename on same filesystem
+
+@router.get("/cron-jobs")
+def crm_cron_jobs():
+    """Return all Hermes cron jobs (routed via CRM prefix for proxy forwarding)."""
+    import json
+    from pathlib import Path
+    try:
+        jobs_file = Path("/home/hermeswebui/.hermes/cron/jobs.json")
+        if not jobs_file.exists():
+            jobs_file = Path("/var/lib/docker/volumes/hermes-webui-gsga_hermes-home/_data/cron/jobs.json")
+        if not jobs_file.exists():
+            return {"jobs": [], "count": 0}
+        payload = json.loads(jobs_file.read_text())
+        jobs = payload.get("jobs", [])
+        return {"jobs": jobs, "count": len(jobs)}
+    except Exception as e:
+        return {"jobs": [], "count": 0, "error": str(e)}
+
 
 # ─── Pydantic Models ──────────────────────────────────────────
 
@@ -189,6 +213,12 @@ def crm_add(data: dict):
     contacts = _load_crm()
     contacts.append(contact)
     _save_crm(contacts)
+    # Sync to Supabase
+    try:
+        from modules.crm_db import upsert_contact
+        upsert_contact(contact)
+    except Exception:
+        pass
     _log_crm_access(
         action="add", contact_id=cid, contact_name=cname,
         endpoint="/api/crm/contacts", method="POST", agent="dashboard"
@@ -204,6 +234,12 @@ def crm_update(contact_id: str, data: dict):
             for k, v in data.items():
                 c[k] = v.strip() if isinstance(v, str) else v
             _save_crm(contacts)
+            # Sync to Supabase
+            try:
+                from modules.crm_db import upsert_contact
+                upsert_contact(c)
+            except Exception:
+                pass
             _log_crm_access(
                 action="write", contact_id=contact_id, contact_name=cname,
                 endpoint=f"/api/crm/contacts/{contact_id}", method="PUT", agent="dashboard"
@@ -380,6 +416,12 @@ def archive_contact(contact_id: str, archived: bool = True):
             cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
             c["archived"] = archived
             _save_crm(contacts)
+            # Sync to Supabase
+            try:
+                from modules.crm_db import upsert_contact
+                upsert_contact(c)
+            except Exception:
+                pass
             _log_crm_access(
                 action="archive" if archived else "unarchive",
                 contact_id=contact_id, contact_name=cname,
@@ -498,3 +540,48 @@ def resend_invite(group_key: str, req: ResendInviteRequest):
         raise HTTPException(504, "Resend timed out after 60s")
     except Exception as e:
         raise HTTPException(500, str(e))
+
+# ─── Task List (reads task-list.json, not intercepted by WebUI proxy) ───
+
+TASK_FILE_PATH = Path(__file__).resolve().parent.parent.parent / "task-list.json"
+
+def _load_task_list():
+    if TASK_FILE_PATH.exists():
+        return json.loads(TASK_FILE_PATH.read_text())
+    return []
+
+@router.get("/tasks")
+def get_task_list():
+    """Return tasks from /workspace/task-list.json — CRM prefix avoids proxy interference."""
+    return _load_task_list()
+
+@router.post("/tasks")
+def create_task(data: dict):
+    import uuid as _uuid
+    tasks = _load_task_list()
+    task = {
+        "id": data.get("id") or str(_uuid.uuid4())[:8],
+        "content": data.get("content", data.get("title", "")),
+        "status": data.get("status", "pending"),
+    }
+    tasks.append(task)
+    TASK_FILE_PATH.write_text(json.dumps(tasks, indent=2))
+    return {"ok": True, "task": task}
+
+@router.put("/tasks/{task_id}")
+def update_task(task_id: str, data: dict):
+    tasks = _load_task_list()
+    for t in tasks:
+        if t.get("id") == task_id:
+            if "content" in data: t["content"] = data["content"]
+            if "status" in data: t["status"] = data["status"]
+            TASK_FILE_PATH.write_text(json.dumps(tasks, indent=2))
+            return {"ok": True, "task": t}
+    raise HTTPException(404, "Task not found")
+
+@router.delete("/tasks/{task_id}")
+def delete_task(task_id: str):
+    tasks = _load_task_list()
+    tasks = [t for t in tasks if t.get("id") != task_id]
+    TASK_FILE_PATH.write_text(json.dumps(tasks, indent=2))
+    return {"ok": True}

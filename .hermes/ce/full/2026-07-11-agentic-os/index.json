@@ -1,0 +1,31 @@
+{
+  "project": "agentic-os",
+  "date": "2026-07-11",
+  "overall_score": 5.1,
+  "dimensions": {
+    "architecture": {"score": 6.0, "grade": "C", "weight": 0.15},
+    "correctness": {"score": 6.5, "grade": "C+", "weight": 0.15},
+    "design_ux": {"score": 5.5, "grade": "C", "weight": 0.12},
+    "security": {"score": 5.0, "grade": "C", "weight": 0.12},
+    "testing": {"score": 0.5, "grade": "F", "weight": 0.15},
+    "operations": {"score": 3.5, "grade": "D", "weight": 0.10},
+    "documentation": {"score": 4.5, "grade": "D+", "weight": 0.10},
+    "conversion_strategy": {"score": 4.5, "grade": "D+", "weight": 0.11}
+  },
+  "findings_summary": {
+    "p0_critical": 3,
+    "p1_high": 4,
+    "p2_medium": 5,
+    "p3_low": 4
+  },
+  "quick_wins": 15,
+  "backlog_stories": 14,
+  "backlog_points": 116,
+  "files_analyzed": {
+    "python": 88,
+    "javascript": 73,
+    "css": 1,
+    "dashboard_pages": 70
+  },
+  "ce_full_version": "2.4.0"
+}

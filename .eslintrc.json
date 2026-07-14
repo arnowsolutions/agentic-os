@@ -1,0 +1,38 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-undef": "warn",
+    "no-console": "off",
+    "semi": ["warn", "always"],
+    "quotes": ["warn", "single", { "avoidEscape": true }],
+    "eqeqeq": "warn"
+  },
+  "globals": {
+    "api": "readonly",
+    "PAGE_TITLES": "readonly",
+    "showToast": "readonly",
+    "navigate": "readonly",
+    "escapeHtml": "readonly",
+    "formatDate": "readonly",
+    "timeAgo": "readonly",
+    "statusColor": "readonly",
+    "toggleSidebar": "readonly",
+    "toggleTheme": "readonly",
+    "loadTheme": "readonly",
+    "showModal": "readonly",
+    "closeModal": "readonly",
+    "getNavRoute": "readonly",
+    "formatBytes": "readonly",
+    "toggleMobileMenu": "readonly"
+  },
+  "ignorePatterns": ["dashboard/pages/*.js"]
+}

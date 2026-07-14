@@ -91,34 +91,28 @@ def get_all_grand_rounds():
 
 
 def _build_friday_title(event):
-    """Build summary from the actual session topics with tag prefixes.
-    Tags: [ PEDS ], [FACULTY], [ GR ] (for all regular Grand Rounds including QI/JC/SASP).
-    Only [NO GR] omits Zoom — but those are filtered out before reaching here.
-    """
+    """Build calendar summary matching last year's Outlook format.
+    Returns (summary, description) tuple."""
+    meeting_type = event['type']
     topic_7 = event['topic_7_8']
     topic_8 = event['topic_8_9']
-    meeting_type = event['type']
     
-    # Build topic string from what's actually on the schedule
+    if "Faculty" in meeting_type:
+        return ("Faculty Meeting", "Faculty Meeting")
+    
+    prefix = "PEDS: " if "Peds" in meeting_type else ""
+    base = f"{prefix}Urology Grand Rounds [In-person]"
+    
+    # Build the topic suffix from excel data
     parts = []
     if topic_7:
         parts.append(topic_7)
     if topic_8 and topic_8 != topic_7:
         parts.append(topic_8)
-    topics = " / ".join(parts) if parts else ""
+    suffix = " / ".join(parts) if parts else ""
     
-    if "Peds" in meeting_type:
-        tag = "[ PEDS ] "
-        summary = f"{tag}Urology Grand Rounds - {topics}" if topics else f"{tag}Urology Grand Rounds Peds"
-    elif "Faculty" in meeting_type:
-        summary = "[FACULTY] Faculty Meeting"
-    elif "Journal" in meeting_type:
-        summary = f"[ GR ] Journal Club - {topics}" if topics else "[ GR ] Journal Club"
-    else:
-        summary = f"[ GR ] Urology Grand Rounds - {topics}" if topics else "[ GR ] Urology Grand Rounds"
-    
-    description = "Urology Grand Rounds"
-    return (summary, description)
+    summary = f"{base} - {suffix}" if suffix else base
+    return (summary, "Grand Rounds")
 
 
 def send_ics_invite(event, friday_date):

@@ -1,31 +1,77 @@
+"use strict";
+
 const api = {
-  async get(path) {
-    const r = await fetch(path);
+  async get(path, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const r = await fetch(path, { signal: controller.signal });
+    clearTimeout(timer);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
     return r.json();
   },
-  async post(path, body = {}, controller) {
+  async post(path, body = {}, controller, timeoutMs = 10000) {
+    let ctl, timer;
+    if (!controller) {
+      ctl = new AbortController();
+      timer = setTimeout(() => ctl.abort(), timeoutMs);
+    }
     const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-    if (controller) opts.signal = controller.signal;
+    opts.signal = controller ? controller.signal : ctl.signal;
     const r = await fetch(path, opts);
+    if (timer) clearTimeout(timer);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
     return r.json();
   },
-  async put(path, body = {}) {
-    const r = await fetch(path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  async put(path, body = {}, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const r = await fetch(path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+    clearTimeout(timer);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
     return r.json();
   },
-  async patch(path, body = {}) {
-    const r = await fetch(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  async patch(path, body = {}, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const r = await fetch(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+    clearTimeout(timer);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
     return r.json();
   },
-  async del(path) {
-    const r = await fetch(path, { method: 'DELETE' });
+  async del(path, timeoutMs = 10000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const r = await fetch(path, { method: 'DELETE', signal: controller.signal });
+    clearTimeout(timer);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
     return r.json();
   },
+
+  /**
+   * Safe fetch wrapper — like fetch() but with timeout + error handling.
+   * Returns {data, error} instead of throwing. Use for one-off API calls.
+   */
+  async fetchSafe(url, opts = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const r = await fetch(url, { ...opts, signal: controller.signal });
+      clearTimeout(timer);
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        return { data: null, error: e.detail || `Request failed: ${r.status}` };
+      }
+      const data = await r.json();
+      return { data, error: null };
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') {
+        return { data: null, error: `Request timed out after ${timeoutMs}ms` };
+      }
+      return { data: null, error: err.message || 'Network error' };
+    }
+  },
+
   getStatus: () => api.get('/api/status'),
   getHealthFull: () => api.get('/api/health/full'),
   processSwap: (dryRun = true) => api.post(`/api/swap/process?dry_run=${dryRun}`),

@@ -77,7 +77,11 @@ def send_email(
             "data": None,
         }
 
-    sender = from_email or cfg["user"]
+    # ⛔ NEVER use from_email — always use the authenticated SMTP user
+    # Montefiore flagged our account for sending as sfrasier@montefiore.org
+    # through a Gmail SMTP session. The envelope sender must match the
+    # authenticated SMTP account to avoid impersonation flags.
+    sender = cfg["user"]
 
     # Use display name "Urology Residency Program" for the From header
     from email.utils import formataddr

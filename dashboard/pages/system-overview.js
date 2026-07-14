@@ -1,103 +1,81 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   System Overview — Clean service health + cron status
+   No emoji. Uses design system classes.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 async function renderSystemOverview() {
   const content = document.getElementById('pageContent');
-  
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">🏥 System Overview</div>
-        <div class="page-subtitle">Central services, cron health & monitoring at a glance</div>
+        <h1 class="page-title">System Overview</h1>
+        <p class="page-subtitle">Central services, cron health, and monitoring</p>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderSystemOverview()">🔄 Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="renderSystemOverview()">Refresh</button>
       </div>
     </div>
-    <div id="soGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-top:16px">
-      <div class="loading"><div class="loading-spinner"></div><span>Loading system status...</span></div>
+    <div class="section-title">Services</div>
+    <div id="soGrid" class="grid grid-3 mb-4">
+      <div class="loading"><div class="loading-spinner"></div></div>
     </div>
-    <div class="so-section" id="soCronSection" style="margin-top:20px;display:none">
-      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">⏱ Cron Jobs</h3>
-      <div id="soCronList"><div class="loading"><div class="loading-spinner"></div></div></div>
+    <div id="soCronSection" style="display:none">
+      <div class="section-title">Cron Jobs</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div id="soCronList"><div class="loading" style="padding:24px"><div class="loading-spinner"></div></div></div>
+      </div>
     </div>
-    <style>
-      .so-card {
-        background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border);
-        padding: 16px; transition: all 0.2s ease;
-      }
-      .so-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-      .so-card .so-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-      .so-card .so-name { font-size: 14px; font-weight: 600; }
-      .so-card .so-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-      .so-card .so-dot.online { background: #00b894; }
-      .so-card .so-dot.offline { background: #d63031; }
-      .so-card .so-dot.warning { background: #fdcb6e; }
-      .so-card .so-detail { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-      .so-card .so-detail strong { color: var(--text); }
-      .so-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      .so-table th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
-      .so-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
-      .so-table tr:hover td { background: rgba(255,255,255,0.03); }
-      .so-section { background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border); padding: 16px; }
-    </style>
   `;
 
-  // Fetch system status
   try {
     const [statusRes, cronRes] = await Promise.all([
       fetch('/api/status').then(r => r.json()).catch(() => ({})),
       fetch('/api/cron/jobs').then(r => r.json()).catch(() => ({jobs: []}))
     ]);
 
+    const hermesStatus = statusRes.agents?.find(a => a.name === 'hermes')?.status || 'unknown';
+
     const services = [
-      { name: 'Agentic OS Dashboard', port: 8090, status: 'online', detail: 'FastAPI + Tailwind SPA' },
-      { name: 'Hermes Agent', port: null, status: statusRes.agents?.find(a => a.name === 'hermes')?.status || 'unknown', detail: 'AI agent framework' },
-      { name: 'Code Server', port: 8080, status: 'online', detail: 'code.srv1738752.hstgr.cloud — VS Code in browser' },
-      { name: 'Vapi Voice Assistant', port: null, status: 'online', detail: '+1 (971) 382-0498 — 22 tools, GPT-4o' },
-      { name: 'Telegram Gateway', port: null, status: statusRes.agents?.find(a => a.name === 'telegram')?.status || 'unknown', detail: 'Connected ✓' },
-      { name: 'Hermes WebUI', port: 8787, status: 'online', detail: 'Browser chat interface' },
+      { name: 'Agentic OS', detail: 'Dashboard server', status: 'online' },
+      { name: 'Hermes Agent', detail: 'AI agent framework', status: hermesStatus },
+      { name: 'Code Server', detail: 'code.srv1738752.hstgr.cloud', status: 'online' },
+      { name: 'Vapi Voice', detail: '+1 (971) 382-0498', status: 'online' },
+      { name: 'Telegram Gateway', detail: 'Connected', status: hermesStatus === 'online' ? 'online' : 'warning' },
+      { name: 'Hermes WebUI', detail: 'Browser chat interface', status: 'online' },
     ];
 
-    const grid = document.getElementById('soGrid');
-    grid.innerHTML = services.map(s => `
-      <div class="so-card">
-        <div class="so-header">
-          <span class="so-name">${s.name}</span>
-          <span class="so-dot ${s.status === 'online' ? 'online' : s.status === 'offline' ? 'offline' : 'warning'}"></span>
+    document.getElementById('soGrid').innerHTML = services.map(s => {
+      const dotColor = s.status === 'online' ? 'var(--green)' : s.status === 'offline' ? 'var(--red)' : 'var(--yellow)';
+      const bgColor = s.status === 'online' ? 'var(--green-dim)' : s.status === 'offline' ? 'var(--red-dim)' : 'var(--yellow-dim)';
+      return `<div class="card" style="display:flex;align-items:center;gap:12px;padding:16px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0" title="${s.status}"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:550;font-size:0.85rem;color:var(--text-primary);letter-spacing:-0.01em">${s.name}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:1px">${s.detail}</div>
         </div>
-        <div class="so-detail">
-          ${s.port ? `<strong>Port:</strong> ${s.port}<br>` : ''}
-          ${s.detail}
-        </div>
-      </div>
-    `).join('');
+        <span class="badge" style="background:${bgColor};color:${dotColor};font-size:0.65rem">${s.status}</span>
+      </div>`;
+    }).join('');
 
-    // Cron jobs section
+    // Cron jobs
     const jobs = cronRes.jobs || [];
     if (jobs.length > 0) {
-      const cronSection = document.getElementById('soCronSection');
-      const cronList = document.getElementById('soCronList');
-      cronSection.style.display = 'block';
-      cronList.innerHTML = `
-        <table class="so-table">
+      document.getElementById('soCronSection').style.display = 'block';
+      document.getElementById('soCronList').innerHTML = `
+        <table>
           <thead><tr><th>Name</th><th>Schedule</th><th>Last Run</th><th>Status</th></tr></thead>
-          <tbody>
-            ${jobs.map(j => `
-              <tr>
-                <td><strong>${j.name || j.id || 'Unnamed'}</strong></td>
-                <td>${j.schedule || '-'}</td>
-                <td style="font-size:11px;color:var(--text-muted)">${j.last_run || j.last_run_at || 'Never'}</td>
-                <td><span class="so-dot ${j.enabled !== false ? 'online' : 'offline'}" style="width:8px;height:8px;vertical-align:middle;margin-right:4px"></span>${j.enabled !== false ? 'Active' : 'Paused'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
+          <tbody>${jobs.map(j => {
+            const active = j.enabled !== false;
+            return `<tr>
+              <td><strong>${j.name || j.id || 'Unnamed'}</strong></td>
+              <td style="font-family:var(--font-mono);font-size:0.72rem">${j.schedule || '—'}</td>
+              <td style="font-size:0.72rem;color:var(--text-muted)">${j.last_run || j.last_run_at || 'Never'}</td>
+              <td><span class="badge ${active ? 'badge-success' : 'badge-warning'}" style="font-size:0.65rem">${active ? 'Active' : 'Paused'}</span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>`;
     }
   } catch (err) {
-    document.getElementById('soGrid').innerHTML = `
-      <div class="so-card" style="grid-column:1/-1;text-align:center;padding:32px">
-        <div style="font-size:24px;margin-bottom:8px">⚠️</div>
-        <div style="color:var(--text-muted)">Could not fetch system status: ${escapeHtml(err.message)}</div>
-      </div>
-    `;
+    document.getElementById('soGrid').innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">—</div><div class="empty-state-title">Connection Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }

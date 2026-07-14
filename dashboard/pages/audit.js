@@ -7,8 +7,8 @@ async function renderAudit() {
         <p class="page-subtitle">Complete system activity trail</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="refreshAudit()">🔄 Refresh</button>
-        <button class="btn" onclick="clearAuditFilters()">✕ Clear Filters</button>
+        <button class="btn" onclick="refreshAudit()">Refresh</button>
+        <button class="btn" onclick="clearAuditFilters()">Clear Filters</button>
       </div>
     </div>
     <div class="flex gap-2 mb-3" style="flex-wrap:wrap">

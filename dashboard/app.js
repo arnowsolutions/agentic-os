@@ -1,11 +1,40 @@
+"use strict";
+
 const pageCache = {};
+
+/** Toggle mobile sidebar + overlay */
+function toggleMobileMenu() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar && overlay) {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('active');
+  }
+}
+
+/** Track recently visited pages (max 5) */
+function trackRecentPage(hash) {
+  if (!hash || hash === 'dashboard') return;
+  try {
+    let recent = JSON.parse(localStorage.getItem('aos_recent') || '[]');
+    recent = recent.filter(p => p !== hash);
+    recent.unshift(hash);
+    recent = recent.slice(0, 5);
+    localStorage.setItem('aos_recent', JSON.stringify(recent));
+  } catch (e) { /* ignore */ }
+}
 
 const PAGE_BASE = '/dashboard/pages/';
 
 async function loadPage(name) {
-  if (pageCache[name]) return pageCache[name];
+  // Remove any previously loaded page script so it always reloads fresh
+  const old = document.querySelector(`script[src*="${PAGE_BASE}${name}.js"]`);
+  if (old) old.remove();
+  delete pageCache[name];
+  
   try {
-    await loadScript(`${PAGE_BASE}${name}.js`);
+    const src = PAGE_BASE + name + '.js';
+    await loadScript(src);
     pageCache[name] = true;
   } catch (err) {
     showToast(`Failed to load page: ${name}`, 'error');
@@ -15,7 +44,6 @@ async function loadPage(name) {
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
     const script = document.createElement('script');
     script.src = src;
     script.onload = () => resolve();
@@ -61,6 +89,12 @@ async function navigate(page) {
   if (!hash) { window.location.hash = DEFAULT_ROUTE; return; }
 
   const route = getNavRoute(hash);
+
+  // Close mobile menu on navigation
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('active');
 
   // Show loading bar
   const bar = document.getElementById('topLoadingBar');
@@ -112,6 +146,8 @@ async function navigate(page) {
       content.className = 'page-content page-enter';
       if (bar) bar.style.width = '70%';
       await renderFn();
+      trackRecentPage(hash);
+      renderSidebar();  // update "Recent" section
       if (bar) { bar.style.width = '100%'; setTimeout(() => { bar.style.width = '0'; bar.classList.remove('active'); }, 400); }
     } else {
       content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" doesn't have a render function</div></div>`;

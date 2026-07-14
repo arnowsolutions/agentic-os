@@ -114,7 +114,7 @@ function buildEventCard(event, isPast = false) {
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0">
         ${hasRecipients ? `
-          <button class="btn" style="font-size:12px;padding:6px 14px" onclick="resendInvite('${groupKey}', '${event.date}')"
+          <button class="btn" style="font-size:12px;padding:6px 14px" onclick="confirmResend('${groupKey}', '${event.date}', ${(group.emails || []).length})"
                   ${confLoading ? 'disabled' : ''}>
             📤 Resend
           </button>
@@ -125,6 +125,15 @@ function buildEventCard(event, isPast = false) {
         `}
       </div>
     </div>`;
+}
+
+function confirmResend(groupKey, date, recipientCount) {
+  const confirmed = confirm(
+    `Send calendar invite to ${recipientCount} recipients?\n\nDate: ${date}\nGroup: ${groupKey}\n\nThis will send real emails. Are you sure?`
+  );
+  if (confirmed) {
+    resendInvite(groupKey, date);
+  }
 }
 
 async function resendInvite(groupKey, date) {

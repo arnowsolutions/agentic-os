@@ -1,0 +1,37 @@
+{
+  "project": "agentic-os",
+  "runs": [
+    {
+      "date": "2026-07-11",
+      "commit": "28612a81eb73",
+      "overall_score": 5.1,
+      "dimensions": {
+        "architecture": 6.0,
+        "correctness": 6.5,
+        "design_ux": 5.5,
+        "security": 5.0,
+        "testing": 0.5,
+        "operations": 3.5,
+        "documentation": 4.5,
+        "conversion_strategy": 4.5
+      },
+      "files_analyzed": {
+        "python": 88,
+        "javascript": 73,
+        "css": 1,
+        "dashboard_pages": 70
+      },
+      "findings": {
+        "p0": 3,
+        "p1": 4,
+        "p2": 5,
+        "p3": 4
+      }
+    }
+  ],
+  "trend": {
+    "direction": "baseline",
+    "previous_score": null,
+    "change": null
+  }
+}

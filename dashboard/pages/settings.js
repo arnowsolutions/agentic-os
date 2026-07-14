@@ -6,7 +6,7 @@ async function renderSettings() {
         <h1 class="page-title">Settings</h1>
         <p class="page-subtitle">Configure Agentic OS behavior</p>
       </div>
-      <button class="btn btn-primary" onclick="saveAllSettings()">💾 Save All</button>
+      <button class="btn btn-primary" onclick="saveAllSettings()">Save All</button>
     </div>
     <div id="settingsForm"><div class="loading"><div class="loading-spinner"></div></div></div>
   `;

@@ -16,7 +16,7 @@ async function renderScheduler() {
     const container = document.getElementById('jobList');
 
     if (jobs.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏱</div><div class="empty-state-title">No scheduled jobs</div><div class="empty-state-desc">Create your first scheduled job to automate workflows</div><button class="btn btn-primary mt-3" onclick="showAddJob()">+ Add Job</button></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">—</div><div class="empty-state-title">No scheduled jobs</div><div class="empty-state-desc">Create your first scheduled job to automate workflows</div><button class="btn btn-primary mt-3" onclick="showAddJob()">+ Add Job</button></div>';
       return;
     }
 

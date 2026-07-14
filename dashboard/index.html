@@ -11,6 +11,8 @@
 <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
+  <button class="mobile-menu-btn" onclick="toggleMobileMenu()" title="Menu" style="display:none">☰</button>
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
   <div id="topLoadingBar"></div>
   <nav id="sidebar" class="sidebar">
     <div class="sidebar-header">

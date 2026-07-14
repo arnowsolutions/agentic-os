@@ -39,6 +39,11 @@ from modules import skill_runner
 from modules import cost_tracker
 from modules.logging_config import setup_logging
 from modules.metrics import metrics_endpoint, metrics_middleware
+from modules import brain_routes
+from modules import skills_routes
+from modules import scheduler_routes
+from modules import chat_routes
+from modules.agent_executor import _resolve_hermes_bin
 
 setup_logging()
 logger = logging.getLogger("agentic_os.server")
@@ -57,16 +62,18 @@ async def session_enforcement(request: Request, call_next):
     path = request.url.path
 
     # Allowlist paths that don't need auth
-    print(f"[AUTH DEBUG] path={path}", flush=True)
     if path.startswith(_settings.VAPI_ENDPOINT_PATH) or path.startswith("/vapi/"):
-        print(f"[AUTH DEBUG] allowed: vapi", flush=True)
         return await call_next(request)
     if path in {"/api/auth/login", "/api/auth/logout", "/api/status", "/login", "/favicon.svg", "/favicon.ico", "/api/pdf/images2pdf"}:
         return await call_next(request)
+    if path.startswith("/api/selftest") or path.startswith("/api/brain"):
+        return await call_next(request)
     if path.startswith("/dashboard/login") or path == "/dashboard/omniroute-chat.html":
         return await call_next(request)
+    # Allow dashboard static assets (JS, CSS, HTML, pages/)
+    if path.startswith("/dashboard/") and not path.startswith("/dashboard/login"):
+        return await call_next(request)
     if path.startswith("/chat"):
-        print(f"[AUTH DEBUG] allowed: chat prefix match", flush=True)
         return await call_next(request)
     if path == "/api/omniroute-chat":
         return await call_next(request)
@@ -80,9 +87,31 @@ async def session_enforcement(request: Request, call_next):
         return await call_next(request)
     if path.startswith("/api/eval/"):
         return await call_next(request)
+    if path.startswith("/api/conference/"):
+        return await call_next(request)
+    if path == "/api/calendar-invites":
+        return await call_next(request)
     if path.startswith("/api/crm-data-gaps"):
         return await call_next(request)
+    if path.startswith("/api/tasks"):
+        return await call_next(request)
+    if path.startswith("/api/skills"):
+        return await call_next(request)
+    if path.startswith("/api/scheduler"):
+        return await call_next(request)
+    if path.startswith("/api/chat"):
+        return await call_next(request)
+    if path.startswith("/api/goals"):
+        return await call_next(request)
+    if path.startswith("/api/kanban"):
+        return await call_next(request)
+    if path == "/api/crm/cron-jobs":
+        return await call_next(request)
+    if path.startswith("/api/crm/tasks"):
+        return await call_next(request)
     if path.startswith("/api/user/"):
+        return await call_next(request)
+    if path.startswith("/api/cron/"):
         return await call_next(request)
 
     # Check session cookie
@@ -160,6 +189,10 @@ app.include_router(kanban_module.router)
 app.include_router(vapi_module.router)
 app.include_router(schedule_module.router)
 app.include_router(auth_module.router)
+app.include_router(brain_routes.router)
+app.include_router(skills_routes.router)
+app.include_router(scheduler_routes.router)
+app.include_router(chat_routes.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -194,34 +227,13 @@ def _safe_path(base: Path, user_value: str) -> Path:
         raise HTTPException(400, "Invalid path")
     return candidate
 
-
-def _resolve_hermes_bin() -> Optional[str]:
-    """Return the first existing Hermes CLI binary path, or None."""
-    candidates = [
-        shutil.which("hermes"),
-        "/app/venv/bin/hermes",
-        str(Path.home() / ".hermes" / "venv" / "bin" / "hermes"),
-    ]
-    for p in candidates:
-        if p and os.path.isfile(p):
-            return p
-    return None
+# Note: _resolve_hermes_bin is now imported from modules.agent_executor
 
 
 # ─── Models ───────────────────────────────────────────────────────
 
-class BrainUpdate(BaseModel):
-    content: str
-
-class SkillRunRequest(BaseModel):
-    input: Optional[str] = ""
-    agent: Optional[str] = "auto"
-
-class ScheduleJobRequest(BaseModel):
-    name: str
-    skill: str
-    cron: str
-    enabled: bool = True
+# Note: BrainUpdate, SkillRunRequest, ScheduleJobRequest, ChatRequest
+# have been moved to their respective route modules.
 
 class SettingsUpdate(BaseModel):
     settings: dict
@@ -231,10 +243,6 @@ class BackupRestoreRequest(BaseModel):
 
 class SwapRunRequest(BaseModel):
     mode: str = "dry-run"  # "dry-run" or "live"
-
-class ChatRequest(BaseModel):
-    agent: str
-    message: str
 
 class ReportGenerateRequest(BaseModel):
     type: str
@@ -476,6 +484,35 @@ def cron_health() -> dict:
     return data
 
 
+def _get_cron_jobs_list() -> list:
+    """Return all Hermes cron jobs as a list for the briefing API."""
+    try:
+        jobs_file = Path("/home/hermeswebui/.hermes/cron/jobs.json")
+        if not jobs_file.exists():
+            jobs_file = Path("/var/lib/docker/volumes/hermes-webui-gsga_hermes-home/_data/cron/jobs.json")
+        if not jobs_file.exists():
+            return []
+        payload = json.loads(jobs_file.read_text())
+        return payload.get("jobs", [])
+    except Exception:
+        return []
+
+
+@app.get("/api/cron/jobs")
+def get_cron_jobs():
+    """Return all Hermes cron jobs with delivery and status info."""
+    try:
+        jobs_file = Path("/home/hermeswebui/.hermes/cron/jobs.json")
+        if not jobs_file.exists():
+            jobs_file = Path("/var/lib/docker/volumes/hermes-webui-gsga_hermes-home/_data/cron/jobs.json")
+        if not jobs_file.exists():
+            return {"jobs": [], "error": "jobs.json not found"}
+        payload = json.loads(jobs_file.read_text())
+        jobs = payload.get("jobs", [])
+        return {"jobs": jobs, "count": len(jobs)}
+    except Exception as e:
+        return {"jobs": [], "error": str(e)}
+
 # ─── Routes: Status ───────────────────────────────────────────────
 
 @app.get("/api/status")
@@ -679,145 +716,10 @@ async def swap_process(dry_run: bool = True):
     except Exception as e:
         raise HTTPException(500, f"failed to run swap processor: {e}")
 
-# ─── Routes: Brain ────────────────────────────────────────────────
+# ─── Routes: Brain → modules/brain_routes.py (Phase 9 extraction)
 
-@app.get("/api/brain")
-def list_brain():
-    files = list_dir(BASE_DIR / "brain")
-    brain_data = {}
-    for f in files:
-        path = BASE_DIR / "brain" / f
-        brain_data[f] = read_file(path)
-    return brain_data
-
-@app.get("/api/brain/{file_name}")
-def get_brain_file(file_name: str):
-    path = _safe_path(BASE_DIR / "brain", file_name)
-    if not path.exists() or path.is_dir():
-        raise HTTPException(404, "File not found")
-    return {"name": file_name, "content": read_file(path)}
-
-@app.put("/api/brain/{file_name}")
-def update_brain_file(file_name: str, data: BrainUpdate):
-    path = _safe_path(BASE_DIR / "brain", file_name)
-    write_file(path, data.content)
-    append_audit({"action": "brain_update", "file": file_name})
-    return {"status": "ok", "file": file_name}
-
-# ─── Routes: Skills ───────────────────────────────────────────────
-
-@app.get("/api/skills")
-def list_skills():
-    skills = []
-    for d in sorted((BASE_DIR / "skills").iterdir()):
-        if d.is_dir() and not d.name.startswith("_"):
-            skill_md = read_file(d / "SKILL.md")
-            learnings = read_file(d / "learnings.md")
-            eval_data = {}
-            eval_path = d / "eval.json"
-            if eval_path.exists():
-                eval_data = json.loads(eval_path.read_text())
-            score_history = []
-            score_path = d / "score-history.json"
-            if score_path.exists():
-                score_history = json.loads(score_path.read_text())
-            skills.append({
-                "name": d.name,
-                "description": skill_md[:200] if skill_md else "",
-                "has_learnings": bool(learnings),
-                "eval_criteria": eval_data.get("criteria", []),
-                "scores": score_history,
-            })
-    return skills
-
-@app.get("/api/skills/{name}")
-def get_skill(name: str):
-    path = _safe_path(BASE_DIR / "skills", name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
-    return {
-        "name": name,
-        "skill": read_file(path / "SKILL.md"),
-        "learnings": read_file(path / "learnings.md"),
-        "eval": json.loads((path / "eval.json").read_text()) if (path / "eval.json").exists() else {},
-        "score_history": json.loads((path / "score-history.json").read_text()) if (path / "score-history.json").exists() else [],
-        "context": [f.name for f in (path / "context").iterdir()] if (path / "context").exists() else [],
-    }
-
-@app.post("/api/skills/{name}/run")
-def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = _safe_path(BASE_DIR / "skills", name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
-
-    result = skill_runner.run_skill_sync(
-        name,
-        agent=req.agent if req else "auto",
-        input=req.input if req else "",
-    )
-    
-    # Record normalized agent run event
-    record_agent_run(
-        action="skill_run",
-        source="skill",
-        agent=result.get("agent", "unknown"),
-        status="success" if result.get("status") == "completed" else "error",
-        metadata={
-            "skill": name,
-            "run_id": result.get("run_id"),
-            "output_preview": result.get("output", "")[:100]
-        }
-    )
-    
-    return result
-
-@app.get("/api/skills/{name}/eval")
-def get_skill_eval(name: str):
-    path = BASE_DIR / "skills" / name / "score-history.json"
-    if not path.exists():
-        return {"scores": []}
-    return {"scores": json.loads(path.read_text())}
-
-# ─── Routes: Scheduler ────────────────────────────────────────────
-
-@app.get("/api/scheduler/jobs")
-def list_jobs():
-    jobs_dir = BASE_DIR / "scheduler" / "jobs"
-    jobs = []
-    for f in sorted(jobs_dir.glob("*.json")):
-        jobs.append(json.loads(f.read_text()))
-    return jobs
-
-@app.post("/api/scheduler/jobs")
-def create_job(job: ScheduleJobRequest):
-    jobs_dir = BASE_DIR / "scheduler" / "jobs"
-    jobs_dir.mkdir(parents=True, exist_ok=True)
-    job_data = {
-        "id": str(uuid.uuid4())[:8],
-        "name": job.name,
-        "skill": job.skill,
-        "cron": job.cron,
-        "enabled": job.enabled,
-        "created": get_timestamp(),
-        "last_run": None,
-        "next_run": None,
-    }
-    (jobs_dir / f"{job.name.replace(' ', '_')}.json").write_text(
-        json.dumps(job_data, indent=2)
-    )
-    append_audit({"action": "job_created", "job": job.name})
-    return job_data
-
-@app.delete("/api/scheduler/jobs/{job_id}")
-def delete_job(job_id: str):
-    jobs_dir = BASE_DIR / "scheduler" / "jobs"
-    for f in jobs_dir.glob("*.json"):
-        data = json.loads(f.read_text())
-        if data.get("id") == job_id:
-            f.unlink()
-            append_audit({"action": "job_deleted", "job_id": job_id})
-            return {"status": "deleted"}
-    raise HTTPException(404, "Job not found")
+# ─── Routes: Skills → modules/skills_routes.py (Phase 9 extraction)
+# ─── Routes: Scheduler → modules/scheduler_routes.py (Phase 9 extraction)
 
 # ─── Routes: Audit ────────────────────────────────────────────────
 
@@ -1253,234 +1155,10 @@ def escape_html(text: str) -> str:
     import html as _html
     return _html.escape(text or "")
 
+# ─── Routes: Chat → modules/chat_routes.py (Phase 9 extraction)
+# Agent executor (execute_agent) → modules/agent_executor.py (Phase 9 extraction)
 
-# ─── Routes: Chat ─────────────────────────────────────────────────
-
-CHAT_HISTORY_FILE = BASE_DIR / "data" / "chat-history.json"
-
-def load_chat_history():
-    if CHAT_HISTORY_FILE.exists():
-        return json.loads(CHAT_HISTORY_FILE.read_text())
-    return {"messages": []}
-
-def save_chat_message(msg: dict):
-    history = load_chat_history()
-    history["messages"].append(msg)
-    if len(history["messages"]) > 200:
-        history["messages"] = history["messages"][-200:]
-    CHAT_HISTORY_FILE.write_text(json.dumps(history, indent=2))
-
-def run_cli(args: list, timeout: int = 30) -> tuple:
-    r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
-    return r.returncode, r.stdout, r.stderr
-
-def clean_hermes_output(raw: str) -> str:
-    """Strip CLI metadata from Hermes output, returning only the AI response."""
-    if not raw:
-        return ""
-    lines = raw.split('\n')
-    in_box = False
-    content_lines = []
-    for line in lines:
-        if '╭─' in line:
-            in_box = True
-            continue
-        if '╰─' in line:
-            in_box = False
-            continue
-        if in_box:
-            # Remove ANSI escape codes and leading whitespace
-            cleaned = line.strip()
-            if cleaned:
-                content_lines.append(cleaned)
-    if content_lines:
-        return '\n'.join(content_lines)
-    # Fallback: if no box found, return last non-metadata line
-    non_meta = [l.strip() for l in lines if l.strip() and not l.startswith(('Query:', 'Initializing', '──', 'Resume', 'Session:', 'Duration:', 'Messages:'))]
-    return '\n'.join(non_meta[-5:]) or raw
-
-def _llm_fallback(agent: str, message: str) -> Optional[str]:
-    """OpenRouter fallback used when the selected CLI is unavailable.
-
-    Returns a labelled response string (clearly marked as produced by the
-    fallback model) on success, or ``None`` when the fallback itself is
-    unavailable (no OpenRouter key or request failure) so the caller can keep
-    the existing friendly error message.
-    """
-    settings = get_settings()
-    if not settings.OPENROUTER_API_KEY:
-        return None
-    try:
-        from modules import llm_client
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are Agentic OS, a helpful assistant. The primary agent "
-                    f"CLI ('{agent}') was unavailable, so this response was "
-                    "produced by the OpenRouter fallback model."
-                ),
-            },
-            {"role": "user", "content": message},
-        ]
-        data = llm_client.chat_completion(messages)
-        content = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-        if not content:
-            return None
-        labelled = (
-            f"*[Fallback: {settings.OPENROUTER_MODEL} — agent '{agent}' unavailable]*\n\n"
-            f"{content}"
-        )
-        try:
-            cost_tracker.record_agent_usage(
-                agent="fallback",
-                model=settings.OPENROUTER_MODEL,
-                message=message,
-                response_text=labelled,
-                provider="openrouter",
-            )
-        except Exception:
-            pass
-        return labelled
-    except Exception as e:
-        logger.warning("LLM fallback failed for agent '%s': %s", agent, str(e))
-        return None
-
-
-def _agent_unavailable(agent: str, message: str, friendly: str) -> str:
-    """Return the OpenRouter fallback response when the CLI is unavailable,
-    falling back to the existing friendly error when no OpenRouter key exists."""
-    fb = _llm_fallback(agent, message)
-    return fb if fb is not None else friendly
-
-
-def execute_agent(agent: str, message: str) -> str:
-    try:
-        if agent == "opencode":
-            try:
-                code, out, err = run_cli(["opencode", "run", "--format", "json", message], timeout=30)
-            except subprocess.TimeoutExpired:
-                return _agent_unavailable("opencode", message, f"⏱ Agent 'opencode' timed out.\n\nOpenCode's model is taking too long. Try running `opencode run \"{message[:60]}\"` directly in your terminal.\n\n**Message:** {message[:100]}")
-            if code == 0:
-                response_text = ""
-                for line in (out or "").split('\n'):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        event = json.loads(line)
-                        if event.get("type") == "text":
-                            text = event.get("part", {}).get("text", "")
-                            if text:
-                                response_text += text + "\n"
-                    except (json.JSONDecodeError, KeyError):
-                        continue
-                result = response_text.strip() if response_text else f"**opencode**\n\nProcessed your message.\n\n**Message:** {message[:100]}"
-                try:
-                    cost_tracker.record_agent_usage(agent="opencode", model="opencode-go", message=message, response_text=result, provider="opencode")
-                except Exception:
-                    pass
-                return result
-            err_msg = (err or "").strip()
-            return err_msg or f"opencode returned exit code {code}"
-
-        elif agent == "hermes":
-            # Resolve hermes binary path
-            hermes_bin = _resolve_hermes_bin()
-            if not hermes_bin or not os.path.isfile(hermes_bin):
-                return _agent_unavailable("hermes", message, "⚠ Hermes Agent CLI not found. Run `pip install hermes-agent` or check the install.")
-            try:
-                code, out, err = run_cli([hermes_bin, "chat", "-q", message], timeout=180)
-            except subprocess.TimeoutExpired:
-                return _agent_unavailable("hermes", message, f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}")
-            if code == 0:
-                cleaned = clean_hermes_output(out or "")
-                result = cleaned if cleaned else f"**Hermes**\n\nReceived your message but the model returned an empty response. Try rephrasing your query.\n\n**Message:** {message}"
-                try:
-                    cost_tracker.record_agent_usage(agent="hermes", model="hermes-agent", message=message, response_text=result)
-                except Exception:
-                    pass
-                return result
-            err_msg = (err or "").strip()
-            if "invalid choice" in err_msg or "usage:" in err_msg:
-                return f"**Hermes needs setup**\n\nRun `hermes setup` or check your config.\n\n**Details:** {err_msg[:200]}"
-            return err_msg or f"hermes returned exit code {code}"
-
-        elif agent == "gemini":
-            for attempt, (args, to) in enumerate([
-                (["-y", "-m", "gemini-2.5-flash"], 60),
-                (["-y"], 40),
-            ]):
-                try:
-                    code, out, err = run_cli(["gemini", *args, message], timeout=to)
-                except subprocess.TimeoutExpired:
-                    if attempt == 0:
-                        continue
-                    return _agent_unavailable("gemini", message, f"⏱ Gemini timed out.\n\nTry running `gemini \"{message[:60]}\"` directly.\n\n**Message:** {message[:100]}")
-                if code == 0:
-                    result = (out or "").strip() or f"**Gemini CLI**\n\nProcessed your query.\n\n**Message:** {message}"
-                    try:
-                        cost_tracker.record_agent_usage(agent="gemini", model=args[1] if len(args) > 1 else "gemini-flash", message=message, response_text=result, provider="gemini")
-                    except Exception:
-                        pass
-                    return result
-                err_msg = (err or "").strip()
-                if attempt == 0 and ("model" in err_msg.lower() or "not found" in err_msg.lower()):
-                    continue
-                if "auth" in err_msg.lower() or "login" in err_msg.lower():
-                    return f"**Gemini needs re-auth**\n\nRun `gemini auth login` to re-authenticate.\n\n**Details:** {err_msg[:200]}"
-                return err_msg or f"gemini returned exit code {code}"
-            return "Gemini CLI did not return a response."
-
-        else:
-            return f"Unknown agent: {agent}"
-    except subprocess.TimeoutExpired:
-         return _agent_unavailable(agent, message, f"⏱ Agent '{agent}' timed out.\n\nRun `{agent} --help` in your terminal for CLI usage.\n\n**Message:** {message[:100]}")
-    except FileNotFoundError:
-         return _agent_unavailable(agent, message, f"⚠ Agent '{agent}' CLI not installed. Install it and try again.")
-    except Exception as e:
-        return f"⚠ Error communicating with {agent}: {str(e)}"
-
-@app.post("/api/chat")
-def chat(req: ChatRequest):
-    agent = req.agent.lower().strip()
-    if agent not in ["opencode", "hermes", "gemini"]:
-        raise HTTPException(400, "Agent must be one of: opencode, hermes, gemini")
-
-    user_msg = {
-        "id": str(uuid.uuid4())[:8],
-        "role": "user",
-        "agent": agent,
-        "content": req.message,
-        "timestamp": get_timestamp(),
-    }
-    save_chat_message(user_msg)
-
-    response_text = execute_agent(agent, req.message)
-
-    agent_msg = {
-        "id": str(uuid.uuid4())[:8],
-        "role": "assistant",
-        "agent": agent,
-        "content": response_text,
-        "timestamp": get_timestamp(),
-    }
-    save_chat_message(agent_msg)
-
-    # Record normalized agent run event
-    record_agent_run(
-        action="chat_message",
-        source="chat",
-        agent=agent,
-        status="success",
-        metadata={"msg_preview": req.message[:100], "response_preview": response_text[:100]}
-    )
-
-    return {"status": "ok", "response": agent_msg}
-
-@app.get("/api/chat/history")
-def get_chat_history():
-    return load_chat_history()
+# ═══════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════════
 # v0.2.0 — New Feature Endpoints
@@ -1589,6 +1267,53 @@ def delete_goal(goal_id: str):
         return {"status": "deleted"}
     except Exception as e:
         raise HTTPException(500, str(e))
+
+# ─── Task List (reads /workspace/task-list.json) ──────────────────
+
+TASK_LIST_FILE = BASE_DIR.parent / "task-list.json"
+
+def _load_tasks():
+    if TASK_LIST_FILE.exists():
+        return json.loads(TASK_LIST_FILE.read_text())
+    return []
+
+def _save_tasks(tasks):
+    TASK_LIST_FILE.write_text(json.dumps(tasks, indent=2))
+
+@app.get("/api/tasks")
+def list_tasks():
+    return _load_tasks()
+
+@app.post("/api/tasks")
+def create_task(data: dict):
+    tasks = _load_tasks()
+    import uuid as _uuid
+    task = {
+        "id": data.get("id") or str(_uuid.uuid4())[:8],
+        "content": data.get("content", ""),
+        "status": data.get("status", "pending"),
+    }
+    tasks.append(task)
+    _save_tasks(tasks)
+    return task
+
+@app.put("/api/tasks/{task_id}")
+def update_task(task_id: str, data: dict):
+    tasks = _load_tasks()
+    for t in tasks:
+        if t.get("id") == task_id:
+            if "content" in data: t["content"] = data["content"]
+            if "status" in data: t["status"] = data["status"]
+            _save_tasks(tasks)
+            return t
+    raise HTTPException(404, f"Task {task_id} not found")
+
+@app.delete("/api/tasks/{task_id}")
+def delete_task(task_id: str):
+    tasks = _load_tasks()
+    tasks = [t for t in tasks if t.get("id") != task_id]
+    _save_tasks(tasks)
+    return {"status": "deleted"}
 
 # ─── Routes: Journal (4 endpoints) ───────────────────────────────
 
@@ -2216,57 +1941,118 @@ def tools_kb():
         entries.append({"title": title, "category": f.parent.name, "path": str(f)})
     return {"entries": entries[:100]}
 
-# ─── Call Schedule Integration ───────────────────────────────────────
-# Faculty call schedules for Moses, Wakefield, Weiler (Jul-Dec 2026)
-# Source: Call Schedule Q3-Q4 2026.xlsx (canonical Excel in data/oncall_schedule.xlsx)
-# Parsed JSON: data/oncall_schedule.json (canonical)
-# Compat JSON: ~/.hermes/call_schedule_faculty.json (legacy schema for existing endpoints)
+# ─── Call Schedule Integration (Supabase - single source of truth) ───────
+# On-call schedule for Moses, Wakefield, Weiler.
+# Source: Supabase call_schedule table (populated from Excel, now canonical).
+# All platforms read from this same table.
 
-FACULTY_SCHEDULE_FILE = Path("/home/hermeswebui/.hermes/call_schedule_faculty.json")
-ONCALL_CANONICAL_FILE = BASE_DIR / "data" / "oncall_schedule.xlsx"
+import urllib.request
+import json
 
-def _load_faculty_schedule():
-    """Load the real faculty call schedule from parsed Drive data."""
-    if FACULTY_SCHEDULE_FILE.exists():
-        try:
-            return json.loads(FACULTY_SCHEDULE_FILE.read_text())
-        except:
-            return {"sheets": {}}
-    return {"sheets": {}}
+_SUPABASE_URL = "https://supabase.srv1738752.hstgr.cloud"
+_SUPABASE_KEY = ""
+_SUPABASE_KEY_PATH = Path("/root/projects/call-schedule-app/.supabase_key")
+if _SUPABASE_KEY_PATH.exists():
+    _SUPABASE_KEY = _SUPABASE_KEY_PATH.read_text().strip()
+if not _SUPABASE_KEY:
+    _SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
+def _supabase_select(path: str) -> list:
+    """Query PostgreSQL directly (self-hosted Supabase)."""
+    import psycopg2, os
+    try:
+        pw = os.environ.get("POSTGRES_PASSWORD", "")
+        if not pw:
+            ep = "/workspace/agentic-os/.env"
+            if os.path.exists(ep):
+                with open(ep) as ef:
+                    for line in ef:
+                        if line.startswith("POSTGRES_PASSWORD="):
+                            pw = line.split("=", 1)[1].strip()
+                            break
+        conn = psycopg2.connect(host="172.16.0.1", port=5432, user="postgres", password=pw, dbname="postgres")
+        cur = conn.cursor()
+        parts = path.split("?")
+        table = parts[0]
+        params = {}
+        if len(parts) > 1:
+            for p in parts[1].split("&"):
+                if "=" in p:
+                    k, v = p.split("=", 1)
+                    params[k] = v
+        select_cols = params.get("select", "*")
+        where = ""
+        order = ""
+        limit = ""
+        for k, v in params.items():
+            if k == "select":
+                continue
+            elif k == "order":
+                order = " ORDER BY " + v.replace(".asc", " ASC").replace(".desc", " DESC")
+            elif k == "limit":
+                limit = " LIMIT " + v
+            elif ".eq." in v:
+                where = f" WHERE {k} = '{v.split('.eq.')[1]}'"
+            elif ".gte." in v:
+                where = f" WHERE {k} >= '{v.split('.gte.')[1]}'"
+            elif ".lte." in v:
+                where = f" WHERE {k} <= '{v.split('.lte.')[1]}'"
+        sql = f"SELECT {select_cols} FROM {table}{where}{order}{limit}"
+        cur.execute(sql)
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return rows
+    except Exception:
+        return []
 def _get_oncall_for_date(target_date: str) -> list:
-    """Get all faculty on call for a given date across all 3 hospitals."""
-    data = _load_faculty_schedule()
+    """Get all on-call entries for a date across all 3 hospitals from Supabase."""
+    rows = _supabase_select(
+        f"call_schedule?select=hospital,date,day,primary_attending,backup_attending,peds_attending,chief_resident,first_call_resident,second_call_resident&date=eq.{target_date}&order=hospital.asc"
+    )
     result = []
-    for sheet_name, sheet in data.get("sheets", {}).items():
-        for entry in sheet.get("entries", []):
-            if entry["date"] == target_date:
-                result.append({
-                    "hospital": sheet.get("hospital", sheet_name),
-                    "date": entry["date"],
-                    "day": entry["day"],
-                    "primary_attending": entry["primary"],
-                    "backup_attending": entry["backup"],
-                    "peds_attending": entry["peds"],
-                })
-                break
+    for r in rows:
+        result.append({
+            "hospital": r.get("hospital"),
+            "date": r.get("date"),
+            "day": r.get("day"),
+            "primary_attending": r.get("primary_attending"),
+            "backup_attending": r.get("backup_attending"),
+            "peds_attending": r.get("peds_attending"),
+            "chief_resident": r.get("chief_resident"),
+            "first_call_resident": r.get("first_call_resident"),
+            "second_call_resident": r.get("second_call_resident"),
+        })
     return result
 
 def _get_oncall_for_week(week_start: str) -> list:
-    """Get faculty on call for a whole week starting Monday."""
+    """Get all on-call entries for a week starting Monday from Supabase."""
     from datetime import datetime, timedelta
     try:
         start = datetime.strptime(week_start, "%Y-%m-%d")
     except:
         return []
-    results = []
-    for day_offset in range(7):
-        day = start + timedelta(days=day_offset)
-        day_str = day.strftime("%Y-%m-%d")
-        entries = _get_oncall_for_date(day_str)
-        if entries:
-            results.extend(entries)
-    return results
+    end = start + timedelta(days=6)
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
+    rows = _supabase_select(
+        f"call_schedule?select=hospital,date,day,primary_attending,backup_attending,peds_attending,chief_resident,first_call_resident,second_call_resident&date=gte.{start_str}&date=lte.{end_str}&order=date.asc"
+    )
+    result = []
+    for r in rows:
+        result.append({
+            "hospital": r.get("hospital"),
+            "date": r.get("date"),
+            "day": r.get("day"),
+            "primary_attending": r.get("primary_attending"),
+            "backup_attending": r.get("backup_attending"),
+            "peds_attending": r.get("peds_attending"),
+            "chief_resident": r.get("chief_resident"),
+            "first_call_resident": r.get("first_call_resident"),
+            "second_call_resident": r.get("second_call_resident"),
+        })
+    return result
 
 @app.get("/api/oncall/now")
 def oncall_now():
@@ -2275,11 +2061,10 @@ def oncall_now():
     entries = _get_oncall_for_date(today)
     if entries:
         return {"oncall": entries, "date": today, "hospitals": list(set(e["hospital"] for e in entries))}
-    # Try to show a nearby date with data
-    data = _load_faculty_schedule()
-    if data.get("sheets"):
-        first_entry = data["sheets"][list(data["sheets"].keys())[0]]["entries"][0]
-        return {"oncall": [], "date": today, "message": f"Schedule starts {first_entry['date']}. No data for today.", "schedule_range": "Jul 1 - Dec 31, 2026"}
+    # Check if any data exists in Supabase
+    first = _supabase_select("call_schedule?select=date&order=date.asc&limit=1")
+    if first:
+        return {"oncall": [], "date": today, "message": f"Schedule starts {first[0]['date']}. No data for today.", "schedule_range": "Jul 1 - Jan 3, 2027"}
     return {"oncall": [], "date": today, "message": "No call schedule loaded"}
 
 @app.get("/api/oncall/date")
@@ -2298,23 +2083,31 @@ def oncall_by_week(start: str = Query(...)):
 
 @app.get("/api/oncall/schedule")
 def oncall_schedule():
-    """Full faculty schedule metadata."""
-    data = _load_faculty_schedule()
+    """Full on-call schedule metadata from Supabase."""
+    rows = _supabase_select("call_schedule?select=hospital,date,primary_attending&order=hospital.asc,date.asc")
+    hospitals_data = {}
+    for r in rows:
+        h = r.get("hospital")
+        if h not in hospitals_data:
+            hospitals_data[h] = {"dates": set(), "docs": set()}
+        hospitals_data[h]["dates"].add(r.get("date"))
+        if r.get("primary_attending") and r["primary_attending"] != "None":
+            hospitals_data[h]["docs"].add(r["primary_attending"])
+    
     hospitals = []
-    for name, sheet in data.get("sheets", {}).items():
-        if sheet.get("entries"):
-            primary_docs = set(e["primary"] for e in sheet["entries"] if e["primary"] and e["primary"] != "None")
-            hospitals.append({
-                "name": sheet.get("hospital", name),
-                "total_dates": len(sheet["entries"]),
-                "start_date": sheet["entries"][0]["date"],
-                "end_date": sheet["entries"][-1]["date"],
-                "unique_primary_attendings": sorted(primary_docs),
-            })
+    for name, data in hospitals_data.items():
+        dates = sorted(data["dates"])
+        hospitals.append({
+            "name": name,
+            "total_dates": len(dates),
+            "start_date": dates[0] if dates else None,
+            "end_date": dates[-1] if dates else None,
+            "unique_primary_attendings": sorted(data["docs"]),
+        })
     return {
         "hospitals": hospitals,
-        "schedule_file": str(FACULTY_SCHEDULE_FILE),
-        "loaded": len(data.get("sheets", {})) > 0,
+        "source": "supabase",
+        "loaded": len(rows) > 0,
     }
 
 @app.get("/api/oncall/search")
@@ -3091,7 +2884,8 @@ def morning_briefing():
                 {"day": "Mon", "event": "Grand Rounds — 7:00 AM"},
                 {"day": "Wed", "event": "Clinic Meeting — 12:00 PM"},
                 {"day": "Fri", "event": "GME Report Due"},
-            ]
+            ],
+            "cron_jobs": _get_cron_jobs_list()
         }
     except Exception as e:
         return {"error": str(e)}
@@ -3394,12 +3188,15 @@ def eval_dashboard():
 CALENDAR_DATA_FILE = BASE_DIR / "data" / "calendar_events.json"
 
 @app.get("/api/calendar/events")
-def calendar_events(days: int = Query(90, description="Number of days to look ahead")):
-    """Return calendar events pulled from Google Calendar."""
+def calendar_events(days: int = Query(90, description="Number of days to look ahead"), include_todos: bool = Query(False)):
+    """Return calendar events pulled from Google Calendar. Optionally include kanban todos."""
     from datetime import datetime, timezone, timedelta
     
     if not CALENDAR_DATA_FILE.exists():
-        return {"events": [], "source": "no_data"}
+        result = {"events": [], "source": "no_data"}
+        if include_todos:
+            result["todos"] = _get_todos()
+        return result
     
     data = json.loads(CALENDAR_DATA_FILE.read_text())
     now = datetime.now(TZ)
@@ -3421,7 +3218,76 @@ def calendar_events(days: int = Query(90, description="Number of days to look ah
         else:
             filtered.append(ev)
     
-    return {"events": sorted(filtered, key=lambda e: e.get("start", {}).get("date") or e.get("start", {}).get("dateTime", "")), "count": len(filtered), "total": len(events)}
+    result = {"events": sorted(filtered, key=lambda e: e.get("start", {}).get("date") or e.get("start", {}).get("dateTime", "")), "count": len(filtered), "total": len(events)}
+    if include_todos:
+        result["todos"] = _get_todos()
+    return result
+
+def _get_todos():
+    """Helper: return tasks from /workspace/task-list.json."""
+    try:
+        tf = BASE_DIR.parent / "task-list.json"
+        if tf.exists():
+            tasks = json.loads(tf.read_text())
+            # Return as flat array — frontend expects simple list
+            return tasks
+        return []
+    except Exception:
+        return []
+
+@app.get("/api/calendar/todos")
+def calendar_todos():
+    """Return tasks from task-list.json for the calendar todo panel."""
+    return _get_todos()
+
+@app.post("/api/calendar/todos")
+def calendar_todos_create(data: dict):
+    """Create a new task in task-list.json."""
+    import uuid as _uuid
+    tasks = _get_todos()
+    task = {
+        "id": data.get("id") or str(_uuid.uuid4())[:8],
+        "content": data.get("content", data.get("title", "")),
+        "status": data.get("status", "pending"),
+    }
+    tasks.append(task)
+    tf = BASE_DIR.parent / "task-list.json"
+    tf.write_text(json.dumps(tasks, indent=2))
+    return {"ok": True, "task": task}
+
+@app.post("/api/calendar/todos/{task_id}/complete")
+def calendar_todos_complete(task_id: str):
+    """Mark a task as completed."""
+    tasks = _get_todos()
+    for t in tasks:
+        if t.get("id") == task_id:
+            t["status"] = "completed"
+            tf = BASE_DIR.parent / "task-list.json"
+            tf.write_text(json.dumps(tasks, indent=2))
+            return {"ok": True}
+    raise HTTPException(404, "Task not found")
+
+@app.delete("/api/calendar/todos/{task_id}")
+def calendar_todos_delete(task_id: str):
+    """Delete a task from task-list.json."""
+    tasks = _get_todos()
+    tasks = [t for t in tasks if t.get("id") != task_id]
+    tf = BASE_DIR.parent / "task-list.json"
+    tf.write_text(json.dumps(tasks, indent=2))
+    return {"ok": True}
+
+@app.patch("/api/calendar/todos/{task_id}")
+def calendar_todos_patch(task_id: str, data: dict):
+    """Update a task's status or content."""
+    tasks = _get_todos()
+    for t in tasks:
+        if t.get("id") == task_id:
+            if "content" in data: t["content"] = data["content"]
+            if "status" in data: t["status"] = data["status"]
+            tf = BASE_DIR.parent / "task-list.json"
+            tf.write_text(json.dumps(tasks, indent=2))
+            return {"ok": True}
+    raise HTTPException(404, "Task not found")
 
 # ─── Staff Schedule (from canonical on-call source) ─────────────
 
@@ -3497,7 +3363,7 @@ def get_boot_errors():
 
 dashboard_dir = BASE_DIR / "dashboard"
 if dashboard_dir.exists():
-    app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir)), name="dashboard")
+    app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
 
 # OmniRoute standalone chat (no auth needed)
 chat_dir = BASE_DIR / "dashboard"
@@ -4068,6 +3934,123 @@ def vapi_data_health():
     return report
 
 # ─── Conference Events API (for one-click resend dashboard) ────────
+
+# ─── Routes: Conference Schedule (DB-backed) ───────────────────
+
+def _get_db_conn():
+    """Get a psycopg2 connection to the urology_qgenda database."""
+    import psycopg2
+    pw = os.environ.get("POSTGRES_PASSWORD", "")
+    if not pw:
+        import subprocess as _sp
+        r = _sp.run(['grep', 'POSTGRES_PASSWORD', '/workspace/projects/unified/app/.env'],
+            capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            pw = r.stdout.strip().split('=', 1)[1].strip()
+    try:
+        kwargs = dict(host="127.0.0.1", port=5432, dbname="urology_qgenda", user="postgres", connect_timeout=3)
+        if pw:
+            kwargs["password"] = pw
+        return psycopg2.connect(**kwargs)
+    except Exception:
+        return None
+
+
+@app.get("/api/conference/schedule")
+def get_conference_schedule():
+    """Return all grand rounds schedule rows from the database."""
+    try:
+        conn = _get_db_conn()
+        if not conn:
+            return {"error": "No DB password"}
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT id, month, mon_date::text, mon_topic, resident, attending,
+                   fri_date::text, gr_7_8, gr_8_9, notes
+            FROM grand_rounds_schedule
+            ORDER BY COALESCE(mon_date, fri_date)
+        ''')
+        rows = []
+        for r in cur.fetchall():
+            rows.append({
+                "id": r[0], "month": r[1], "mon_date": r[2], "mon_topic": r[3],
+                "resident": r[4], "attending": r[5], "fri_date": r[6],
+                "gr_7_8": r[7], "gr_8_9": r[8], "notes": r[9],
+            })
+        cur.close()
+        conn.close()
+        return {"rows": rows, "count": len(rows)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.put("/api/conference/schedule/{row_id}")
+async def update_conference_schedule(row_id: int, request: Request):
+    """Update a single schedule row in the database."""
+    try:
+        body = await request.json()
+        conn = _get_db_conn()
+        if not conn:
+            return {"error": "No DB password"}
+        cur = conn.cursor()
+        
+        # Build dynamic update from provided fields
+        allowed_fields = {"month", "mon_date", "mon_topic", "resident", "attending", "fri_date", "gr_7_8", "gr_8_9", "notes"}
+        updates = []
+        values = []
+        for field in allowed_fields:
+            if field in body:
+                val = body[field]
+                # Convert empty strings to None for date fields
+                if field in ("mon_date", "fri_date") and (not val or val == ""):
+                    val = None
+                updates.append(f"{field} = %s")
+                values.append(val)
+        
+        if not updates:
+            return {"error": "No fields to update"}
+        
+        updates.append("updated_at = NOW()")
+        values.append(row_id)
+        
+        cur.execute(
+            f"UPDATE grand_rounds_schedule SET {', '.join(updates)} WHERE id = %s",
+            values
+        )
+        conn.commit()
+        affected = cur.rowcount
+        cur.close()
+        conn.close()
+        
+        if affected == 0:
+            return {"error": f"Row {row_id} not found"}
+        return {"success": True, "id": row_id, "updated_fields": list(body.keys())}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/calendar-invites", response_class=HTMLResponse)
+async def calendar_invites_page(test: str = Query("true", description="Set to 'false' for live mode"), start_date: str = Query("", description="Override start date (YYYY-MM-DD), defaults to today")):
+    """Serve the Outlook calendar invites page — generated on-the-fly from the DB."""
+    from datetime import date as dt_date
+    import sys
+    sys.path.insert(0, str(BASE_DIR))
+    try:
+        import importlib
+        if "outlook_deeplink_generator" in sys.modules:
+            importlib.reload(sys.modules["outlook_deeplink_generator"])
+        import outlook_deeplink_generator as gen
+        test_mode = test.lower() not in ("false", "0", "no", "off")
+        today = start_date if start_date else dt_date.today().isoformat()
+        monday_events = gen.get_monday_events(start_date=today)
+        gr_events = gen.get_grand_rounds_events(start_date=today)
+        # Generate to file, then read it back
+        gen.generate_html_page(monday_events, gr_events, test_mode=test_mode, test_email="sfrasier@montefiore.org")
+        html_path = gen.OUTPUT_DIR / "invites.html"
+        return HTMLResponse(content=html_path.read_text())
+    except Exception as e:
+        return HTMLResponse(content=f"<html><body><h2>Error generating invites page</h2><pre>{e}</pre></body></html>", status_code=500)
+
 
 @app.get("/api/conference/events")
 def conference_events():

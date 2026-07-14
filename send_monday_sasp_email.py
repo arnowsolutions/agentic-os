@@ -49,7 +49,45 @@ def _load_prod_recipients():
 
 _resident_lookup = None
 
-# Nickname → first-name mapping for PDF shorthand names
+# Hardcoded map of all GR_DATA resident entries → "Dr. LastName" format.
+# Keys: both the old first names (backward compat) and current last names.
+# Values: final "Dr. LastName" string.
+_KNOWN_RESIDENT_NAMES = {
+    # Last names (current GR_DATA values)
+    "iskhakov": "Dr. Iskhakov",
+    "capellan": "Dr. Capellan",
+    "murota": "Dr. Murota",
+    "yim": "Dr. Yim",
+    "drobner": "Dr. Drobner",
+    "aibel": "Dr. Aibel",
+    "kim": "Dr. Kim",
+    "hordines": "Dr. Hordines",
+    "hill": "Dr. Hill",
+    # Multiple Patels — use first-initial disambiguation
+    "patel": "Dr. Patel",  # generic — caller uses specific name for disambiguation
+    "valpatel": "Dr. V. Patel",
+    "rutupatel": "Dr. R. Patel",
+    # "Pak" appears twice (Jen Pak and standalone) — same person
+    "pak": "Dr. Pak",
+    # Old first-name keys (backward compatibility if GR_DATA reverts)
+    "nate": "Dr. Iskhakov",
+    "nathaniel": "Dr. Iskhakov",
+    "jasmin": "Dr. Capellan",
+    "dinora": "Dr. Murota",
+    "val": "Dr. V. Patel",
+    "valmic": "Dr. V. Patel",
+    "sam": "Dr. Yim",
+    "samuel": "Dr. Yim",
+    "jake": "Dr. Drobner",
+    "kelli": "Dr. Aibel",
+    "rutul": "Dr. R. Patel",
+    "joe": "Dr. Kim",
+    "joseph": "Dr. Kim",
+    "jen": "Dr. Pak",
+    "jennifer": "Dr. Pak",
+}
+
+# Nickname → first-name mapping for PDF shorthand names (kept for backward compat)
 _RESIDENT_NICKNAMES = {
     "nate": "nathaniel",
     "sam": "samuel",
@@ -76,24 +114,30 @@ def _load_resident_lookup():
     return _resident_lookup
 
 def _resolve_resident(name):
-    """Given a resident name (first or last), return 'Dr. F. LastName' format.
-    Resolves nicknames (Nate→Nathaniel), looks up CRM, uses first initial for
-    disambiguation when multiple residents share a last name (e.g. Patel, Kim)."""
-    if not name:
+    """Given a resident name (first or last), return 'Dr. LastName' format.
+    Resolution order: 1) Hardcoded KNOWN_RESIDENT_NAMES map (most reliable)
+    2) CRM lookup (when PG is up) 3) Fallback: 'Dr. {name}' for last names."""
+    if not name or name.strip().lower() in ("n/a", ":(", "?"):
         return ""
-    lookup = _load_resident_lookup()
     clean = name.strip().lower()
-    # Try nickname → full first name first
+
+    # 1) Hardcoded map — always works, even when CRM is down
+    result = _KNOWN_RESIDENT_NAMES.get(clean)
+    if result:
+        return result
+
+    # 2) Try nickname → first name → CRM lookup (backward compat)
+    lookup = _load_resident_lookup()
     resolved_fn = _RESIDENT_NICKNAMES.get(clean, clean)
     ln = lookup.get(resolved_fn, "")
     if ln:
-        # Check if this last name appears for multiple residents → use first initial
         dupes = sum(1 for v in lookup.values() if v.lower() == ln.lower())
         if dupes > 1:
             initial = resolved_fn[0].upper()
             return f"Dr. {initial}. {ln}"
         return f"Dr. {ln}"
-    # Name might already be a last name (e.g. 'Hordines', 'Hill', 'Pak')
+
+    # 3) Name is already a last name (Hordines, Hill, Pak, new additions)
     return f"Dr. {name.strip()}"
 
 _faculty_lookup = None

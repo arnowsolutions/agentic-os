@@ -1,0 +1,648 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ce:full — Agentic OS — 2026-07-11</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0f1a; --bg-card: #1a1a2e; --bg-card-hover: #22223e; --border: #2a2a44;
+  --text: #e2e2f0; --text-bright: #f8f8ff; --text-muted: #9999bb;
+  --accent: #6c6cf0; --accent-hover: #8a8aff;
+  --p0: #f87171; --p0-bg: rgba(248,113,113,0.12);
+  --p1: #fb923c; --p1-bg: rgba(251,146,60,0.12);
+  --p2: #fbbf24; --p2-bg: rgba(251,191,36,0.12);
+  --p3: #60a5fa; --p3-bg: rgba(96,165,250,0.12);
+  --green: #34d399; --green-bg: rgba(52,211,153,0.12);
+  --score-1: #f87171; --score-3: #fb923c; --score-5: #fbbf24; --score-7: #34d399; --score-9: #60a5fa;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 1rem; line-height: 1.7; }
+code, pre { font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; }
+
+.menu-toggle { display:none; position: fixed; top: 14px; left: 14px; z-index: 1001; background: var(--bg-card); border:1px solid var(--border); color: var(--text-bright); padding: 10px 14px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+nav {
+  position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
+  background: var(--bg-card); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: 24px 16px; gap: 2px;
+  z-index: 1000; overflow-y: auto; overflow-x: hidden;
+}
+nav::-webkit-scrollbar { width: 4px; }
+nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+nav .nav-title { font-weight: 700; color: var(--text-bright); font-size: 17px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); white-space: normal; line-height: 1.3; }
+nav a { color: var(--text-muted); text-decoration: none; font-size: 14px; padding: 8px 14px; border-radius: 7px; transition: all .15s; display: block; }
+nav a:hover { color: var(--text-bright); background: var(--bg-card-hover); }
+nav a.active { color: var(--accent); background: var(--bg-card-hover); }
+nav .nav-score { margin-top: auto; background: var(--p2); color: #000; padding: 8px 16px; border-radius: 22px; font-weight: 700; font-size: 15px; text-align: center; margin-bottom: 8px; }
+
+.container { max-width: 1100px; margin: 0 auto; margin-left: var(--sidebar-w); padding: 36px 32px; }
+
+.hero { text-align: center; margin-bottom: 40px; }
+.hero h1 { font-size: 34px; color: var(--text-bright); margin-bottom: 8px; }
+.hero .subtitle { color: var(--text-muted); font-size: 18px; }
+.hero .meta { display: flex; justify-content: center; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+.hero .meta-item { background: var(--bg-card); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; font-size: 14px; }
+.hero .meta-item strong { color: var(--text-bright); }
+
+.score-ring { width: 160px; height: 160px; margin: 0 auto 16px; position: relative; }
+.score-ring svg { transform: rotate(-90deg); }
+.score-ring .ring-bg { fill: none; stroke: var(--border); stroke-width: 9; }
+.score-ring .ring-fg { fill: none; stroke-width: 9; stroke-linecap: round; }
+.score-ring .score-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.score-ring .score-num { font-size: 44px; font-weight: 800; color: var(--text-bright); }
+.score-ring .score-label { font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+.scorecard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 32px; }
+.scorecard { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 14px; text-align: center; }
+.scorecard .score { font-size: 36px; font-weight: 800; }
+.scorecard .score .total { font-size: 17px; color: var(--text-muted); font-weight: 400; }
+.scorecard .label { font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+.scorecard .issue { font-size: 13px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+.score-1 { color: var(--score-1); } .score-3 { color: var(--score-3); } .score-5 { color: var(--score-5); }
+.score-7 { color: var(--score-7); } .score-9 { color: var(--score-9); }
+
+.finding-bar { display: flex; gap: 12px; margin-bottom: 40px; flex-wrap: wrap; justify-content: center; }
+.finding-pill { padding: 10px 20px; border-radius: 24px; font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.finding-pill .count { font-size: 20px; }
+.pill-p0 { background: var(--p0-bg); color: var(--p0); border: 1px solid var(--p0); }
+.pill-p1 { background: var(--p1-bg); color: var(--p1); border: 1px solid var(--p1); }
+.pill-p2 { background: var(--p2-bg); color: var(--p2); border: 1px solid var(--p2); }
+.pill-p3 { background: var(--p3-bg); color: var(--p3); border: 1px solid var(--p3); }
+
+section { margin-bottom: 48px; }
+section h2 { font-size: 24px; color: var(--text-bright); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+section h2 .badge { font-size: 14px; padding: 4px 12px; border-radius: 12px; font-weight: 600; }
+section h3 { font-size: 19px; color: var(--text-bright); margin: 20px 0 10px; }
+section h4 { font-size: 16px; color: var(--text-bright); margin: 14px 0 6px; }
+section p { font-size: 15px; line-height: 1.7; }
+
+.p0-card { background: var(--p0-bg); border: 1px solid var(--p0); border-radius: 12px; padding: 20px 24px; margin-bottom: 14px; }
+.p0-card .p0-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.p0-card .p0-id { background: var(--p0); color: #fff; padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 14px; }
+.p0-card h3 { color: var(--text-bright); font-size: 18px; margin: 0; }
+.p0-card .p0-meta { display: flex; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; font-size: 14px; color: var(--text-muted); }
+.p0-card .p0-meta code { background: var(--bg); padding: 2px 7px; border-radius: 4px; color: var(--accent); font-size: 13px; }
+.p0-card .p0-impact { font-size: 15px; margin-bottom: 8px; line-height: 1.6; }
+.p0-card .p0-fix { color: var(--green); font-size: 14px; padding-top: 10px; border-top: 1px solid rgba(248,113,113,0.25); line-height: 1.6; }
+
+.p1-card { background: var(--p1-bg); border: 1px solid var(--p1); border-radius: 10px; padding: 16px 20px; margin-bottom: 10px; }
+.p1-card h4 { color: var(--text-bright); font-size: 16px; margin-bottom: 4px; }
+.p1-card .p1-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 6px; }
+.p1-card .p1-meta code { background: var(--bg); padding: 2px 6px; border-radius: 4px; color: var(--accent); font-size: 13px; }
+.p1-card p { font-size: 14px; margin: 0; line-height: 1.6; }
+
+.finding-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+.finding-table th { background: var(--bg-card-hover); padding: 12px 16px; text-align: left; font-size: 14px; text-transform: uppercase; color: var(--text-muted); letter-spacing: .4px; border-bottom: 1px solid var(--border); }
+.finding-table td { padding: 12px 16px; font-size: 15px; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+.finding-table tr:last-child td { border-bottom: none; }
+.finding-table tr:hover { background: var(--bg-card-hover); }
+.finding-table code { background: var(--bg); padding: 2px 6px; border-radius: 4px; color: var(--accent); font-size: 14px; }
+
+.sev { padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 13px; }
+.sev-p0 { background: var(--p0-bg); color: var(--p0); } .sev-p1 { background: var(--p1-bg); color: var(--p1); }
+.sev-p2 { background: var(--p2-bg); color: var(--p2); } .sev-p3 { background: var(--p3-bg); color: var(--p3); }
+
+.quick-win { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; font-size: 15px; }
+.quick-win .qw-time { background: var(--green-bg); color: var(--green); padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 13px; white-space: nowrap; }
+.quick-win code { background: var(--bg); padding: 2px 6px; border-radius: 4px; color: var(--accent); font-size: 14px; }
+
+.rec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.rec-card { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; padding: 16px 20px; }
+.rec-card h4 { color: var(--text-bright); font-size: 16px; margin-bottom: 4px; }
+.rec-card p { font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.6; }
+.rec-card p code { background: var(--bg); padding: 2px 5px; border-radius: 3px; color: var(--accent); font-size: 13px; }
+
+.roadmap-list { list-style: none; }
+.roadmap-list li { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 15px; line-height: 1.6; }
+.roadmap-list li:last-child { border-bottom: none; }
+.roadmap-list li strong { color: var(--accent); }
+
+.phase-header { background: var(--bg-card); border: 1px solid var(--accent); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 18px; margin-bottom: 16px; }
+.phase-header .phase-label { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); margin-bottom: 3px; }
+.phase-header .phase-desc { font-size: 15px; color: var(--text-muted); }
+
+footer { text-align: center; padding: 32px; color: var(--text-muted); font-size: 14px; border-top: 1px solid var(--border); margin-top: 24px; }
+a { color: var(--accent); }
+
+@media (max-width: 768px) {
+  .menu-toggle { display: block; }
+  nav { transform: translateX(-100%); transition: transform .3s ease; width: 260px; }
+  nav.open { transform: translateX(0); box-shadow: 4px 0 30px rgba(0,0,0,0.5); }
+  .container { margin-left: 0; padding: 60px 16px 24px; }
+  .hero h1 { font-size: 24px; }
+  .scorecard-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style></head><body>
+
+<button class="menu-toggle" onclick="document.querySelector('nav').classList.toggle('open')">☰ Menu</button>
+<nav>
+  <span class="nav-title">ce:full — Agentic OS</span>
+  <a href="#scorecard">Scorecard</a>
+  <a href="#p0">P0 Critical</a>
+  <a href="#p1">P1 High</a>
+  <a href="#p2">P2 Medium</a>
+  <a href="#p3">P3 Low</a>
+  <a href="#quick-wins">Quick Wins</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#code-review">Code Review</a>
+  <a href="#design">Design</a>
+  <a href="#design-strategy">Strategy</a>
+  <a href="#integrity">Integrity</a>
+  <a href="#production">Production</a>
+  <a href="#deps">Deps</a>
+  <a href="#tests">Tests</a>
+  <a href="#docs">Docs</a>
+  <a href="#ts">JS Quality</a>
+  <a href="#api">API</a>
+  <a href="#mobile">Mobile</a>
+  <a href="#bundle">Bundle</a>
+  <a href="#roadmap">Roadmap</a>
+  <a href="#backlog">Backlog</a>
+  <a href="#recs">Recs</a>
+  <span class="nav-score">5.1/10</span>
+</nav>
+<div class="container">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="score-ring">
+    <svg width="160" height="160" viewBox="0 0 130 130">
+      <circle class="ring-bg" cx="65" cy="65" r="56"/>
+      <circle class="ring-fg" cx="65" cy="65" r="56" stroke-dasharray="351.86" stroke-dashoffset="172.4" stroke="var(--p2)"/>
+    </svg>
+    <div class="score-text"><div class="score-num">5.1</div><div class="score-label">Health</div></div>
+  </div>
+  <h1>Agentic OS</h1>
+  <p class="subtitle">Multi-Agent Orchestration Dashboard — FastAPI + Vanilla JS SPA</p>
+  <div class="meta">
+    <div class="meta-item">📅 <strong>2026-07-11</strong></div>
+    <div class="meta-item">📁 <strong>88 .py</strong> / <strong>73 .js</strong> / <strong>70 pages</strong></div>
+    <div class="meta-item">🚀 <strong>Live</strong> at os.srv1738752.hstgr.cloud</div>
+    <div class="meta-item">🔬 <strong>50+</strong> endpoints</div>
+    <div class="meta-item">📈 <strong>Baseline</strong> (first ce:full run)</div>
+  </div>
+  <p style="color:var(--text-muted);margin-top:12px;font-size:14px;">Commit <code>28612a8</code> · modimihir07/agentic-os · MIT License</p>
+</div>
+
+<!-- SCORECARD -->
+<section id="scorecard"><h2>📊 Health Scorecard <span class="badge" style="background:var(--p2-bg);color:var(--p2);">5.1/10</span></h2>
+<div class="scorecard-grid">
+<div class="scorecard"><div class="score score-7">6.0<span class="total">/10</span></div><div class="label">Architecture</div><div class="issue">Monolith with good extraction discipline</div></div>
+<div class="scorecard"><div class="score score-7">6.5<span class="total">/10</span></div><div class="label">Correctness</div><div class="issue">Works, needs input validation</div></div>
+<div class="scorecard"><div class="score score-5">5.5<span class="total">/10</span></div><div class="label">Design/UX</div><div class="issue">Clean but unpolished; no mobile</div></div>
+<div class="scorecard"><div class="score score-5">5.0<span class="total">/10</span></div><div class="label">Security</div><div class="issue">Acceptable for internal tool</div></div>
+<div class="scorecard"><div class="score score-1">0.5<span class="total">/10</span></div><div class="label">Testing</div><div class="issue">Zero test coverage</div></div>
+<div class="scorecard"><div class="score score-3">3.5<span class="total">/10</span></div><div class="label">Operations</div><div class="issue">Dev-stage deployment</div></div>
+<div class="scorecard"><div class="score score-3">4.5<span class="total">/10</span></div><div class="label">Documentation</div><div class="issue">AGENTS.md excellent, API bare</div></div>
+<div class="scorecard"><div class="score score-3">4.5<span class="total">/10</span></div><div class="label">Conversion/Strategy</div><div class="issue">Right pages, missing UX flows</div></div>
+</div>
+<div class="finding-bar">
+<div class="finding-pill pill-p0"><span class="count">3</span> P0</div>
+<div class="finding-pill pill-p1"><span class="count">4</span> P1</div>
+<div class="finding-pill pill-p2"><span class="count">5</span> P2</div>
+<div class="finding-pill pill-p3"><span class="count">4</span> P3</div>
+</div>
+<div style="text-align:center;color:var(--text-muted);font-size:15px;margin-bottom:16px;">
+<strong style="color:var(--text-bright);">The good:</strong> Works in production, solves real problems, 70-page dashboard covers impressive breadth.<br>
+<strong style="color:var(--text-bright);">The bad:</strong> Built like a prototype — zero tests, no mobile, JSON file database, bus factor 1.
+</div></section>
+
+<!-- P0 -->
+<section id="p0"><h2>🔴 P0 — Critical <span class="badge" style="background:var(--p0);color:#fff;">3</span></h2>
+
+<div class="p0-card">
+  <div class="p0-header"><span class="p0-id">P0-1</span><h3>Zero Test Coverage</h3></div>
+  <div class="p0-meta"><span>Severity: Critical</span><code>entire codebase</code><span>88 .py + 73 .js files</span></div>
+  <div class="p0-impact">No pytest, no Jest, no integration tests. Two scaffold test files with no assertions. Any change — even a simple refactor — risks production regression with no safety net.</div>
+  <div class="p0-fix"><strong>Fix:</strong> Add 10 pytest smoke tests covering auth middleware, CRM CRUD, cost tracker calculations, agent routing, and selftest endpoint. ~2 hours. <code>test_auth.py</code>, <code>test_cost_tracker.py</code>, <code>test_crm.py</code></div>
+</div>
+
+<div class="p0-card">
+  <div class="p0-header"><span class="p0-id">P0-2</span><h3>No Data Integrity Guarantees</h3></div>
+  <div class="p0-meta"><span>Severity: Critical</span><code>127 JSON files</code><span>No transactions, no backups</span></div>
+  <div class="p0-impact">All data lives in JSON files. Concurrent writes can corrupt data. No schema enforcement — any endpoint can write any shape. No foreign key enforcement — EZ IDs in eval forms may not exist in CRM. No automated backups. One corrupted write = potential data loss.</div>
+  <div class="p0-fix"><strong>Fix:</strong> Add atomic writes (write to temp → rename) to CRM save. Set up daily backup cron job. ~1 hour.</div>
+</div>
+
+<div class="p0-card">
+  <div class="p0-header"><span class="p0-id">P0-3</span><h3>No Production Operations</h3></div>
+  <div class="p0-meta"><span>Severity: Critical</span><code>deployment</code><span>No supervisor, monitoring, or alerting</span></div>
+  <div class="p0-impact">Server runs via manual <code>nohup python3 server.py</code>. No systemd, no Docker restart policy, no process supervisor. Server crash = manual SSH restart. No staging environment — all changes deploy directly to production. No CI/CD.</div>
+  <div class="p0-fix"><strong>Fix:</strong> Add systemd unit or Docker restart policy. Configure health check for Traefik. ~1 hour.</div>
+</div>
+</section>
+
+<!-- P1 -->
+<section id="p1"><h2>🟠 P1 — High Impact <span class="badge" style="background:var(--p1);color:#000;">4</span></h2>
+
+<div class="p1-card"><h4>No Mobile Support</h4><div class="p1-meta"><code>styles.css</code> · 70% of users are residents on phones</div><p>Zero <code>@media</code> queries. Sidebar consumes 70% of a 375px screen. No hamburger menu. Fixed font sizes. Tables overflow without scroll. The fix is ~50 lines of CSS.</p></div>
+
+<div class="p1-card"><h4>No Type Safety</h4><div class="p1-meta"><code>73 .js files</code> · Zero TypeScript, JSDoc, or PropTypes</div><p>Renaming a field requires manual grep across 70 page files. IDE provides no autocomplete. A linter and JSDoc types would be high-ROI.</p></div>
+
+<div class="p1-card"><h4>No Input Validation on Most Endpoints</h4><div class="p1-meta"><code>server.py</code> · Custom routes accept raw dicts</div><p>Routes like quick-action and PDF generation accept generic <code>data: dict</code> without Pydantic validation. Malformed input can cause 500 errors or data corruption.</p></div>
+
+<div class="p1-card"><h4>No Rate Limiting on Login</h4><div class="p1-meta"><code>modules/auth.py</code> · 5-attempt lockout but no IP throttling</div><p>Brute-force across different accounts is possible. No per-IP rate limiting.</p></div>
+</section>
+
+<!-- P2 -->
+<section id="p2"><h2>🟡 P2 — Medium <span class="badge" style="background:var(--p2);color:#000;">5</span></h2>
+<table class="finding-table">
+<tr><th style="width:60px">Sev</th><th>Finding</th><th>File</th></tr>
+<tr><td><span class="sev sev-p2">P2</span></td><td>Debug print left in production middleware</td><td><code>server.py:60</code></td></tr>
+<tr><td><span class="sev sev-p2">P2</span></td><td>Unused imports (httpx, asyncio)</td><td><code>server.py</code></td></tr>
+<tr><td><span class="sev sev-p2">P2</span></td><td>Redundant /metrics endpoint without auth</td><td><code>server.py</code></td></tr>
+<tr><td><span class="sev sev-p2">P2</span></td><td>No request logging beyond Prometheus middleware</td><td><code>server.py</code></td></tr>
+<tr><td><span class="sev sev-p2">P2</span></td><td>innerHTML XSS risk — <code>escapeHtml()</code> usage inconsistent</td><td><code>dashboard/pages/*.js</code></td></tr>
+</table>
+</section>
+
+<!-- P3 -->
+<section id="p3"><h2>🔵 P3 — Low <span class="badge" style="background:var(--p3);color:#fff;">4</span></h2>
+<table class="finding-table">
+<tr><th style="width:60px">Sev</th><th>Finding</th><th>File</th></tr>
+<tr><td><span class="sev sev-p3">P3</span></td><td>Missing docstrings on 90% of route handlers</td><td><code>server.py</code></td></tr>
+<tr><td><span class="sev sev-p3">P3</span></td><td>Duplicate <code>BASE_DIR</code> assignment (lines 106 + 181)</td><td><code>server.py</code></td></tr>
+<tr><td><span class="sev sev-p3">P3</span></td><td>Inconsistent error response format (error vs detail)</td><td><code>server.py</code></td></tr>
+<tr><td><span class="sev sev-p3">P3</span></td><td>No .gitignore entry for <code>.env</code></td><td><code>.gitignore</code></td></tr>
+</table>
+</section>
+
+<!-- QUICK WINS -->
+<section id="quick-wins"><h2>⚡ Quick Wins <span class="badge" style="background:var(--green-bg);color:var(--green);">&lt; 30 min</span></h2>
+<div class="quick-win"><span class="qw-time">1 min</span> Remove debug print in middleware <code>server.py:60</code></div>
+<div class="quick-win"><span class="qw-time">1 min</span> Add <code>.env</code> to <code>.gitignore</code></div>
+<div class="quick-win"><span class="qw-time">1 min</span> Remove duplicate <code>BASE_DIR</code> assignment <code>server.py:181</code></div>
+<div class="quick-win"><span class="qw-time">5 min</span> Add <code>SameSite=Strict</code> to session cookie in <code>auth.py</code></div>
+<div class="quick-win"><span class="qw-time">5 min</span> Consolidate .env loading — keep <code>config.py</code> version only</div>
+<div class="quick-win"><span class="qw-time">3 min</span> Add <code>"use strict"</code> to <code>api.js</code>, <code>utils.js</code>, <code>app.js</code></div>
+<div class="quick-win"><span class="qw-time">15 min</span> Add single <code>@media (max-width: 768px)</code> breakpoint to <code>styles.css</code></div>
+<div class="quick-win"><span class="qw-time">15 min</span> Add atomic write to CRM save in <code>modules/crm.py</code></div>
+<div class="quick-win"><span class="qw-time">10 min</span> Store EZ ID in localStorage for Resident Portal <code>pages/user.js</code></div>
+<div class="quick-win"><span class="qw-time">10 min</span> Add confirmation dialog to email resend <code>pages/conference-email.js</code></div>
+<div class="quick-win"><span class="qw-time">10 min</span> Add timeout to <code>fetch()</code> calls (10s default) in <code>api.js</code></div>
+<div class="quick-win"><span class="qw-time">15 min</span> Add JSDoc types to <code>api.js</code> functions</div>
+<div class="quick-win"><span class="qw-time">20 min</span> Add "Recently Visited" to sidebar <code>app.js</code> + <code>utils.js</code></div>
+<div class="quick-win"><span class="qw-time">20 min</span> Add hamburger menu toggle for mobile <code>index.html</code> + <code>app.js</code></div>
+<div class="quick-win"><span class="qw-time">20 min</span> Add <code>try/catch</code> to <code>fetch()</code> calls missing error handling (~10 pages)</div>
+<p style="margin-top:12px;color:var(--green);font-weight:600;">Total: ~2.5 hours for 15 high-impact fixes</p>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="phase-header"><div class="phase-label">Phase 6.2 · Block A</div><div class="phase-desc">Architecture Review — <code>02-architecture.md</code></div></div>
+  <h2>🏗️ Architecture <span class="badge" style="background:var(--score-7);color:#000;">6.0/10</span></h2>
+  <p><strong>Pattern:</strong> Monolithic FastAPI backend with module extraction in progress. Vanilla JS SPA frontend with hash routing. ~40% extracted — 8 modules pulled out, ~60% of server.py still monolithic.</p>
+  <h3>Strengths</h3>
+  <ul class="roadmap-list">
+    <li>✅ Clean module extraction pattern — APIRouter + helpers, well-isolated</li>
+    <li>✅ Auth middleware is solid — allowlist, session management, rate limiting</li>
+    <li>✅ No-framework frontend — zero build step, fast iteration</li>
+    <li>✅ CSS variable theming — dark/light mode with clean names</li>
+    <li>✅ NAV_CONFIG-driven sidebar — single source of truth for 70+ nav items</li>
+  </ul>
+  <h3>Gaps</h3>
+  <ul class="roadmap-list">
+    <li>❌ server.py still 3,400+ lines — ~60% of routes not yet extracted</li>
+    <li>❌ No TypeScript — 73 JS files with zero type safety</li>
+    <li>❌ No component reuse — each page duplicates header/table/filter patterns</li>
+    <li>❌ JSON file database — no migrations, concurrency, or querying</li>
+    <li>❌ No API versioning — all routes at <code>/api/</code>, no <code>/api/v1/</code></li>
+  </ul>
+</section>
+
+<!-- CODE REVIEW -->
+<section id="code-review">
+  <div class="phase-header"><div class="phase-label">Phase 6.3 · Block A</div><div class="phase-desc">Standard Code Review — <code>03-standard-review.md</code></div></div>
+  <h2>🔍 Code Review <span class="badge" style="background:var(--score-7);color:#000;">6.5/10</span></h2>
+  <p>Code is generally clean but lacks guardrails. No linter, no formatter, inconsistent patterns across 70 page files. The module-extracted code (crm, auth, cost_tracker) is significantly higher quality than the monolithic server.py routes.</p>
+  <table class="finding-table">
+    <tr><th>Area</th><th>Quality</th><th>Notes</th></tr>
+    <tr><td>Module code</td><td>⭐⭐⭐⭐</td><td>crm.py, auth.py, cost_tracker.py — well-structured, documented</td></tr>
+    <tr><td>server.py routes</td><td>⭐⭐</td><td>Flat decorators, no grouping, inconsistent error handling</td></tr>
+    <tr><td>Dashboard pages</td><td>⭐⭐</td><td>Template strings, no components, inconsistent error handling</td></tr>
+    <tr><td>Shared JS (api, utils, app)</td><td>⭐⭐⭐</td><td>Well-commented router, clean API client, centralized utils</td></tr>
+    <tr><td>CSS</td><td>⭐⭐</td><td>Good variables, no methodology, single monolithic file</td></tr>
+  </table>
+</section>
+
+<!-- DESIGN -->
+<section id="design">
+  <div class="phase-header"><div class="phase-label">Phase 6.4 + 6.10a · Block A + B</div><div class="phase-desc">Design + Design Quality — <code>04a-after-design.md</code> + <code>10a-design-quality.md</code></div></div>
+  <h2>🎨 Design <span class="badge" style="background:var(--score-5);color:#000;">5.5/10</span></h2>
+  <p>A competent dark-themed dashboard (purple accent <code>#6c5ce7</code>, Inter font, CSS variables for dark/light mode). Clean and functional but lacks production polish — spacing inconsistency, no typographic hierarchy, spinner-only loading states, zero micro-interactions.</p>
+  <h3>Typography</h3>
+  <table class="finding-table">
+    <tr><th>Aspect</th><th>Rating</th><th>Notes</th></tr>
+    <tr><td>Font choice</td><td>⭐⭐⭐⭐</td><td>Inter + JetBrains Mono — excellent pairing</td></tr>
+    <tr><td>Type scale</td><td>⭐⭐</td><td>12-18px range only. No heading hierarchy. Missing display sizes.</td></tr>
+    <tr><td>Readability</td><td>⭐⭐⭐</td><td>OK at 15px on desktop. Too small for mobile.</td></tr>
+  </table>
+  <h3>Interaction</h3>
+  <table class="finding-table">
+    <tr><th>Aspect</th><th>Rating</th><th>Notes</th></tr>
+    <tr><td>Transitions</td><td>⭐⭐⭐</td><td>Smooth sidebar collapse, card hover states</td></tr>
+    <tr><td>Loading states</td><td>⭐⭐</td><td>Spinner only. No skeletons, no progress indicators</td></tr>
+    <tr><td>Micro-interactions</td><td>⭐</td><td>No button press feedback, no page transitions, no hover effects</td></tr>
+  </table>
+  <h3>Best Practices</h3>
+  <div class="rec-grid">
+    <div class="rec-card"><h4>Add spacing scale</h4><p>Define 4-6 token values (xs/sm/md/lg/xl) and use consistently. Currently 8/10/12/14/16/20/24/32/40px used arbitrarily.</p></div>
+    <div class="rec-card"><h4>Add loading skeletons</h4><p>Replace spinners with content-shaped skeletons for perceived performance. 3 shapes needed: text line, card, table row.</p></div>
+    <div class="rec-card"><h4>Add page transitions</h4><p>Simple fade or slide transition between pages. Currently a jarring instant replace.</p></div>
+  </div>
+</section>
+
+<!-- DESIGN STRATEGY -->
+<section id="design-strategy">
+  <div class="phase-header"><div class="phase-label">Phase 6.10b · Block B</div><div class="phase-desc">Design Strategy & Conversion — <code>10b-design-strategy.md</code></div></div>
+  <h2>🎯 Design Strategy <span class="badge" style="background:var(--accent);color:#fff;">Conversion</span></h2>
+  <p style="color:var(--text-muted);margin-bottom:14px;">Industry: <strong style="color:var(--text-bright);">Healthcare Operations</strong> · "Conversion" = time-to-task completion + user adoption across residents, faculty, and managers.</p>
+
+  <h3>📊 User Personas & Primary Goals</h3>
+  <table class="finding-table">
+    <tr><th>Persona</th><th>Primary Goal</th><th>Key Pages</th></tr>
+    <tr><td><strong>Resident</strong></td><td>Check schedule, submit evals, view GME balance</td><td>User Portal, Eval Portal, GME Detail, On-call</td></tr>
+    <tr><td><strong>Faculty/Attending</strong></td><td>View call schedule, complete evals</td><td>Staff Schedule, Eval Portal, Calendar</td></tr>
+    <tr><td><strong>Program Manager</strong></td><td>Send emails, manage contacts, monitor ops</td><td>Conference Email, CRM, Email Groups, Morning Briefing</td></tr>
+    <tr><td><strong>Admin/Developer</strong></td><td>Monitor system, run skills, manage agents</td><td>Dashboard, System Overview, Skills, Chat</td></tr>
+  </table>
+
+  <h3>🔄 Conversion Bottlenecks</h3>
+  <table class="finding-table">
+    <tr><th>Bottleneck</th><th>Impact</th><th>Priority</th><th>Recommended Approach</th></tr>
+    <tr><td>Resident Portal requires EZ ID + PIN every visit</td><td>High — residents won't use it</td><td><span class="sev sev-p0">P0</span></td><td>Store EZ ID in localStorage; "Remember me" checkbox</td></tr>
+    <tr><td>One-click email has no confirmation dialog</td><td>High — risk of mass mis-send</td><td><span class="sev sev-p0">P0</span></td><td>"Send to 88 recipients?" confirmation with count</td></tr>
+    <tr><td>70+ sidebar items — cognitive overload</td><td>Medium — hard to find pages</td><td><span class="sev sev-p1">P1</span></td><td>"Recently Visited" + favorites in sidebar</td></tr>
+    <tr><td>No in-app notifications</td><td>Medium — missed eval deadlines</td><td><span class="sev sev-p1">P1</span></td><td>Notification bell with unread count badge</td></tr>
+    <tr><td>No mobile support</td><td>High — 70% of users on phones</td><td><span class="sev sev-p0">P0</span></td><td>Hamburger menu + single-column layout at 768px</td></tr>
+  </table>
+
+  <h3>🏆 Benchmark (Internal Tools)</h3>
+  <table class="finding-table">
+    <tr><th>Dimension</th><th>Current State</th><th>Best Practice</th><th>Gap</th></tr>
+    <tr><td>Mobile access</td><td>None</td><td>Responsive or PWA</td><td>🔴 Critical</td></tr>
+    <tr><td>Search/discoverability</td><td>Page name search only</td><td>Full-text + recent + favorites</td><td>🟠 Large</td></tr>
+    <tr><td>Notification system</td><td>Toast only (ephemeral)</td><td>Persistent notification center</td><td>🟠 Large</td></tr>
+    <tr><td>Role-based UX</td><td>Same sidebar for all</td><td>Role-based landing + sidebar</td><td>🟡 Medium</td></tr>
+  </table>
+
+  <h3>📈 Strategy Score</h3>
+  <div class="scorecard" style="max-width:300px;margin:0 auto;">
+    <div class="score score-3">4.5<span class="total">/10</span> → <span class="score-7">7.0</span><span class="total">/10</span></div>
+    <div class="label">Current → Target</div>
+    <div class="issue">Top 3 levers: mobile support, remember-me, confirmation dialogs</div>
+  </div>
+</section>
+
+<!-- INTEGRITY -->
+<section id="integrity">
+  <div class="phase-header"><div class="phase-label">Phase 6.4 + 6.8a · Block A + B</div><div class="phase-desc">Integrity + Data Integrity — <code>04b-after-integrity.md</code> + <code>08a-data-integrity.md</code></div></div>
+  <h2>🛡️ Integrity <span class="badge" style="background:var(--score-3);color:#fff;">4.0/10</span></h2>
+  <table class="finding-table">
+    <tr><th>Data Store</th><th>Risk</th><th>Status</th></tr>
+    <tr><td><code>crm_contacts.json</code></td><td>Concurrent writes, no schema, no backups</td><td>⚠️ High risk</td></tr>
+    <tr><td><code>user_pins.json</code></td><td>Default PINs from phone numbers (predictable)</td><td>⚠️ Weak PIN generation</td></tr>
+    <tr><td><code>sessions.json</code></td><td>All sessions in plain JSON — file read = full compromise</td><td>⚠️ Inherent risk</td></tr>
+    <tr><td><code>cost-history.json</code></td><td>Single-writer pattern enforced — atomic writes</td><td>✅ Well-managed</td></tr>
+    <tr><td><code>eval_forms.json</code></td><td>Growing file, no archiving, no size limits</td><td>⚠️ No archival strategy</td></tr>
+    <tr><td><code>email_groups.json</code></td><td>No email validation — typos = silent delivery failures</td><td>⚠️ Validation missing</td></tr>
+    <tr><td>Calendar/GR_DATA</td><td>Two sources of truth (JSON + in-JS canonical)</td><td>⚠️ Drift risk</td></tr>
+  </table>
+  <p style="margin-top:12px;">No transactions, no schema enforcement, no foreign keys, no backups. JSON files are convenient for a solo dev but fragile at scale.</p>
+</section>
+
+<!-- PRODUCTION -->
+<section id="production">
+  <div class="phase-header"><div class="phase-label">Phase 6.4c · Block A</div><div class="phase-desc">Production Readiness — <code>04c-after-production.md</code></div></div>
+  <h2>🚀 Production <span class="badge" style="background:var(--score-3);color:#fff;">3.5/10</span></h2>
+  <table class="finding-table">
+    <tr><th>Gap</th><th>Impact</th></tr>
+    <tr><td>No process supervisor (systemd/Docker restart)</td><td>Server crash = manual SSH restart</td></tr>
+    <tr><td>No health check for orchestration</td><td>Traefik can't detect failures</td></tr>
+    <tr><td>No monitoring or alerting</td><td>No visibility into errors or downtime</td></tr>
+    <tr><td>No staging environment</td><td>All changes go straight to production</td></tr>
+    <tr><td>No CI/CD</td><td>Manual paramiko deploy script</td></tr>
+    <tr><td>No secrets management</td><td>API keys in <code>.env</code> file, deployed with code</td></tr>
+    <tr><td>No log rotation</td><td>Uvicorn logs to stdout only</td></tr>
+  </table>
+  <p style="margin-top:12px;"><strong>What works:</strong> <code>/api/selftest</code> is excellent for one-click health checks. Cost tracking with free-tier alerts. Audit log for agent runs. Deploy script handles file sync + restart.</p>
+</section>
+
+<!-- DEPS -->
+<section id="deps">
+  <div class="phase-header"><div class="phase-label">Phase 6.5 · Block B</div><div class="phase-desc">Dependencies — <code>04-dependencies.md</code></div></div>
+  <h2>📦 Dependencies <span class="badge" style="background:var(--score-7);color:#000;">6.0/10</span></h2>
+  <table class="finding-table">
+    <tr><th>Risk</th><th>Detail</th></tr>
+    <tr><td>CDN dependencies</td><td>Chart.js + Inter font from external CDNs — offline = degraded UX</td></tr>
+    <tr><td>No lockfile</td><td>No <code>requirements.txt</code> with pinned versions. Dependency drift risk.</td></tr>
+    <tr><td>scikit-learn</td><td>Imported but unclear if used. Heavy package for a dashboard.</td></tr>
+    <tr><td>No vuln scanning</td><td>No <code>pip-audit</code>, <code>safety</code>, or Dependabot.</td></tr>
+    <tr><td>Google API</td><td>Token refresh issues have caused production outages (documented).</td></tr>
+  </table>
+</section>
+
+<!-- TESTS -->
+<section id="tests">
+  <div class="phase-header"><div class="phase-label">Phase 6.6 · Block B</div><div class="phase-desc">Test Health — <code>05-test-health.md</code></div></div>
+  <h2>🧪 Tests <span class="badge" style="background:var(--score-1);color:#fff;">0.5/10</span></h2>
+  <p><strong>Status: CRITICAL.</strong> 2 scaffold test files. No pytest.ini, no conftest.py, no jest.config. Essentially zero coverage.</p>
+  <h3>Recommended First Tests</h3>
+  <table class="finding-table">
+    <tr><th>Test</th><th>Priority</th><th>Effort</th></tr>
+    <tr><td>Auth middleware — allowlisted paths bypass, protected paths require session</td><td><span class="sev sev-p0">P0</span></td><td>Low</td></tr>
+    <tr><td>CRM CRUD — create, read, update, delete contact</td><td><span class="sev sev-p0">P0</span></td><td>Low</td></tr>
+    <tr><td>Cost tracker — record computes daily totals, free-tier alert triggers</td><td><span class="sev sev-p0">P0</span></td><td>Low</td></tr>
+    <tr><td>Agent routing logic — pattern matching, confidence scoring</td><td><span class="sev sev-p1">P1</span></td><td>Low</td></tr>
+    <tr><td>Selftest endpoint — all checks pass on healthy system</td><td><span class="sev sev-p1">P1</span></td><td>Low</td></tr>
+    <tr><td>Safe path validation — path traversal blocked</td><td><span class="sev sev-p1">P1</span></td><td>Low</td></tr>
+  </table>
+</section>
+
+<!-- DOCS -->
+<section id="docs">
+  <div class="phase-header"><div class="phase-label">Phase 6.7 · Block B</div><div class="phase-desc">Documentation — <code>06-documentation.md</code></div></div>
+  <h2>📄 Docs <span class="badge" style="background:var(--score-3);color:#fff;">4.5/10</span></h2>
+  <table class="finding-table">
+    <tr><th>Document</th><th>Quality</th><th>Notes</th></tr>
+    <tr><td>AGENTS.md</td><td>⭐⭐⭐⭐⭐</td><td>The gold standard. Comprehensive context for AI agents + humans.</td></tr>
+    <tr><td>agentic-os-dashboard SKILL.md</td><td>⭐⭐⭐⭐⭐</td><td>25 pitfalls, full API ref, page patterns, deployment docs.</td></tr>
+    <tr><td>FastAPI /docs (Swagger)</td><td>⭐⭐⭐⭐</td><td>Auto-generated but incomplete without route docstrings.</td></tr>
+    <tr><td>README.md</td><td>⭐⭐⭐</td><td>Basic setup. Missing: env vars, Supabase, Vapi config.</td></tr>
+    <tr><td>Route docstrings</td><td>⭐</td><td>90% of endpoints have zero docstrings.</td></tr>
+    <tr><td>Page-level comments</td><td>⭐</td><td>Most dashboard pages have zero comments.</td></tr>
+  </table>
+</section>
+
+<!-- TS / JS -->
+<section id="ts">
+  <div class="phase-header"><div class="phase-label">Phase 6.8 · Block B</div><div class="phase-desc">TypeScript / JS Quality — <code>07-typescript-audit.md</code></div></div>
+  <h2>📘 JavaScript Quality <span class="badge" style="background:var(--score-5);color:#000;">5.0/10</span></h2>
+  <p><strong>No TypeScript.</strong> All 73 files are vanilla JS. What's well-structured: <code>api.js</code> (clean REST client), <code>app.js</code> (well-commented router), <code>utils.js</code> (centralized helpers). Gaps: no strict mode, global namespace pollution, no ESLint, no JSDoc types, magic strings for API paths across 70 files.</p>
+  <p style="margin-top:8px;"><strong>Quick win:</strong> Add <code>"use strict"</code>, ESLint with recommended rules, and JSDoc types on shared modules. Full TypeScript migration later.</p>
+</section>
+
+<!-- API -->
+<section id="api">
+  <div class="phase-header"><div class="phase-label">Phase 6.9 · Block B</div><div class="phase-desc">API Surface — <code>08-api-surface.md</code></div></div>
+  <h2>🔌 API Surface <span class="badge" style="background:var(--score-5);color:#000;">5.5/10</span></h2>
+  <p>50+ endpoints across 20+ route groups. Comprehensive coverage but inconsistent: auth (some public, some session), naming (<code>/api/cost</code> vs <code>/api/cost/record</code>), response formats, and no pagination on any list endpoint.</p>
+  <table class="finding-table">
+    <tr><th>Issue</th><th>Example</th></tr>
+    <tr><td>Auth inconsistency</td><td><code>/api/oncall/</code> is public but <code>/api/schedule/</code> requires session</td></tr>
+    <tr><td>Naming inconsistency</td><td><code>/api/telegram/status</code> vs <code>/api/telegram/logs</code></td></tr>
+    <tr><td>Response format varies</td><td><code>{"status":"ok","data":[...]}</code> vs <code>{"events":[...],"count":N}</code> vs bare arrays</td></tr>
+    <tr><td>No pagination</td><td>All list endpoints return full datasets</td></tr>
+    <tr><td>No API versioning</td><td>No <code>/api/v1/</code> prefix</td></tr>
+  </table>
+</section>
+
+<!-- MOBILE -->
+<section id="mobile">
+  <div class="phase-header"><div class="phase-label">Phase 6.10 · Block B</div><div class="phase-desc">Mobile Responsiveness — <code>09-mobile-responsiveness.md</code></div></div>
+  <h2>📱 Mobile <span class="badge" style="background:var(--score-1);color:#fff;">2.5/10</span></h2>
+  <p><strong>Desktop-only dashboard.</strong> Zero <code>@media</code> queries. Sidebar consumes 70% of a 375px screen. No hamburger menu. Fixed 15px font. Tables overflow. Touch targets under 44px. ~50 lines of CSS would fix it.</p>
+  <pre style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;color:var(--text);overflow-x:auto;font-size:13px;">@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  html { font-size: 14px; }
+}</pre>
+</section>
+
+<!-- BUNDLE -->
+<section id="bundle">
+  <div class="phase-header"><div class="phase-label">Phase 6.11 · Block B</div><div class="phase-desc">Bundle Analysis — <code>10-bundle-analysis.md</code></div></div>
+  <h2>📦 Bundle</h2>
+  <p><strong>N/A — No build step.</strong> 73 JS files loaded dynamically via <code>&lt;script&gt;</code> injection. Single CSS file. No bundler, no minification, no tree-shaking. Intentional trade-off for fast iteration in a solo-developer project.</p>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap">
+  <div class="phase-header"><div class="phase-label">Phase 6.13 · Block C</div><div class="phase-desc">Strategic Roadmap — <code>12-strategic-roadmap.md</code></div></div>
+  <h2>🗺️ Strategic Roadmap</h2>
+
+  <h3>Feature Gaps (vs. AGENTS.md Vision)</h3>
+  <table class="finding-table">
+    <tr><th>Feature</th><th>Status</th></tr>
+    <tr><td>38 planned features</td><td>30 fully implemented · 5 partial · 3 missing</td></tr>
+    <tr><td>Self-Improving Skills (F8)</td><td>eval.json exists but learnings loop is manual</td></tr>
+    <tr><td>Memory Consolidation (F16)</td><td>Skill exists but cron integration unclear</td></tr>
+    <tr><td>Skills Registry/Hub (F27)</td><td>plugins.js page exists but marketplace is mock</td></tr>
+    <tr><td>Shared Business Brain (F10)</td><td>File exists but isn't auto-loaded by agents</td></tr>
+    <tr><td>Batch Processing (F36)</td><td>No parallel skill execution from dashboard</td></tr>
+  </table>
+
+  <h3>Architecture Consolidation</h3>
+  <table class="finding-table">
+    <tr><th>#</th><th>Action</th><th>Why</th></tr>
+    <tr><td>1</td><td>Extract brain, skills, chat, scheduler routes from server.py</td><td>server.py 3400→1000 lines</td></tr>
+    <tr><td>2</td><td>Add TypeScript to api.js, utils.js, app.js</td><td>Gradual migration, not full rewrite</td></tr>
+    <tr><td>3</td><td>Introduce simple component pattern</td><td>Reduce 70 copy-pasted page headers</td></tr>
+    <tr><td>4</td><td>Add API versioning <code>/api/v1/</code></td><td>Before routes proliferate further</td></tr>
+  </table>
+
+  <h3>2-Week Sprint Plan</h3>
+  <p style="color:var(--text-muted);margin-bottom:8px;"><strong style="color:var(--text-bright);">Week 1 — Stabilize & Secure</strong></p>
+  <ol class="roadmap-list">
+    <li><strong>Day 1:</strong> Remove debug prints, consolidate .env loading, add .env to .gitignore</li>
+    <li><strong>Day 2:</strong> Add 5 pytest smoke tests (auth, CRM, cost tracker, routing, selftest)</li>
+    <li><strong>Day 3:</strong> Add atomic writes to CRM, set up daily backup cron</li>
+    <li><strong>Day 4:</strong> Add mobile CSS breakpoint + hamburger menu toggle</li>
+    <li><strong>Day 5:</strong> Add ESLint + <code>"use strict"</code> to JS files. Deploy to staging.</li>
+  </ol>
+  <p style="color:var(--text-muted);margin:12px 0 8px;"><strong style="color:var(--text-bright);">Week 2 — Polish & UX</strong></p>
+  <ol class="roadmap-list">
+    <li><strong>Day 6:</strong> Add confirmation dialogs to email resend + destructive actions</li>
+    <li><strong>Day 7:</strong> Add "Remember me" to Resident Portal + Recently Visited sidebar</li>
+    <li><strong>Day 8:</strong> Extract brain + skills routes from server.py to modules</li>
+    <li><strong>Day 9:</strong> Add input validation (Pydantic) to mutation endpoints</li>
+    <li><strong>Day 10:</strong> Systemd unit for auto-restart. Deploy to production.</li>
+  </ol>
+
+  <h3>6-Month Vision</h3>
+  <table class="finding-table">
+    <tr><th>Quarter</th><th>Theme</th><th>Goals</th></tr>
+    <tr><td><strong>Q1 (Month 1)</strong></td><td>Productionize</td><td>Tests, mobile, backups, supervisor, v1.2.0</td></tr>
+    <tr><td><strong>Q2 (Months 2-3)</strong></td><td>Scale & Polish</td><td>TypeScript core, components, API versioning, v2.0.0</td></tr>
+    <tr><td><strong>Q3 (Months 4-6)</strong></td><td>Platform</td><td>SQLite migration, search, plugin marketplace, v3.0.0</td></tr>
+  </table>
+</section>
+
+<!-- BACKLOG -->
+<section id="backlog">
+  <div class="phase-header"><div class="phase-label">Phase 6.17 · Block C</div><div class="phase-desc">Agile Backlog — <code>12-backlog.md</code></div></div>
+  <h2>📋 Agile Backlog <span class="badge" style="background:var(--accent);color:#fff;">14 stories · 116 points</span></h2>
+
+  <h3>Epic Summary</h3>
+  <table class="finding-table">
+    <tr><th>Epic</th><th>Stories</th><th>Points</th></tr>
+    <tr><td>Production Reliability</td><td>3</td><td>16</td></tr>
+    <tr><td>Testing Foundation</td><td>2</td><td>11</td></tr>
+    <tr><td>Mobile Support</td><td>2</td><td>13</td></tr>
+    <tr><td>Developer Experience</td><td>3</td><td>34</td></tr>
+    <tr><td>Data Layer Upgrade</td><td>2</td><td>29</td></tr>
+    <tr><td>User Experience</td><td>2</td><td>13</td></tr>
+    <tr style="font-weight:700;"><td>Total</td><td>14</td><td>116</td></tr>
+  </table>
+
+  <h3>Epic 1: Production Reliability (16 pts)</h3>
+  <table class="finding-table">
+    <tr><th>Story</th><th>Pri</th><th>SP</th></tr>
+    <tr><td>US-1.1: Server Auto-Restart — systemd unit or Docker restart policy</td><td><span class="sev sev-p0">P0</span></td><td>3</td></tr>
+    <tr><td>US-1.2: Automated Backups — daily cron, 7-day rolling, logged</td><td><span class="sev sev-p0">P0</span></td><td>5</td></tr>
+    <tr><td>US-1.3: Data Validation Layer — Pydantic models for all mutation endpoints</td><td><span class="sev sev-p1">P1</span></td><td>8</td></tr>
+  </table>
+
+  <h3>Epic 2: Testing Foundation (11 pts)</h3>
+  <table class="finding-table">
+    <tr><th>Story</th><th>Pri</th><th>SP</th></tr>
+    <tr><td>US-2.1: Backend Smoke Tests — 10+ pytest tests covering critical paths</td><td><span class="sev sev-p0">P0</span></td><td>8</td></tr>
+    <tr><td>US-2.2: Frontend Linting — ESLint + "use strict" on all JS files</td><td><span class="sev sev-p1">P1</span></td><td>3</td></tr>
+  </table>
+
+  <h3>Epic 3: Mobile Support (13 pts)</h3>
+  <table class="finding-table">
+    <tr><th>Story</th><th>Pri</th><th>SP</th></tr>
+    <tr><td>US-3.1: Responsive Dashboard — hamburger menu, single-column, touch targets</td><td><span class="sev sev-p0">P0</span></td><td>8</td></tr>
+    <tr><td>US-3.2: Mobile Resident Portal — remember EZ ID, PWA manifest</td><td><span class="sev sev-p1">P1</span></td><td>5</td></tr>
+  </table>
+</section>
+
+<!-- RECS -->
+<section id="recs"><h2>💡 Recommendations</h2>
+
+<h3>🎨 UX Upgrades</h3>
+<div class="rec-grid">
+  <div class="rec-card"><h4>Mobile hamburger menu</h4><p>Single <code>@media</code> breakpoint at 768px. Unlocks phone access for residents in clinic. ~15 min.</p></div>
+  <div class="rec-card"><h4>Remember-me for Resident Portal</h4><p>Store EZ ID in localStorage. Residents don't re-enter it every visit. ~10 min.</p></div>
+  <div class="rec-card"><h4>Confirmation dialogs</h4><p>"Send to 88 recipients?" before email blast. Prevents the #1 anxiety-inducing action. ~10 min.</p></div>
+</div>
+
+<h3 style="margin-top:14px;">🚀 Feature Upgrades</h3>
+<div class="rec-grid">
+  <div class="rec-card"><h4>Notification center</h4><p>Bell icon with unread count. Persistent alerts for eval assignments + email results. ~8 hrs.</p></div>
+  <div class="rec-card"><h4>Role-based landing pages</h4><p>Residents → User Portal. Managers → Dashboard. Removes navigation friction. ~4 hrs.</p></div>
+  <div class="rec-card"><h4>Full-text search</h4><p>Search across contacts, evals, schedules. SQLite FTS5. ~8 hrs.</p></div>
+</div>
+
+<h3 style="margin-top:14px;">📊 Quick-Impact ROI Ranking</h3>
+<ol class="roadmap-list">
+  <li><strong>Mobile breakpoint</strong> — 15 min, unlocks 70% of users. ROI: ∞</li>
+  <li><strong>5 pytest smoke tests</strong> — 2 hrs, prevents regression for every future change. ROI: Very high.</li>
+  <li><strong>Atomic writes + daily backups</strong> — 1 hr, prevents data loss. ROI: Very high.</li>
+  <li><strong>Remember-me for Resident Portal</strong> — 10 min, removes #1 adoption blocker. ROI: High.</li>
+  <li><strong>Confirmation dialogs</strong> — 10 min, prevents catastrophic mis-sends. ROI: High.</li>
+  <li><strong>Systemd unit</strong> — 1 hr, eliminates manual restart. ROI: High.</li>
+  <li><strong>ESLint + "use strict"</strong> — 30 min, catches bugs before deploy. ROI: Medium.</li>
+  <li><strong>TypeScript core files</strong> — 8 hrs, IDE autocomplete for all devs. ROI: Medium (long-term).</li>
+  <li><strong>Extract remaining modules</strong> — 4 hrs, halves server.py size. ROI: Medium.</li>
+  <li><strong>SQLite migration</strong> — 16 hrs, data integrity foundation. ROI: Medium (long-term).</li>
+</ol>
+</section>
+
+<footer>
+  Generated by ce:full v2.4.0 on 2026-07-11 · Agentic OS · Health 5.1/10 · 16 findings · 24 artifacts · <a href="#scorecard">Back to top</a>
+</footer>
+</div>
+</body>
+</html>

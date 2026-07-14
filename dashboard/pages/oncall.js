@@ -225,6 +225,8 @@ async function loadOncallNow() {
           <div style="margin-top:2px"><strong>Attending:</strong> ${attendingCell(moses.primary_attending)}</div>
           ${moses.backup_attending && moses.backup_attending !== 'None' ? `<div><strong>Backup:</strong> ${attendingCell(moses.backup_attending)}</div>` : ''}
           ${moses.peds_attending && moses.peds_attending !== 'None' ? `<div><strong>PEDS:</strong> ${attendingCell(moses.peds_attending)}</div>` : ''}
+          ${moses.first_call_resident ? `<div><strong>1st Call:</strong> ${esc(moses.first_call_resident)}</div>` : ''}
+          ${moses.chief_resident ? `<div><strong>Chief:</strong> ${esc(moses.chief_resident)}</div>` : ''}
         </div>`;
       }
       if (wakefield) {
@@ -233,6 +235,8 @@ async function loadOncallNow() {
           <div style="margin-top:2px"><strong>Attending:</strong> ${attendingCell(wakefield.primary_attending)}</div>
           ${wakefield.backup_attending && wakefield.backup_attending !== 'None' ? `<div><strong>Backup:</strong> ${attendingCell(wakefield.backup_attending)}</div>` : ''}
           ${wakefield.peds_attending && wakefield.peds_attending !== 'None' ? `<div><strong>PEDS:</strong> ${attendingCell(wakefield.peds_attending)}</div>` : ''}
+          ${wakefield.first_call_resident ? `<div><strong>1st Call:</strong> ${esc(wakefield.first_call_resident)}</div>` : ''}
+          ${wakefield.chief_resident ? `<div><strong>Chief:</strong> ${esc(wakefield.chief_resident)}</div>` : ''}
         </div>`;
       }
       if (weiler) {
@@ -241,6 +245,8 @@ async function loadOncallNow() {
           <div style="margin-top:2px"><strong>Attending:</strong> ${attendingCell(weiler.primary_attending)}</div>
           ${weiler.backup_attending && weiler.backup_attending !== 'None' ? `<div><strong>Backup:</strong> ${attendingCell(weiler.backup_attending)}</div>` : ''}
           ${weiler.peds_attending && weiler.peds_attending !== 'None' ? `<div><strong>PEDS:</strong> ${attendingCell(weiler.peds_attending)}</div>` : ''}
+          ${weiler.first_call_resident ? `<div><strong>1st Call:</strong> ${esc(weiler.first_call_resident)}</div>` : ''}
+          ${weiler.chief_resident ? `<div><strong>Chief:</strong> ${esc(weiler.chief_resident)}</div>` : ''}
         </div>`;
       }
       html += `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">${esc(data.date)}</div></div>`;
@@ -318,14 +324,18 @@ async function renderWeekView() {
       const backupDisplay = entry && entry.backup_attending && entry.backup_attending !== 'None' ? attendingCell(entry.backup_attending) : '<span style="color:var(--text-muted)">—</span>';
       const pedsDisplay = entry && entry.peds_attending && entry.peds_attending !== 'None' ? attendingCell(entry.peds_attending) : '<span style="color:var(--text-muted)">—</span>';
 
+      const chiefDisplay = entry && entry.chief_resident ? esc(entry.chief_resident) : '<span style="color:var(--text-muted)">—</span>';
+      const firstCallDisplay = entry && entry.first_call_resident ? esc(entry.first_call_resident) : '<span style="color:var(--text-muted)">—</span>';
+      const secondCallDisplay = entry && entry.second_call_resident ? esc(entry.second_call_resident) : '<span style="color:var(--text-muted)">—</span>';
+
       html += `<tr style="${rowStyle};border-bottom:1px solid var(--border)">
         <td style="padding:8px 12px;white-space:nowrap"><strong>${isToday ? '🟢 ' : ''}${fmtDateShort(dateStr)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${dayName}</span></td>
         <td style="padding:8px 12px">${attendingDisplay}</td>
         <td style="padding:8px 12px">${backupDisplay}</td>
         <td style="padding:8px 12px">${pedsDisplay}</td>
-        <td style="padding:8px 12px;color:var(--text-muted)">—</td>
-        <td style="padding:8px 12px;color:var(--text-muted)">—</td>
-        <td style="padding:8px 12px;color:var(--text-muted)">—</td>
+        <td style="padding:8px 12px">${firstCallDisplay}</td>
+        <td style="padding:8px 12px">${secondCallDisplay}</td>
+        <td style="padding:8px 12px">${chiefDisplay}</td>
         <td style="padding:8px 12px;text-align:center"><span class="tag" style="background:${isWeekend ? 'rgba(108,92,231,0.15)' : 'rgba(0,184,148,0.15)'};color:${isWeekend ? '#6c5ce7' : '#00b894'};border:none">${isWeekend ? 'WE' : 'WD'}</span></td>
       </tr>`;
     }
@@ -390,7 +400,9 @@ async function searchOncall() {
           <tr><td style="color:var(--text-muted);width:80px">On-Call:</td><td style="font-weight:500">${attendingCell(e.primary_attending)}</td></tr>
           ${e.backup_attending && e.backup_attending !== 'None' ? `<tr><td style="color:var(--text-muted)">Backup:</td><td>${attendingCell(e.backup_attending)}</td></tr>` : ''}
           ${e.peds_attending && e.peds_attending !== 'None' ? `<tr><td style="color:var(--text-muted)">PEDS:</td><td>${attendingCell(e.peds_attending)}</td></tr>` : ''}
-          <tr><td style="color:var(--text-muted)">Resident:</td><td style="color:var(--text-muted)">— (add schedule)</td></tr>
+          <tr><td style="color:var(--text-muted)">1st Call:</td><td>${e.first_call_resident ? esc(e.first_call_resident) : '<span style="color:var(--text-muted)">—</span>'}</td></tr>
+          <tr><td style="color:var(--text-muted)">2nd Call:</td><td>${e.second_call_resident ? esc(e.second_call_resident) : '<span style="color:var(--text-muted)">—</span>'}</td></tr>
+          <tr><td style="color:var(--text-muted)">Chief:</td><td>${e.chief_resident ? esc(e.chief_resident) : '<span style="color:var(--text-muted)">—</span>'}</td></tr>
         </table>
       </div>`;
     });

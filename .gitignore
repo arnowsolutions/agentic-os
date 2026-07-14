@@ -51,3 +51,4 @@ test_swap_*.json
 # Duplicate / unused code
 google_workspace.py
 *.pkl
+*.bak*

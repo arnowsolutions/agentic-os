@@ -133,3 +133,114 @@ def get_contact_by_email(email: str) -> dict[str, Any] | None:
         if c.get("email", "").lower() == email.lower():
             return c
     return None
+
+
+# ─── Write operations ──────────────────────────────────────────────
+
+def upsert_contact(contact: dict[str, Any]) -> bool:
+    """Insert or update a contact in Supabase Postgres. Returns True on success."""
+    conn = _get_pg_connection()
+    if conn is None:
+        logger.warning("No PG connection for upsert — contact saved to JSON only")
+        return False
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO public.contacts (
+                id, ez_id, first_name, last_name, email, category,
+                mobile, title, role, location, primary_location,
+                pgy, block, shift, hours_per_shift, work_days_per_week,
+                rotation_start, rotation_end, banner_id, course,
+                notes, gme_visible, data_gaps
+            ) VALUES (
+                %(id)s, %(ez_id)s, %(first_name)s, %(last_name)s, %(email)s, %(category)s,
+                %(mobile)s, %(title)s, %(role)s, %(location)s, %(primary_location)s,
+                %(pgy)s, %(block)s, %(shift)s, %(hours_per_shift)s, %(work_days_per_week)s,
+                %(rotation_start)s, %(rotation_end)s, %(banner_id)s, %(course)s,
+                %(notes)s, %(gme_visible)s, %(data_gaps)s
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                ez_id = EXCLUDED.ez_id,
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                email = EXCLUDED.email,
+                category = EXCLUDED.category,
+                mobile = EXCLUDED.mobile,
+                title = EXCLUDED.title,
+                role = EXCLUDED.role,
+                location = EXCLUDED.location,
+                primary_location = EXCLUDED.primary_location,
+                pgy = EXCLUDED.pgy,
+                block = EXCLUDED.block,
+                shift = EXCLUDED.shift,
+                hours_per_shift = EXCLUDED.hours_per_shift,
+                work_days_per_week = EXCLUDED.work_days_per_week,
+                rotation_start = EXCLUDED.rotation_start,
+                rotation_end = EXCLUDED.rotation_end,
+                banner_id = EXCLUDED.banner_id,
+                course = EXCLUDED.course,
+                notes = EXCLUDED.notes,
+                gme_visible = EXCLUDED.gme_visible,
+                data_gaps = EXCLUDED.data_gaps
+        """, _contact_to_pg(contact))
+        conn.commit()
+        cur.close()
+        logger.info(f"Upserted contact {contact.get('id','?')} to Supabase")
+        return True
+    except Exception as e:
+        logger.warning(f"Supabase upsert failed (contact saved to JSON): {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def delete_contact_from_pg(contact_id: str) -> bool:
+    """Delete a contact from Supabase Postgres. Returns True on success."""
+    conn = _get_pg_connection()
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM public.contacts WHERE id = %s", (contact_id,))
+        conn.commit()
+        cur.close()
+        logger.info(f"Deleted contact {contact_id} from Supabase")
+        return True
+    except Exception as e:
+        logger.warning(f"Supabase delete failed: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def _contact_to_pg(contact: dict[str, Any]) -> dict[str, Any]:
+    """Map camelCase contact dict to Supabase snake_case columns."""
+    return {
+        "id": contact.get("id", ""),
+        "ez_id": contact.get("ezId", "") or "",
+        "first_name": contact.get("firstName", "") or "",
+        "last_name": contact.get("lastName", "") or "",
+        "email": contact.get("email", "") or "",
+        "category": contact.get("category", "") or "",
+        "mobile": contact.get("mobile", "") or "",
+        "title": contact.get("title", "") or "",
+        "role": contact.get("role", "") or "",
+        "location": contact.get("location", "") or "",
+        "primary_location": contact.get("primaryLocation", "") or "",
+        "pgy": contact.get("pgy", "") or "",
+        "block": contact.get("block", "") or "",
+        "shift": contact.get("shift", "") or "",
+        "hours_per_shift": contact.get("hoursPerShift") or None,
+        "work_days_per_week": contact.get("workDaysPerWeek") or None,
+        "rotation_start": contact.get("rotationStart") or None,
+        "rotation_end": contact.get("rotationEnd") or None,
+        "banner_id": contact.get("bannerId") or None,
+        "course": contact.get("course", "") or "",
+        "notes": contact.get("notes", "") or "",
+        "gme_visible": contact.get("gmeVisible", False),
+        "data_gaps": contact.get("dataGaps") or None,
+    }

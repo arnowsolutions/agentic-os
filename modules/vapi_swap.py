@@ -5,12 +5,15 @@ When a caller asks to swap a call, this module:
 2. Finds eligible replacements from the CRM who are NOT already on call that day.
 3. Ranks candidates by workload (fewer upcoming calls = higher rank).
 4. Returns top candidates with contact info so the assistant can offer them.
+
+All data resolved through EZ ID (universal key).
+Swap execution routes through the Unified Platform.
 """
 import json
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from modules.config import get_settings
 from modules.logging_config import audit_record
@@ -94,6 +97,27 @@ def _candidate_name(c: dict) -> str:
     return f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
 
 
+def _candidate_ez_id(c: dict) -> Optional[str]:
+    """Get a candidate's EZ ID from the CRM entry."""
+    return c.get('ezId') or c.get('ez_id') or None
+
+
+# ─── Swap Execution ──────────────────────────────────────────────────────
+
+# Import the swap engine to execute swaps directly
+import sys
+_swap_engine_path = Path("/workspace/call-schedule-app/swap_engine.py")
+if _swap_engine_path.exists():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("swap_engine", _swap_engine_path)
+    _swap_engine = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(_swap_engine)
+    execute_swap = _swap_engine.execute_swap
+else:
+    def execute_swap(requester=None, target=None, req_date_str=None, tgt_date_str=None, **kwargs):
+        return {"success": False, "error": "swap_engine.py not found"}
+
+
 def _format_phone(phone: str) -> str:
     digits = "".join(c for c in (phone or "") if c.isdigit())
     if len(digits) == 10:
@@ -146,6 +170,7 @@ def handle_swap_request(args: Dict[str, Any]) -> Dict[str, Any]:
         workload = _upcoming_call_count(name, schedule, target)
         candidates.append({
             "name": name,
+            "ezId": _candidate_ez_id(c),
             "category": c.get("category", ""),
             "phone": _format_phone(c.get("phone", "")),
             "email": c.get("email", ""),

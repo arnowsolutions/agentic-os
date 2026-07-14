@@ -9,8 +9,8 @@ async function renderChat() {
         <p class="page-subtitle">Talk to opencode, Hermes, and Gemini CLI</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="clearChat()">🗑 Clear</button>
-        <button class="btn" onclick="refreshChat()">🔄 Refresh</button>
+        <button class="btn" onclick="clearChat()">Clear</button>
+        <button class="btn" onclick="refreshChat()">Refresh</button>
       </div>
     </div>
     <div class="chat-layout">
@@ -44,20 +44,20 @@ async function renderChat() {
       <div class="chat-main" id="chatMain">
         <div id="chatMessages" class="chat-messages">
           <div class="chat-welcome">
-            <div class="chat-welcome-icon">💬</div>
+            <div class="chat-welcome-icon">+</div>
             <div class="chat-welcome-title">Agentic OS Chat</div>
-            <div class="chat-welcome-desc">Select an agent on the left and start a conversation.<br>Each agent has different capabilities — choose the right one for your task.</div>
+            <div class="chat-welcome-desc">Select an agent on the left and start a conversation.<br>Each agent has different capabilities.</div>
             <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center">
-              <button class="btn btn-sm" onclick="sendQuickPrompt('opencode','Check the system status and running processes')">🔍 System Check</button>
-              <button class="btn btn-sm" onclick="sendQuickPrompt('hermes','What did I work on recently?')">🧠 Recall Memory</button>
-              <button class="btn btn-sm" onclick="sendQuickPrompt('gemini','Research the latest trends in AI agents')">📊 Research</button>
+              <button class="btn btn-sm" onclick="sendQuickPrompt('opencode','Check the system status and running processes')">System Check</button>
+              <button class="btn btn-sm" onclick="sendQuickPrompt('hermes','What did I work on recently?')">Recall Memory</button>
+              <button class="btn btn-sm" onclick="sendQuickPrompt('gemini','Research the latest trends in AI agents')">Research</button>
             </div>
           </div>
         </div>
         <div class="chat-input-area">
           <div class="chat-agent-indicator" id="chatAgentIndicator">opencode</div>
           <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message..." onkeydown="handleChatKey(event)"></textarea>
-          <button class="btn btn-primary btn-icon" onclick="sendChatMessage()" id="chatSendBtn" title="Send">➤</button>
+          <button class="btn btn-primary btn-icon" onclick="sendChatMessage()" id="chatSendBtn" title="Send">&rarr;</button>
         </div>
       </div>
       <div class="chat-iframe-container" id="hermesIframeContainer" style="display:none;flex:1;position:relative;background:var(--bg-primary);border-radius:var(--radius-lg);overflow:hidden;">
