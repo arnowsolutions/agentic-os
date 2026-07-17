@@ -186,6 +186,7 @@ const NAV_CONFIG = {
         { page: 'kanban',      icon: '▸', label: 'Kanban',         title: 'Kanban Board',  breadcrumb: 'Task management' },
         { page: 'goals',       icon: '▸', label: 'Goals',          title: 'Goals',         breadcrumb: 'Project targets & progress' },
         { page: 'journal',     icon: '▸', label: 'Journal',        title: 'Journal',       breadcrumb: 'Daily entries & notes' },
+        { page: 'meeting-reports', icon: '▸', label: 'Meeting Reports', title: 'Meeting Reports', breadcrumb: 'Transcribe + analyze meetings into reports' },
         { page: 'reports',     icon: '▸', label: 'Report Center',  title: 'Report Center', breadcrumb: 'Generate & deliver reports' },
         { page: 'drive-sync',  icon: '▸', label: 'Drive Sync',     title: 'Drive Sync',    breadcrumb: 'Location-roster files' },
         { page: 'audit',       icon: '▸', label: 'Audit Log',      title: 'Audit Log',     breadcrumb: 'System activity trail' },

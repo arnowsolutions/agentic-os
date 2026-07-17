@@ -109,6 +109,8 @@ async def session_enforcement(request: Request, call_next):
         return await call_next(request)
     if path.startswith("/api/crm/tasks"):
         return await call_next(request)
+    if path.startswith("/api/crm/workflows"):
+        return await call_next(request)
     if path.startswith("/api/user/"):
         return await call_next(request)
     if path.startswith("/api/cron/"):

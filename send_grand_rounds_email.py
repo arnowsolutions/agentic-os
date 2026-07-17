@@ -144,6 +144,7 @@ def send_ics_invite(event, friday_date):
             session_8_9=event['topic_8_9'],
             session_7_8_label="Grand Rounds",
             session_8_9_label="Grand Rounds Conference",
+            physical_location="Hutch | PH2 Conf A & Conf B — both rooms used for both sessions",
         )
         return True, ""
     except Exception as e:

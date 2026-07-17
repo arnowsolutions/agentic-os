@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 
 from modules.config import get_settings
@@ -585,3 +585,45 @@ def delete_task(task_id: str):
     tasks = [t for t in tasks if t.get("id") != task_id]
     TASK_FILE_PATH.write_text(json.dumps(tasks, indent=2))
     return {"ok": True}
+
+
+# ─── Workflow Runner ────────────────────────────────────────────
+
+from modules.workflow_runner import list_workflows, run_workflow, save_uploaded_file
+
+@router.get("/workflows")
+def get_workflows():
+    """List available workflow definitions."""
+    return {"workflows": list_workflows()}
+
+@router.post("/workflows/upload")
+async def upload_workflow_file(file: UploadFile = File(...)):
+    """Upload a file for workflow processing. Returns the saved file path.
+
+    Supported formats: PDF, DOCX, TXT, MD, CSV, MP3, WAV, M4A
+    """
+    try:
+        contents = await file.read()
+        file_path = save_uploaded_file(contents, file.filename or "upload")
+        return {"success": True, "file_path": file_path, "filename": file.filename, "size": len(contents)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.post("/workflows/run")
+def execute_workflow(data: dict):
+    """Run a workflow pipeline.
+
+    Body:
+        workflow_id: str — "meeting-report" (currently the only one)
+        file_path: str (optional) — path to uploaded file (from /upload)
+        text: str (optional) — direct meeting text/transcript
+        email_recipients: str (optional) — comma-separated emails
+    """
+    workflow_id = data.get("workflow_id", "")
+    if not workflow_id:
+        return {"success": False, "error": "workflow_id is required"}
+
+    # Build kwargs from the request data, excluding workflow_id
+    kwargs = {k: v for k, v in data.items() if k != "workflow_id" and v is not None}
+    result = run_workflow(workflow_id, **kwargs)
+    return result

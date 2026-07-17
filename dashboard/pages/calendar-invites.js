@@ -13,7 +13,7 @@ async function renderCalendarInvites() {
       </div>
     </div>
     <div style="position:relative;width:100%;height:calc(100vh - 180px);min-height:600px;border:1px solid var(--border-color,#334155);border-radius:12px;overflow:hidden;background:#0f172a">
-      <iframe src="/api/calendar-invites" style="width:100%;height:100%;border:none" title="Calendar Invites"></iframe>
+      <iframe src="/api/calendar-invites?test=false" style="width:100%;height:100%;border:none" title="Calendar Invites"></iframe>
     </div>
   `;
 }

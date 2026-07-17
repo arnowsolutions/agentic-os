@@ -28,7 +28,9 @@ def _resolve_hermes_bin() -> Optional[str]:
     candidates = [
         shutil.which("hermes"),
         "/app/venv/bin/hermes",
+        "/home/hermeswebui/.hermes/home/.local/bin/hermes",
         str(Path.home() / ".hermes" / "venv" / "bin" / "hermes"),
+        str(Path.home() / ".hermes" / "home" / ".local" / "bin" / "hermes"),
     ]
     for p in candidates:
         if p and os.path.isfile(p):
