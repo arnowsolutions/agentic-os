@@ -1623,6 +1623,47 @@ def get_ics_progress():
                 pass
     return result
 
+# ─── Routes: Chief Meetings (.eml generation & download) ────────────────────────────────────
+
+@app.get("/api/chief-meetings/generate-eml")
+def generate_chief_meeting_eml():
+    """Generate .eml files for all Chief Residents' Meetings."""
+    import subprocess
+    script = BASE_DIR / "send_chief_meeting_email.py"
+    if not script.exists():
+        return {"success": False, "error": "send_chief_meeting_email.py not found"}
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, "PYTHONPATH": str(BASE_DIR)}
+        )
+        output = result.stdout.strip()
+        error = result.stderr.strip()
+        return {
+            "success": result.returncode == 0,
+            "message": f"Generated .eml files ({output.count('saved')} files)" if result.returncode == 0 else error,
+            "output": output,
+            "error": error if result.returncode != 0 else ""
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/chief-meetings/eml")
+def download_chief_meeting_eml(date: str = ""):
+    """Download a single .eml file for a specific date."""
+    import glob
+    eml_dir = BASE_DIR / "data" / "chief_meeting_eml"
+    if not date:
+        return {"success": False, "error": "date parameter required"}
+    pattern = str(eml_dir / f"*{date}*.eml")
+    files = glob.glob(pattern)
+    if not files:
+        return {"success": False, "error": f"No .eml file found for date {date}"}
+    filepath = files[0]
+    from fastapi.responses import FileResponse
+    return FileResponse(filepath, media_type="message/rfc822", filename=os.path.basename(filepath))
+
 # ─── Routes: Learning Analytics (2 endpoints) ────────────────────────────────────────────────
 
 @app.get("/api/analytics/skills")
