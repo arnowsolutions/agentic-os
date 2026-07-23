@@ -25,31 +25,51 @@ PGY_SALARY = {
 LETTERHEAD = """<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><style>
-  body { font-family: 'Times New Roman', Georgia, serif; color: #111; max-width: 700px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
-  .letterhead { text-align: center; border-bottom: 2px solid #1a3a5c; padding-bottom: 16px; margin-bottom: 28px; }
-  .letterhead h1 { font-size: 18px; color: #1a3a5c; margin: 0 0 2px 0; letter-spacing: 1px; }
-  .letterhead h2 { font-size: 13px; color: #1a3a5c; margin: 0 0 4px 0; font-weight: normal; }
-  .letterhead p { font-size: 11px; color: #555; margin: 2px 0; }
-  .letterhead .contact { font-size: 11px; color: #555; margin-top: 6px; }
+  body { font-family: 'Times New Roman', Georgia, serif; color: #111; max-width: 750px; margin: 40px auto; padding: 0 30px; line-height: 1.6; }
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 28px; border-bottom: 2px solid #002856; padding-bottom: 12px; }
+  .header-table td { vertical-align: top; padding: 0; }
+  .monte-logo { font-family: Georgia, 'Times New Roman', serif; font-size: 22px; font-weight: bold; }
+  .monte-logo .m { color: #c00050; }
+  .monte-logo .rest { color: #002856; }
+  .einstein-box { display: inline-block; background: #002856; color: #fff; padding: 3px 10px; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: bold; letter-spacing: 1px; }
+  .einstein-sub { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #002856; margin-top: 2px; }
+  .dept-header { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #002856; font-weight: bold; text-align: right; }
+  .dept-info { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #002856; text-align: right; line-height: 1.5; }
+  .dept-info a { color: #005aaa; text-decoration: none; }
   .date { margin-bottom: 20px; font-size: 12px; }
   .re { font-weight: bold; margin-bottom: 16px; font-size: 12px; }
   .body { font-size: 12px; }
   .body p { margin: 10px 0; }
   .signature { margin-top: 40px; }
-  .signature .name { font-weight: bold; }
-  .signature .title { font-size: 11px; color: #444; }
-  .footer { margin-top: 30px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 9px; color: #888; }
+  .signature .name { font-weight: bold; font-size: 13px; }
+  .signature .title { font-size: 11px; color: #333; line-height: 1.5; }
+  .contact-block { margin-top: 24px; font-size: 10px; color: #333; line-height: 1.5; }
 </style></head>
 <body>
-<div class="letterhead">
-  <h1>Department of Urology Residency Program</h1>
-  <h2>Montefiore Medical Center</h2>
-  <p>The University Hospital for Albert Einstein College of Medicine</p>
-  <p>1250 Waters Place, Tower I, Penthouse &bull; Bronx, N.Y. 10461</p>
-  <p class="contact">347.842.1724 &bull; 917.962.5410 fax</p>
-  <p class="contact">Alex Sankin, M.D., Program Director &bull; asankin@montefiore.org</p>
-  <p class="contact">Shareef Frasier, Program Administrator &bull; sfrasier@montefiore.org</p>
-</div>
+
+<table class="header-table">
+<tr>
+  <td width="140">
+    <div class="monte-logo"><span class="m">M</span><span class="rest">ontefiore</span></div>
+  </td>
+  <td width="160" style="text-align:center">
+    <div class="einstein-box">EINSTEIN</div>
+    <div class="einstein-sub">Albert Einstein College of Medicine</div>
+  </td>
+  <td style="text-align:right">
+    <div class="dept-header">Department of Urology Residency Program</div>
+    <div class="dept-info">
+      <strong>Montefiore Medical Center</strong><br>
+      The University Hospital for Albert Einstein College of Medicine<br>
+      1250 Waters Place, Tower I, Penthouse<br>
+      Bronx, N.Y. 10461<br>
+      347.842.1724 &bull; 917.962.5410 fax<br>
+      Alex Sankin, M.D., Program Director &bull; <a href="mailto:asankin@montefiore.org">asankin@montefiore.org</a><br>
+      Shareef Frasier, Program Administrator &bull; <a href="mailto:sfrasier@montefiore.org">sfrasier@montefiore.org</a>
+    </div>
+  </td>
+</tr>
+</table>
 """
 
 FOOTER_HTML = """
