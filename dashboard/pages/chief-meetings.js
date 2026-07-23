@@ -140,7 +140,20 @@ function openChiefOutlook(date) {
   const summary = `Chief Residents' Meeting${labelStr}`;
   const subj = `Invitation: ${summary}`;
 
-  const body = `Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}\nDate: ${formatted}\nTime: 12:00 PM – 1:00 PM (ET)\nLocation: Penthouse`;
+  const body = [
+    `<strong>Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}</strong>`,
+    ``,
+    `<strong>Date:</strong> ${formatted}`,
+    `<strong>Time:</strong> 12:00 PM – 1:00 PM (ET)`,
+    `<strong>Location:</strong> Penthouse — Montefiore Medical Center`,
+    ``,
+    `<strong>Attendees:</strong>`,
+    `Dr. Mark Schoenberg, Dr. Alex Sankin, Dr. Alex Small`,
+    `John Hill (Chief), John Hordines (Chief), So Yeon (Jen) Pak (Chief)`,
+    ``,
+    `This is an automated calendar invitation.`,
+    `Please Accept or Decline to confirm your attendance.`,
+  ].join('<br>');
 
   const attendees = CHIEF_ATTENDEES_EMAILS.join(';');
   const params = new URLSearchParams({
