@@ -12,15 +12,13 @@ Usage:
 import os, sys, json, argparse
 from datetime import datetime, date
 
-# ── PGY Salary Table (2025-2026 academic year) ─────────────
+# ── PGY Salary Table (2026-2027 academic year) ─────────────
 PGY_SALARY = {
-    "PG-1": 82000,
-    "PG-2": 85000,
-    "PG-3": 88000,
-    "PG-4": 92000,
-    "PG-5": 96000,
-    "PG-6": 100000,
-    "PG-7": 104000,
+    "PG-1": 87585.59,
+    "PG-2": 91449.66,
+    "PG-3": 95313.73,
+    "PG-4": 99177.81,
+    "PG-5": 107041.87,
 }
 
 # ── Letterhead HTML ────────────────────────────────────────
