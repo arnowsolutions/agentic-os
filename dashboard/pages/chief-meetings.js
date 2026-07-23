@@ -155,7 +155,6 @@ function openChiefOutlook(date) {
     `John Hordines (Chief)`,
     `So Yeon (Jen) Pak (Chief)`,
     ``,
-    `This is an automated calendar invitation.`,
     `Please Accept or Decline to confirm your attendance.`,
   ].join('<br>');
 
