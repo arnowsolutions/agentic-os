@@ -144,11 +144,7 @@ function openChiefOutlook(date) {
     `Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}`,
     `Date: ${formatted}`,
     `Time: 12:00 PM – 1:00 PM (ET)`,
-    `Location: Penthouse — Montefiore Medical Center`,
-    `Attendees: Dr. Schoenberg, Dr. Sankin, Dr. Small, Chief Residents`,
-    ``,
-    `This is an automated calendar invitation. Please Accept or Decline to confirm your attendance.`,
-    `If you have any questions, please contact the Urology Residency Program.`,
+    `Location: Penthouse`,
   ].join('\n');
 
   const attendees = CHIEF_ATTENDEES_EMAILS.join(';');
