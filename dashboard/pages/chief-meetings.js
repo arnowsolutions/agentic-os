@@ -140,12 +140,7 @@ function openChiefOutlook(date) {
   const summary = `Chief Residents' Meeting${labelStr}`;
   const subj = `Invitation: ${summary}`;
 
-  const body = [
-    `Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}`,
-    `Date: ${formatted}`,
-    `Time: 12:00 PM – 1:00 PM (ET)`,
-    `Location: Penthouse`,
-  ].join('\n');
+  const body = `Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}\nDate: ${formatted}\nTime: 12:00 PM – 1:00 PM (ET)\nLocation: Penthouse`;
 
   const attendees = CHIEF_ATTENDEES_EMAILS.join(';');
   const params = new URLSearchParams({
