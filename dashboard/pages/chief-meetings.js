@@ -141,17 +141,40 @@ function openChiefOutlook(date) {
   const subj = `Invitation: ${summary}`;
 
   const body = [
-    `CHIEF RESIDENTS' MEETING`,
+    `═══════════════════════════════════════════════`,
+    `       CHIEF RESIDENTS' MEETING${label ? ` — ${label}` : ''}`,
+    `═══════════════════════════════════════════════`,
     ``,
-    `Date: ${formatted}`,
-    `Time: 12:00 PM – 1:00 PM (ET)`,
-    `Location: Penthouse`,
+    `  📅  DATE`,
+    `       ${formatted}`,
     ``,
-    `Attendees: Dr. Schoenberg, Dr. Sankin, Dr. Small, Chief Residents`,
+    `  ⏰  TIME`,
+    `       12:00 PM – 1:00 PM (ET)`,
     ``,
-    `---`,
-    `This is an automated calendar invite. Please Accept or Decline to confirm your attendance.`,
-  ].join('\n');
+    `  📍  LOCATION`,
+    `       Penthouse — Montefiore Medical Center`,
+    ``,
+    `  👥  ATTENDEES`,
+    `       • Dr. Mark Schoenberg`,
+    `       • Dr. Alex Sankin`,
+    `       • Dr. Alex Small`,
+    `       • John Hill (Chief Resident)`,
+    `       • John Hordines (Chief Resident)`,
+    `       • So Yeon (Jen) Pak (Chief Resident)`,
+    ``,
+    `───────────────────────────────────────────────`,
+    ``,
+    `This is an automated calendar invitation for the`,
+    `Chief Residents' Meeting. Please Accept or Decline`,
+    `to confirm your attendance.`,
+    ``,
+    `If you have any questions, please contact the`,
+    `Urology Residency Program.`,
+    ``,
+    `───────────────────────────────────────────────`,
+    `Montefiore Medical Center  |  Department of Urology`,
+    `This is an automated message.`,
+  ].join('\\n');
 
   const attendees = CHIEF_ATTENDEES_EMAILS.join(';');
   const params = new URLSearchParams({
