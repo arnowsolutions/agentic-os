@@ -72,77 +72,58 @@ def build_summary(meeting):
 
 
 def build_html_body(meeting):
-    """Build the premium HTML email body for a Chief Meeting invite."""
+    """Build the premium HTML email body for a Chief Meeting invite.
+    Matches the Grand Rounds card-based design from calendar_mailer.send_calendar_invite()."""
     date_str = meeting["date"]
     dt = datetime.strptime(date_str, "%Y-%m-%d")
-    day_name = dt.strftime("%A")
-    formatted = dt.strftime("%B %d, %Y")
-
+    formatted = dt.strftime("%A, %B %d, %Y")
     summary = build_summary(meeting)
+    label = meeting.get("label", "")
 
-    inner = f"""
-<table width="100%" cellpadding="0" cellspacing="0" style="font-family:'Segoe UI',Arial,sans-serif;color:#333;max-width:600px;margin:0 auto">
-  <tr>
-    <td style="background:#1a3a5c;padding:20px 24px;text-align:center;border-radius:8px 8px 0 0">
-      <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:600;letter-spacing:0.5px">CHIEF RESIDENTS' MEETING</h1>
-    </td>
-  </tr>
-  <tr>
-    <td style="background:#ffffff;padding:24px;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb">
-
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px">
-        <tr>
-          <td style="padding:16px 20px">
-            <table cellpadding="0" cellspacing="0" width="100%">
-              <tr>
-                <td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;padding-bottom:4px">Date</td>
-              </tr>
-              <tr>
-                <td style="font-size:15px;color:#111827;font-weight:600;padding-bottom:10px">{day_name}, {formatted}</td>
-              </tr>
-              <tr>
-                <td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;padding-bottom:4px">Time</td>
-              </tr>
-              <tr>
-                <td style="font-size:15px;color:#111827;font-weight:600;padding-bottom:10px">12:00 PM \u2013 1:00 PM (ET)</td>
-              </tr>
-              <tr>
-                <td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;padding-bottom:4px">Location</td>
-              </tr>
-              <tr>
-                <td style="font-size:15px;color:#111827;font-weight:600">Penthouse</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:16px">
-        <tr>
-          <td style="padding:14px 20px;text-align:center">
-            <p style="margin:0;font-size:12px;color:#166534;font-weight:600">Attendees</p>
-            <p style="margin:6px 0 0 0;font-size:13px;color:#111827">Dr. Schoenberg, Dr. Sankin, Dr. Small, Chief Residents</p>
-          </td>
-        </tr>
-      </table>
-
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fefce8;border:1px solid #fde68a;border-radius:8px">
-        <tr>
-          <td style="padding:12px 16px;text-align:center">
-            <p style="margin:0;font-size:11px;color:#92400e">
-              <strong>Note:</strong> This calendar invite will be added to your Outlook calendar automatically.
-              You can Accept, Tentative, or Decline below.
-            </p>
-          </td>
-        </tr>
-      </table>
-
-    </td>
-  </tr>
+    # ── Location card ──
+    location_card = f"""
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:16px">
+<tr><td style="padding:14px 20px;text-align:center">
+<p style="margin:0;font-size:11px;color:#15803d;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">In-Person Location</p>
+<p style="margin:4px 0 0 0;font-size:14px;color:#111827;font-weight:500">Penthouse — Montefiore Medical Center</p>
+</td></tr>
 </table>"""
 
-    return _html_wrap(summary, inner)
+    # ── Attendees card ──
+    attendees_card = """
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px">
+<tr><td style="padding:12px 16px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #e5e7eb;text-align:center">Attendees</td></tr>
+<tr><td style="padding:14px 20px;text-align:center">
+<p style="margin:0;font-size:13px;color:#111827;line-height:1.8">
+<strong>Faculty:</strong> Dr. Mark Schoenberg, Dr. Alex Sankin, Dr. Alex Small<br>
+<strong>Chief Residents:</strong> John Hill, John Hordines, So Yeon (Jen) Pak
+</p>
+</td></tr>
+</table>"""
 
+    # ── Date & Time card ──
+    datetime_card = f"""
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr><td style="padding:8px 0;text-align:center">
+<p style="margin:0;font-size:14px;color:#374151"><strong>Date:</strong> {formatted}</p>
+<p style="margin:6px 0 0 0;font-size:14px;color:#374151"><strong>Time:</strong> 12:00 PM – 1:00 PM (ET)</p>
+</td></tr>
+</table>"""
+
+    # ── Note card ──
+    note_card = """
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;margin-top:16px">
+<tr><td style="padding:12px 16px;text-align:center">
+<p style="margin:0;font-size:11px;color:#92400e">
+<strong>Note:</strong> This calendar invite will be added to your Outlook calendar automatically.
+You can Accept, Tentative, or Decline below.
+</p>
+</td></tr>
+</table>"""
+
+    inner = f"""{location_card}{attendees_card}{datetime_card}{note_card}"""
+
+    return _html_wrap(summary, inner)
 
 def build_eml(meeting, to_email):
     """Build a .eml file for a single Chief Meeting invite."""
