@@ -142,6 +142,7 @@ const NAV_CONFIG = {
         { page: 'staff-schedule',         icon: '▸', label: 'Staff Schedule',         title: 'Staff Schedule',         breadcrumb: 'NP/PA/coordinator schedules' },
         { page: 'grand-rounds',           icon: '▸', label: 'Grand Rounds',           title: 'Grand Rounds',           breadcrumb: 'Academic schedule & invites' },
         { page: 'chief-meetings',         icon: '▸', label: 'Chief Meetings',          title: 'Chief Meetings',         breadcrumb: 'Chief Residents\' meetings & invites' },
+        { page: 'resident-letters',       icon: '▸', label: 'Resident Letters',        title: 'Resident Letters',       breadcrumb: 'Good Standing & Income Verification' },
         { page: 'calendar-invites',       icon: '▸', label: 'Calendar Invites',       title: 'Calendar Invites',       breadcrumb: 'One-click Outlook invites' },
         { page: 'grand-rounds-attendance',icon: '▸', label: 'Attendance',             title: 'Grand Rounds Attendance',breadcrumb: 'Faculty compliance tracking' },
         { page: 'email-send-log',         icon: '▸', label: 'Email Log',              title: 'Email Send Log',         breadcrumb: 'Invite tracking — real vs test' },

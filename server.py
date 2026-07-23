@@ -1664,6 +1664,104 @@ def download_chief_meeting_eml(date: str = ""):
     from fastapi.responses import FileResponse
     return FileResponse(filepath, media_type="message/rfc822", filename=os.path.basename(filepath))
 
+
+# ─── Routes: Resident Letters (Good Standing & Income Verification) ────────────────────────────
+
+@app.get("/api/letters/generate")
+@app.post("/api/letters/generate")
+async def generate_resident_letter(
+    request: Request,
+    resident_id: str = "",
+    type: str = "good-standing",
+    recipient: str = "",
+    recipient_title: str = "Dr.",
+    institution: str = "",
+    preview: bool = False,
+):
+    """Generate a Good Standing or Income Verification letter for a resident."""
+    import subprocess, tempfile, os
+    script = BASE_DIR / "letter_generator.py"
+    if not script.exists():
+        return {"success": False, "error": "letter_generator.py not found"}
+    
+    # Get body from POST if available
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            resident_id = body.get("resident_id", resident_id)
+            type = body.get("type", type)
+            recipient = body.get("recipient", recipient)
+            recipient_title = body.get("recipient_title", recipient_title)
+            institution = body.get("institution", institution)
+        except:
+            pass
+    
+    if not resident_id:
+        return {"success": False, "error": "resident_id required"}
+    
+    outdir = BASE_DIR / "data" / "letters"
+    outdir.mkdir(parents=True, exist_ok=True)
+    
+    outfile = tempfile.NamedTemporaryFile(suffix=".html", dir=str(outdir), delete=False)
+    outpath = outfile.name
+    outfile.close()
+    
+    cmd = [sys.executable, str(script), "--type", type, "--resident-id", resident_id, "--output", outpath]
+    if type == "good-standing" and recipient:
+        cmd += ["--recipient", recipient, "--recipient-title", recipient_title]
+        if institution:
+            cmd += ["--institution", institution]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                                env={**os.environ, "PYTHONPATH": str(BASE_DIR)})
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr.strip() or result.stdout.strip()}
+        
+        # Parse output to get resident name/pgy
+        resident_name = ""
+        pgy = ""
+        salary = ""
+        for line in result.stdout.split("\n"):
+            if "Resident:" in line:
+                parts = line.split("Resident:")[-1].strip().split(",")
+                resident_name = parts[0].strip()
+                if len(parts) > 1:
+                    pgy = parts[1].strip()
+            if "Salary:" in line:
+                salary = line.split("Salary:")[-1].strip()
+        
+        filename = os.path.basename(outpath)
+        return {
+            "success": True,
+            "filename": filename,
+            "resident_name": resident_name,
+            "pgy": pgy,
+            "salary": salary,
+            "download_url": f"/api/letters/download/{filename}",
+            "preview_url": f"/api/letters/preview/{filename}",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/letters/download/{filename}")
+async def download_letter(filename: str):
+    """Download a generated letter HTML file."""
+    from fastapi.responses import FileResponse
+    filepath = BASE_DIR / "data" / "letters" / filename
+    if not filepath.exists():
+        return {"success": False, "error": "File not found"}
+    return FileResponse(str(filepath), media_type="text/html", filename=filename)
+
+@app.get("/api/letters/preview/{filename}")
+async def preview_letter(filename: str):
+    """Preview a generated letter in browser."""
+    from fastapi.responses import HTMLResponse
+    filepath = BASE_DIR / "data" / "letters" / filename
+    if not filepath.exists():
+        return HTMLResponse("<h1>File not found</h1>", status_code=404)
+    return HTMLResponse(filepath.read_text())
+
 # ─── Routes: Learning Analytics (2 endpoints) ────────────────────────────────────────────────
 
 @app.get("/api/analytics/skills")
