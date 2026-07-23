@@ -151,9 +151,9 @@ function openChiefOutlook(date) {
     `Dr. Mark Schoenberg`,
     `Dr. Alex Sankin`,
     `Dr. Alex Small`,
-    `John Hill (Chief)`,
-    `John Hordines (Chief)`,
-    `So Yeon (Jen) Pak (Chief)`,
+    `Dr. John Hill (Chief)`,
+    `Dr. John Hordines (Chief)`,
+    `Dr. So Yeon (Jen) Pak (Chief)`,
     ``,
     `Please Accept or Decline to confirm your attendance.`,
   ].join('<br>');
