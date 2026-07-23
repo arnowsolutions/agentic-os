@@ -250,6 +250,7 @@ def main():
     parser.add_argument("--recipient-title", default="Dr.", help="Recipient title")
     parser.add_argument("--institution", default="", help="Institution name (for good-standing letter)")
     parser.add_argument("--output", help="Output HTML file path")
+    parser.add_argument("--resident-data", help="JSON string with resident info (bypasses CRM)")
     parser.add_argument("--list-residents", action="store_true", help="List all residents")
     parser.add_argument("--salary-table", action="store_true", help="Show PGY salary table")
     args = parser.parse_args()
@@ -267,21 +268,24 @@ def main():
     if not args.type:
         parser.error("--type required (good-standing or income)")
 
-    # Find resident
-    contacts = load_resident(resident_id=args.resident_id, email=args.email)
-    if args.name:
-        contacts = [c for c in contacts if args.name.lower() in
-                    f"{c.get('firstName','')} {c.get('lastName','')}".lower()]
-    if not contacts:
-        print("No resident found. Use --list-residents to see available residents.")
-        sys.exit(1)
-    if len(contacts) > 1:
-        print(f"Multiple matches ({len(contacts)}). Use --resident-id or --email to narrow down:")
-        for c in contacts[:10]:
-            print(f"  {c.get('id','?')}: {c.get('firstName','')} {c.get('lastName','')} ({c.get('pgy','?')})")
-        sys.exit(1)
-
-    resident = contacts[0] if isinstance(contacts, list) else contacts
+    # Find resident - priority: --resident-data > --resident-id > --email > --name
+    if args.resident_data:
+        resident = json.loads(args.resident_data)
+    else:
+        contacts = load_resident(resident_id=args.resident_id, email=args.email)
+    if not args.resident_data:
+        if args.name:
+            contacts = [c for c in contacts if args.name.lower() in
+                        f"{c.get('firstName','')} {c.get('lastName','')}".lower()]
+        if not contacts:
+            print("No resident found. Use --list-residents to see available residents.")
+            sys.exit(1)
+        if len(contacts) > 1:
+            print(f"Multiple matches ({len(contacts)}). Use --resident-id or --email to narrow down:")
+            for c in contacts[:10]:
+                print(f"  {c.get('id','?')}: {c.get('firstName','')} {c.get('lastName','')} ({c.get('pgy','?')})")
+            sys.exit(1)
+        resident = contacts[0] if isinstance(contacts, list) else contacts
 
     # Generate letter
     if args.type == "good-standing":
