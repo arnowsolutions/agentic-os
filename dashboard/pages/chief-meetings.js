@@ -174,7 +174,7 @@ function openChiefOutlook(date) {
     `───────────────────────────────────────────────`,
     `Montefiore Medical Center  |  Department of Urology`,
     `This is an automated message.`,
-  ].join('\\n');
+  ].join('\n');
 
   const attendees = CHIEF_ATTENDEES_EMAILS.join(';');
   const params = new URLSearchParams({
