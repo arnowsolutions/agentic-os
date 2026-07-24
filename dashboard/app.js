@@ -55,6 +55,47 @@ function loadScript(src) {
 function capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
 
 /**
+ * Shared page loading flow — loads the page JS module, finds the render
+ * function, and renders it. Used by navigate() and CUSTOM_PAGES entries.
+ */
+async function navigateLoadPage(hash, info) {
+  const bar = document.getElementById('topLoadingBar');
+  const content = document.getElementById('pageContent');
+
+  document.getElementById('pageTitle').textContent = info.title;
+  document.getElementById('pageBreadcrumb').textContent = info.breadcrumb || '';
+
+  // Close search results
+  const searchResults = document.getElementById('searchResults');
+  if (searchResults) { searchResults.innerHTML = ''; searchResults.style.display = 'none'; }
+
+  // Loading state
+  content.innerHTML = `<div class="loading"><div class="loading-spinner"></div><span>Loading ${info.title}...</span></div>`;
+  if (bar) { bar.classList.add('active'); bar.style.width = '30%'; }
+
+  try {
+    await loadPage(hash);
+    const renderFnName = `render${capitalize(hash.replace(/-./g, m => m[1].toUpperCase()))}`;
+    const renderFn = window[renderFnName];
+    if (renderFn) {
+      content.innerHTML = '';
+      content.className = 'page-content page-enter';
+      if (bar) bar.style.width = '70%';
+      await renderFn();
+      trackRecentPage(hash);
+      renderSidebar();
+      if (bar) { bar.style.width = '100%'; setTimeout(() => { bar.style.width = '0'; bar.classList.remove('active'); }, 400); }
+    } else {
+      content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" doesn't have a render function</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
+      if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
+    }
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">${escapeHtml(err.message)}</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
+    if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
+  }
+}
+
+/**
  * Hash-aware router.
  *
  * - When called with an explicit `page` that differs from the current hash,
@@ -105,9 +146,15 @@ async function navigate(page) {
   const navItem = document.querySelector(`[data-page="${hash}"]`);
   if (navItem) navItem.classList.add('active');
 
-  // Title/breadcrumb — use config if available, fall back to PAGE_TITLES,
-  // finally a generic "Unknown" placeholder. Disabled routes still get a
-  // title/breadcrumb from their config entry so the top bar looks right.
+  // Custom pages not in NAV_CONFIG (social-media-hub, etc.)
+  const CUSTOM_PAGES = {
+    'social-media-hub': { title: '📱 Social Media Hub', breadcrumb: '42+ integrated social skills' },
+  };
+  if (!route && CUSTOM_PAGES[hash]) {
+    return navigateLoadPage(hash, CUSTOM_PAGES[hash]);
+  }
+
+  // Title/breadcrumb
   const info = route
     ? { title: route.title, breadcrumb: route.breadcrumb || '' }
     : (PAGE_TITLES[hash] || { title: 'Unknown', breadcrumb: '' });

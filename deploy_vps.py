@@ -12,7 +12,7 @@ import json
 import os
 
 VPS_IP = "147.93.113.241"
-VPS_PASS = "e't64)QQ#-aWExcT"
+VPS_PASS = "QzexH#s488Ipynh5"  # updated 2026-07-18; runbook: /workspace/obsidian-vault/Reference/VPS-SSH-Access.md (key auth preferred — restore_vps_ssh.sh)
 WORKSPACE = "/var/lib/docker/volumes/hermes-webui-gsga_hermes-workspace/_data"
 COMPOSE_DIR = "/docker/hermes-webui-gsga"
 

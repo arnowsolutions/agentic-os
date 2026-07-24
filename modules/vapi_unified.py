@@ -219,16 +219,9 @@ def _load_schedule():
 
 
 def call_weekend():
-    """Get the upcoming weekend block (Fri-Mon)."""
+    """Get the weekend call block (Fri-Sun; Monday only when it's a holiday)."""
     sched = _load_schedule()
-    today = date.today()
-    wd = today.weekday()
-    if wd < 4:
-        days_to = 4 - wd
-    else:
-        days_to = 0
-    fri = today + timedelta(days=days_to)
-    dates = [(fri + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(4)]
+    dates = _weekend_dates()
     result = {"dates": dates}
     for campus, rows in sched.items():
         campus_data = []
@@ -675,4 +668,381 @@ def get_person_dashboard(name: str, role: str = "staff", email: str = "") -> dic
         except Exception:
             pass
     
+    return result
+
+
+# ============================================================================
+# LIVE UNIFIED-PLATFORM ROUTING (ADR 0001) — added 2026-07-18
+# ============================================================================
+# The functions above read flat-file snapshots (xlsx/CSV). The unified
+# platform now exposes structured machine-to-machine intents at
+# POST /api/v1/vapi/m2m/query (service-token guarded) backed by the LIVE
+# databases: urology_qgenda (editable schedule), public.call_schedule,
+# CRM contacts, SCL, and reimbursement Postgres.
+#
+# The wrappers below REBIND the public functions to try LIVE first and fall
+# back to the original flat-file implementations on any error, so the voice
+# assistant keeps working even if the unified platform is briefly down.
+# Live results carry "source": "live" for observability in call logs.
+#
+# Env (agentic-os container):
+#   UNIFIED_API_URL      default http://unified-platform:8097
+#   VAPI_SERVICE_TOKEN   shared secret; must match unified-platform .env
+#   UNIFIED_API_TIMEOUT  seconds, default 5
+
+import sys as _sys
+import urllib.request as _urlreq
+
+UNIFIED_API_URL = os.environ.get("UNIFIED_API_URL", "http://unified-platform:8097").rstrip("/")
+UNIFIED_API_TIMEOUT = float(os.environ.get("UNIFIED_API_TIMEOUT", "5"))
+
+
+def _unified_query(intent: str, params: dict = None) -> dict:
+    """POST a structured intent to the unified platform m2m endpoint."""
+    token = os.environ.get("VAPI_SERVICE_TOKEN", "")
+    if not token:
+        raise RuntimeError("VAPI_SERVICE_TOKEN not set")
+    body = json.dumps({"intent": intent, "params": params or {}}).encode("utf-8")
+    req = _urlreq.Request(
+        f"{UNIFIED_API_URL}/api/v1/vapi/m2m/query",
+        data=body,
+        headers={"Content-Type": "application/json", "X-Service-Token": token},
+        method="POST",
+    )
+    with _urlreq.urlopen(req, timeout=UNIFIED_API_TIMEOUT) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    data = payload.get("data")
+    if data is None:
+        raise RuntimeError(f"m2m response missing data for intent {intent}")
+    return data
+
+
+def _live_fail(fn_name: str, err: Exception) -> None:
+    print(f"[vapi_unified] live {fn_name} failed, using file fallback: {err}", file=_sys.stderr)
+
+
+def _strip_t(v) -> str:
+    """PG date columns arrive as '2026-07-01T00:00:00.000Z' — keep date part."""
+    return str(v or "").split("T")[0]
+
+
+def _iso_day_name(iso: str) -> str:
+    try:
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%A")
+    except Exception:
+        return ""
+
+
+def _live_task_label(row: dict) -> str:
+    typ = str(row.get("type_name") or row.get("type_category") or "").strip()
+    loc = str(row.get("location_name") or "").strip()
+    if typ and loc:
+        return f"{typ} @ {loc}"
+    return typ or loc or "Assigned"
+
+
+# ── QGenda (urology_qgenda DB — the schedule the unified editor writes) ──
+
+_file_qgenda_today = qgenda_today
+_file_qgenda_person_day = qgenda_person_day
+_file_qgenda_today_task = qgenda_today_task
+_file_qgenda_person_upcoming = qgenda_person_upcoming
+
+
+def qgenda_today(name=None):  # noqa: F811 — deliberate live rebind
+    """LIVE: today's full schedule. If name provided, filter for that person."""
+    if name:
+        return qgenda_person_day(name)
+    try:
+        data = _unified_query("today", {})
+        entries = [
+            {"name": r.get("name", ""), "task": _live_task_label(r), "date": _strip_t(r.get("date"))}
+            for r in data.get("assignments", [])
+        ]
+        if not entries:
+            return {"date": data.get("date", ""), "note": "No schedule entries for today",
+                    "entries": [], "source": "live"}
+        by_task = defaultdict(list)
+        for e in entries:
+            by_task[e["task"]].append(e["name"])
+        return {
+            "date": data.get("date", ""),
+            "total": len(entries),
+            "summary": {t: {"count": len(ns), "people": ns[:10]}
+                        for t, ns in sorted(by_task.items(), key=lambda x: -len(x[1]))},
+            "entries": entries[:30],
+            "source": "live",
+        }
+    except Exception as e:
+        _live_fail("qgenda_today", e)
+        return _file_qgenda_today(name)
+
+
+def qgenda_person_day(name: str, date_str: str = None):  # noqa: F811
+    """LIVE: a person's assignments on a date (default today)."""
+    try:
+        iso = _normalize_date(date_str) if date_str else None
+        params = {"name": name}
+        if iso:
+            params["date"] = iso
+        data = _unified_query("person_day", params)
+        assignments = [
+            {"date": _strip_t(r.get("date")), "task": _live_task_label(r),
+             "period": r.get("period") or ""}
+            for r in data.get("assignments", [])
+        ]
+        return {
+            "name": data.get("matched") or name,
+            "date": _strip_t(data.get("date")) or (iso or date.today().strftime("%Y-%m-%d")),
+            "assignments": assignments,
+            "count": len(assignments),
+            "source": "live",
+        }
+    except Exception as e:
+        _live_fail("qgenda_person_day", e)
+        return _file_qgenda_person_day(name, date_str)
+
+
+def qgenda_today_task(task_name: str):  # noqa: F811
+    """LIVE: everyone on a task/clinic/location today."""
+    try:
+        data = _unified_query("today_task", {"task": task_name})
+        people = sorted({str(p.get("name") or "") for p in data.get("people", []) if p.get("name")})
+        return {"task": task_name, "date": _strip_t(data.get("date")),
+                "people": people, "count": len(people), "source": "live"}
+    except Exception as e:
+        _live_fail("qgenda_today_task", e)
+        return _file_qgenda_today_task(task_name)
+
+
+def qgenda_person_upcoming(name: str, days: int = 7):  # noqa: F811
+    """LIVE: a person's upcoming schedule for the next N days."""
+    try:
+        data = _unified_query("person_upcoming", {"name": name, "days": int(days)})
+        assignments = []
+        for r in data.get("assignments", []):
+            iso = _strip_t(r.get("date"))
+            assignments.append({"date": iso, "day": _iso_day_name(iso), "task": _live_task_label(r)})
+        assignments.sort(key=lambda x: x["date"])
+        return {"name": data.get("matched") or name, "days": days,
+                "assignments": assignments, "count": len(assignments), "source": "live"}
+    except Exception as e:
+        _live_fail("qgenda_person_upcoming", e)
+        return _file_qgenda_person_upcoming(name, days)
+
+
+# ── Role-based call schedule (postgres public.call_schedule) ──
+
+_file_schedule_by_date = schedule_by_date
+_file_call_weekend = call_weekend
+_file_call_month = call_month
+
+_CALL_ROLE_COLS = [
+    ("primary_attending", "primary"),
+    ("backup_attending", "backup"),
+    ("peds_attending", "peds"),
+    ("chief_resident", "chief"),
+    ("first_call_resident", "first_call"),
+    ("second_call_resident", "second_call"),
+]
+
+
+def _monday_holiday(mon) -> bool:
+    """True if the given Monday is a hospital-observed holiday.
+
+    Covered: New Year's, MLK (3rd Mon Jan), Memorial (last Mon May),
+    Juneteenth, July 4th, Labor Day (1st Mon Sep), Christmas —
+    including Sunday holidays observed on Monday.
+    """
+    if mon.weekday() != 0:  # defensive: this rule only applies to Mondays
+        return False
+    m, d = mon.month, mon.day
+    if m == 1 and 15 <= d <= 21:   # MLK — 3rd Monday of January
+        return True
+    if m == 5 and d >= 25:         # Memorial Day — last Monday of May
+        return True
+    if m == 9 and d <= 7:          # Labor Day — 1st Monday of September
+        return True
+    fixed = {(1, 1), (6, 19), (7, 4), (12, 25)}
+    if (m, d) in fixed:            # fixed-date holiday falls on Monday
+        return True
+    prev = mon - timedelta(days=1)
+    if (prev.month, prev.day) in fixed:  # fell on Sunday → observed Monday
+        return True
+    return False
+
+
+def _weekend_dates() -> list:
+    """Weekend block = Fri, Sat, Sun. Monday joins ONLY if it's a holiday.
+
+    Anchored to the current weekend when today is Fri-Sun, otherwise the
+    upcoming one.
+    """
+    today_d = date.today()
+    wd = today_d.weekday()
+    if wd < 4:
+        fri = today_d + timedelta(days=4 - wd)
+    else:
+        fri = today_d - timedelta(days=wd - 4)
+    days = [fri, fri + timedelta(days=1), fri + timedelta(days=2)]
+    monday = fri + timedelta(days=3)
+    if _monday_holiday(monday):
+        days.append(monday)
+    return [d.strftime("%Y-%m-%d") for d in days]
+
+
+def _call_row_shape(row: dict) -> dict:
+    iso = _strip_t(row.get("date"))
+    return {
+        "date": iso,
+        "day": row.get("day") or _iso_day_name(iso),
+        "primary": row.get("primary_attending") or "—",
+        "backup": row.get("backup_attending") or "—",
+        "peds": row.get("peds_attending") or "—",
+        "chief": row.get("chief_resident") or "—",
+        "first_call": row.get("first_call_resident") or "—",
+        "second_call": row.get("second_call_resident") or "—",
+    }
+
+
+def schedule_by_date(date_str: str) -> dict:  # noqa: F811
+    """LIVE: call coverage (attendings + residents) for a date, all campuses."""
+    normalized = _normalize_date(date_str)
+    if normalized is None:
+        return {
+            "date": date_str,
+            "note": (
+                f"I couldn't understand the date '{date_str}'. "
+                "Please say it as a month and day, like 'July 2' or 'July 2 2026', "
+                "or use YYYY-MM-DD format."
+            ),
+        }
+    try:
+        data = _unified_query("call_schedule", {"date": normalized})
+        campuses = {}
+        for row in data.get("entries", []):
+            hosp = str(row.get("hospital") or "Unknown").title()
+            shaped = _call_row_shape(row)
+            shaped.pop("date", None)
+            shaped.pop("day", None)
+            campuses[hosp] = shaped
+        if campuses:
+            return {"date": normalized, "campuses": campuses, "source": "live"}
+        # DB has no rows for this date — the xlsx snapshot may still cover it
+        return _file_schedule_by_date(date_str)
+    except Exception as e:
+        _live_fail("schedule_by_date", e)
+        return _file_schedule_by_date(date_str)
+
+
+def call_weekend():  # noqa: F811
+    """LIVE: weekend call block (Fri-Sun; Monday only when it's a holiday)."""
+    try:
+        dates = _weekend_dates()
+        data = _unified_query("call_schedule", {"start": dates[0], "end": dates[-1]})
+        entries = data.get("entries", [])
+        if not entries:
+            return _file_call_weekend()
+        result = {"dates": dates, "source": "live"}
+        for row in entries:
+            hosp = str(row.get("hospital") or "unknown").lower()
+            result.setdefault(hosp, []).append(_call_row_shape(row))
+        return result
+    except Exception as e:
+        _live_fail("call_weekend", e)
+        return _file_call_weekend()
+
+
+def call_month(name: str):  # noqa: F811
+    """LIVE: a person's call assignments over the next 60 days."""
+    try:
+        nl = name.lower().strip()
+        start = date.today().strftime("%Y-%m-%d")
+        end = (date.today() + timedelta(days=60)).strftime("%Y-%m-%d")
+        data = _unified_query("call_schedule", {"start": start, "end": end})
+        entries = data.get("entries", [])
+        if not entries:
+            return _file_call_month(name)
+        results = []
+        for row in entries:
+            iso = _strip_t(row.get("date"))
+            for col, role in _CALL_ROLE_COLS:
+                val = str(row.get(col) or "")
+                if val and nl in val.lower():
+                    results.append({
+                        "campus": str(row.get("hospital") or "").title(),
+                        "date": iso,
+                        "day": row.get("day") or _iso_day_name(iso),
+                        "role": role,
+                    })
+                    break
+        return {"results": results, "total": len(results), "source": "live"}
+    except Exception as e:
+        _live_fail("call_month", e)
+        return _file_call_month(name)
+
+
+# ── Staff directory (CRM contacts — the source of truth) ──
+
+_file_staff_lookup = staff_lookup
+_file_staff_by_location = staff_by_location
+
+
+def staff_lookup(name: str):  # noqa: F811
+    """LIVE: find a staff member in the CRM (source of truth)."""
+    try:
+        data = _unified_query("staff_lookup", {"name": name})
+        results = []
+        for c in data.get("results", []):
+            results.append({
+                "display_name": f"{c.get('first_name', '')} {c.get('last_name', '')}".strip(),
+                "email": c.get("email") or "",
+                "phone": c.get("mobile") or "",
+                "location": c.get("location") or "",
+                "category": c.get("category") or "",
+                "title": c.get("title") or "",
+                "pgy": c.get("pgy") or "",
+            })
+        return {"results": results[:10], "count": len(results), "source": "live"}
+    except Exception as e:
+        _live_fail("staff_lookup", e)
+        return _file_staff_lookup(name)
+
+
+def staff_by_location(location: str):  # noqa: F811
+    """LIVE: all CRM staff at a location."""
+    try:
+        data = _unified_query("staff_by_location", {"location": location})
+        names = [
+            f"{c.get('first_name', '')} {c.get('last_name', '')}".strip()
+            for c in data.get("results", [])
+        ]
+        return {"location": location, "staff": names, "count": len(names), "source": "live"}
+    except Exception as e:
+        _live_fail("staff_by_location", e)
+        return _file_staff_by_location(location)
+
+
+# ── GME balance — tracker xlsx remains authoritative for spend-vs-cap; ──
+# ── live reimbursement system data is attached for context/fallback.   ──
+
+_file_gme_balance = gme_balance
+
+
+def gme_balance(name: str):  # noqa: F811
+    """Tracker xlsx first (authoritative cap math); live reimb data attached."""
+    result = _file_gme_balance(name)
+    try:
+        live = _unified_query("reimb_summary", {"name": name})
+        if isinstance(result, dict) and "error" not in result:
+            result["live_reimbursement"] = live
+        elif isinstance(live, dict) and live.get("found"):
+            return {
+                "name": live.get("matched") or name,
+                "live_reimbursement": live,
+                "note": "GME tracker file unavailable; showing live reimbursement system data.",
+                "source": "live",
+            }
+    except Exception:
+        pass
     return result
