@@ -470,31 +470,80 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
 
 
 def _handle_sick_call(args: dict):
-    cfg = _supabase_config()
-    if not cfg:
-        return {"status": "error", "message": "Sick call not configured"}
     eid = args.get("employee_id", "").strip()
-    sd = args.get("start_date", "").strip()
-    days = args.get("days_requested", 1)
-    if not eid or not sd:
+    sd_raw = args.get("start_date", "").strip()
+    days = int(args.get("days_requested", 1) or 1)
+    if not eid or not sd_raw:
         return {"status": "error", "message": "employee_id and start_date required"}
+
+    # Normalize date (handles today/tomorrow/July 7/etc.)
+    from modules import vapi_unified
+    sd = vapi_unified._normalize_date(sd_raw)
+    if not sd:
+        return {"status": "error", "message": f"Could not understand date: {sd_raw}"}
+
+    # Connect to local Postgres (VPS self-hosted Supabase)
+    import psycopg2
+    pg_password = os.environ.get("POSTGRES_PASSWORD", "")
+    if not pg_password:
+        return {"status": "error", "message": "Postgres password not configured"}
+
     try:
-        r = httpx.post(
-            f"{cfg['supabase_url']}/functions/v1/submit-intake",
-            json={
-                "employee_id": eid,
-                "start_date": sd,
-                "days_requested": days,
-                "channel": "phone",
-                "internal_service_key": cfg["service_key"],
-            },
-            headers={"Authorization": f"Bearer {cfg['service_key']}"},
-            timeout=15,
+        conn = psycopg2.connect(
+            host="127.0.0.1",
+            port=5432,
+            dbname="postgres",
+            user="postgres",
+            password=pg_password,
         )
-        if r.status_code == 200:
-            return {"status": "submitted", "confirmation": r.json().get("confirmation_number", "N/A")}
-        return {"status": "error", "message": f"Sick call API returned {r.status_code}"}
+        cur = conn.cursor()
+
+        # Resolve employee by EZ ID or name
+        employee = None
+        if eid:
+            cur.execute(
+                "SELECT id, full_name, email FROM public.employees WHERE ez_id = %s LIMIT 1",
+                (eid,),
+            )
+            employee = cur.fetchone()
+            if not employee:
+                cur.execute(
+                    "SELECT id, full_name, email FROM public.employees WHERE full_name ILIKE %s LIMIT 1",
+                    (eid,),
+                )
+                employee = cur.fetchone()
+
+        if not employee:
+            return {"status": "error", "message": f"Employee not found: {eid}"}
+
+        employee_id, full_name, email = employee
+
+        # Compute expected return date
+        from datetime import datetime as dt, timedelta
+        start = dt.strptime(sd, "%Y-%m-%d").date()
+        expected_return = (start + timedelta(days=days)).isoformat()
+
+        cur.execute(
+            """INSERT INTO public.sick_calls
+               (employee_id, shift_date, call_date, reason, reason_details, expected_return_date, start_time, status)
+             VALUES (%s, %s, CURRENT_DATE, 'sick_callout', %s, %s, NULL, 'submitted')
+             RETURNING id""",
+            (str(employee_id), sd, args.get("notes", "Submitted via voice assistant"), expected_return),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return {
+            "status": "submitted",
+            "confirmation": str(row[0]) if row else "N/A",
+            "employee": full_name,
+            "shift_date": sd,
+            "expected_return": expected_return,
+        }
     except Exception as e:
+        logger.exception("Sick call submission failed")
         return {"status": "error", "message": f"Submission failed: {e}"}
 
 
@@ -829,6 +878,7 @@ async def first_message():
 
 
 @router.post("")
+@router.post("/")
 async def vapi_webhook(request: Request):
     try:
         body = await request.json()
@@ -1523,7 +1573,7 @@ def _auto_find_coverage_for_sick_call(args: dict, sick_result: dict) -> dict:
     and email Shareef about it. Does NOT send SMS — just flags for Shareef."""
     employee_id = args.get("employee_id", "")
     start_date = args.get("start_date", "")
-    name = args.get("name", "Unknown")
+    name = sick_result.get("employee", args.get("name", "Unknown"))
     campus = args.get("campus", "")
 
     coverage_candidates = []
