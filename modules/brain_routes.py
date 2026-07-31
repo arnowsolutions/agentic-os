@@ -19,6 +19,13 @@ router = APIRouter(prefix="/api/brain", tags=["brain"])
 class BrainUpdate(BaseModel):
     content: str
 
+class TaskUpdate(BaseModel):
+    status: str | None = None
+    content: str | None = None
+    priority: str | None = None
+    category: str | None = None
+    due_date: str | None = None
+
 # ─── Helpers ─────────────────────────────────────────────────────
 
 def _read_file(path: Path) -> str:
@@ -58,7 +65,72 @@ def _get_base_dir() -> Path:
     settings = get_settings()
     return settings.BASE_DIR
 
-# ─── Routes ──────────────────────────────────────────────────────
+# ─── Tasks endpoints — reads/writes /workspace/task-list.json ─────
+# MUST be defined BEFORE the /{file_name} wildcard routes so specific
+# paths like /tasks-data match first instead of being caught by {file_name}.
+
+TASKS_PATH = Path("/workspace/task-list.json")
+
+
+@router.get("/tasks-data")
+def list_tasks():
+    """Return the full task list."""
+    if not TASKS_PATH.exists():
+        return {"tasks": []}
+    try:
+        tasks = json.loads(TASKS_PATH.read_text(encoding="utf-8"))
+        return {"tasks": tasks}
+    except (json.JSONDecodeError, OSError):
+        return {"tasks": []}
+
+
+@router.put("/tasks-data")
+def save_tasks(data: dict):
+    """Replace the entire task list."""
+    tasks = data.get("tasks", data)
+    TASKS_PATH.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
+    # Also sync copy used by the dashboard static serve
+    static_copy = Path("/workspace/agentic-os/dashboard/data/tasks.json")
+    static_copy.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
+    return {"ok": True, "count": len(tasks) if isinstance(tasks, list) else 0}
+
+
+@router.patch("/tasks-data/{task_id}")
+def patch_task(task_id: str, data: TaskUpdate):
+    """Update a single task's fields (status, content, priority, category, due_date)."""
+    if not TASKS_PATH.exists():
+        raise HTTPException(404, "Task list not found")
+    try:
+        tasks = json.loads(TASKS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        raise HTTPException(500, "Failed to read task list")
+
+    updated = False
+    for task in tasks:
+        if task.get("id") == task_id:
+            if data.status is not None:
+                task["status"] = data.status
+            if data.content is not None:
+                task["content"] = data.content
+            if data.priority is not None:
+                task["priority"] = data.priority
+            if data.category is not None:
+                task["category"] = data.category
+            if data.due_date is not None:
+                task["due_date"] = data.due_date
+            updated = True
+            break
+
+    if not updated:
+        raise HTTPException(404, f"Task '{task_id}' not found")
+
+    TASKS_PATH.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
+    static_copy = Path("/workspace/agentic-os/dashboard/data/tasks.json")
+    static_copy.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
+    return {"ok": True, "task_id": task_id, "status": data.status}
+
+
+# ─── Brain routes ────────────────────────────────────────────────
 
 @router.get("")
 def list_brain():

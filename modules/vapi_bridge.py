@@ -490,7 +490,7 @@ def _handle_sick_call(args: dict):
 
     try:
         conn = psycopg2.connect(
-            host="127.0.0.1",
+            host="147.93.113.241",
             port=5432,
             dbname="postgres",
             user="postgres",

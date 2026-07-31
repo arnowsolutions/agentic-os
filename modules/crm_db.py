@@ -35,7 +35,12 @@ def _get_pg_connection():
         import psycopg2
         pw = os.environ.get("POSTGRES_PASSWORD", "")
         if not pw:
-            # Try to read from unified env file
+            # 1. Try .pgpass file (created for cron runs)
+            pgpass = Path(os.path.expanduser("~/.hermes/.pgpass"))
+            if pgpass.exists():
+                pw = pgpass.read_text().strip()
+        if not pw:
+            # 2. Try env file
             env_path = Path("/workspace/projects/unified/app/.env")
             if env_path.exists():
                 for line in env_path.read_text().splitlines():
@@ -48,7 +53,7 @@ def _get_pg_connection():
             return None
 
         _PG_CONN = psycopg2.connect(
-            host="127.0.0.1", port=5432,
+            host="147.93.113.241", port=5432,
             dbname="postgres", user="postgres", password=pw,
             connect_timeout=3,
         )

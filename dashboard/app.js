@@ -26,6 +26,8 @@ function trackRecentPage(hash) {
 
 const PAGE_BASE = '/dashboard/pages/';
 
+const DEFAULT_ROUTE = 'tasks';
+
 async function loadPage(name) {
   // Remove any previously loaded page script so it always reloads fresh
   const old = document.querySelector(`script[src*="${PAGE_BASE}${name}.js"]`);
@@ -125,7 +127,6 @@ async function navigate(page) {
     return;
   }
 
-  const DEFAULT_ROUTE = 'dashboard';
   const hash = page || window.location.hash.slice(1) || DEFAULT_ROUTE;
   if (!hash) { window.location.hash = DEFAULT_ROUTE; return; }
 
@@ -148,6 +149,7 @@ async function navigate(page) {
 
   // Custom pages not in NAV_CONFIG (social-media-hub, etc.)
   const CUSTOM_PAGES = {
+    'tasks': { title: '📋 Tasks', breadcrumb: 'Your task list' },
     'social-media-hub': { title: '📱 Social Media Hub', breadcrumb: '42+ integrated social skills' },
   };
   if (!route && CUSTOM_PAGES[hash]) {
@@ -232,7 +234,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Build the sidebar from NAV_CONFIG before the first navigate() so nav
   // items exist when active-state is applied.
   renderSidebar();
-  navigate(window.location.hash.slice(1) || 'dashboard');
+  navigate(window.location.hash.slice(1) || DEFAULT_ROUTE);
   updateAgentStatus();
   loadHealth();
   setInterval(updateAgentStatus, 15000);
