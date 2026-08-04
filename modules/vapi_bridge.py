@@ -228,7 +228,13 @@ def _crm_role_to_vapi(cat: str) -> str:
     return m.get(cat, "other")
 
 
-def _get_greeting(role: str, name: str) -> str:
+def _get_greeting(role: str, name: str, salutation: str = "", real_name: str = "") -> str:
+    # Salutation-based addressing (Mr./Ms./Dr. + last name) — matches the call-out line.
+    # real_name is the actual full name (display_name may be a nickname like "Big Reef").
+    if salutation:
+        full = real_name or name
+        last = full.split()[-1] if full.split() else name
+        return f"Welcome back, {salutation} {last}! How can I help you today?"
     if role == "administrator":
         return f"Welcome back, {name}! You can manage schedules, check reimbursements, or review call coverage."
     elif role == "attending":
@@ -241,6 +247,21 @@ def _get_greeting(role: str, name: str) -> str:
         first = name.split()[0] if name.split() else name
         return f"Welcome, {first}! How can I help you today?"
     return f"Welcome back, {name}!"
+
+
+def _db_pin_ok(u: dict, pin: str):
+    """Verify PIN against the unified platform DB (single source of truth —
+    public.users.pin_hash, bcrypt). Returns:
+      True/False when the account HAS a DB row (authoritative),
+      None when it does not (caller falls back to the legacy JSON hash)."""
+    try:
+        from modules.vapi_unified import _unified_query
+        r = _unified_query("verify_pin", {"ez_id": u.get("ez_id", ""), "pin": pin})
+        if r.get("found"):
+            return bool(r.get("valid"))
+        return None
+    except Exception:
+        return None
 
 
 def _handle_auth(name: str, pin: str, ez_id: str = "", client_ip: str = "", request: Request | None = None, caller_phone: str = ""):
@@ -281,7 +302,7 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
                 "verified": True,
                 "auto_verified": True,
                 "user": {k: v for k, v in vip_user.items() if k != "pin_hash"},
-                "greeting": _get_greeting(role, display),
+                "greeting": _get_greeting(role, display, vip_user.get("salutation", ""), vip_user.get("name", "")),
                 "message": "Verified by phone.",
                 "next_step": "proceed",
             }
@@ -310,9 +331,12 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
             db_ez = (u.get("ez_id", "") or "").strip().lower()
             if db_ez and (db_ez == ez_id_clean or ez_id_clean in db_ez or db_ez in ez_id_clean):
                 name_lower = u.get("name", "").lower().strip()
-                if u.get("pin_hash") == _hash_pin(pin_clean):
+                pin_ok = _db_pin_ok(u, pin_clean)
+                if pin_ok is None:
+                    pin_ok = u.get("pin_hash") == _hash_pin(pin_clean)
+                if pin_ok:
                     profile = {k: v for k, v in u.items() if k != "pin_hash"}
-                    greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid))
+                    greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid), u.get("salutation", ""), u.get("name", ""))
                     _auth_limiter.record(name, True, ip)
                     _log_auth_attempt(ez_id_clean, len(pin_clean), True, "verified_ezid", ip, ua)
                     return {
@@ -343,7 +367,7 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
                     return {
                         "verified": True,
                         "user": {"name": display, "role": role, "email": c.get("email", "")},
-                        "greeting": _get_greeting(role, c.get("firstName", "")),
+                        "greeting": _get_greeting(role, c.get("firstName", ""), c.get("salutation", ""), f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()),
                         "message": "Verified.",
                         "next_step": "proceed",
                     }
@@ -367,9 +391,12 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
         dbd = u.get("display_name", "").lower().strip()
         if _strong(name_lower, uid, dbn, dbd):
             had = True
-            if u.get("pin_hash") == _hash_pin(pin_clean):
+            pin_ok = _db_pin_ok(u, pin_clean)
+            if pin_ok is None:
+                pin_ok = u.get("pin_hash") == _hash_pin(pin_clean)
+            if pin_ok:
                 profile = {k: v for k, v in u.items() if k != "pin_hash"}
-                greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid))
+                greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid), u.get("salutation", ""), u.get("name", ""))
                 _auth_limiter.record(name, True, ip)
                 _log_auth_attempt(name, len(pin_clean), True, "verified", ip, ua)
                 return {
@@ -404,11 +431,14 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
     for uid, u in users.items():
         dbn = u.get("name", "").lower().strip()
         dbd = u.get("display_name", "").lower().strip()
+        pin_ok = _db_pin_ok(u, pin_clean)
+        if pin_ok is None:
+            pin_ok = u.get("pin_hash") == _hash_pin(pin_clean)
         for w in words:
             for dw in (dbn + " " + dbd).replace("-", " ").split():
-                if len(dw) >= 3 and _fuzzy(w, dw) and u.get("pin_hash") == _hash_pin(pin_clean):
+                if len(dw) >= 3 and _fuzzy(w, dw) and pin_ok:
                     profile = {k: v for k, v in u.items() if k != "pin_hash"}
-                    greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid))
+                    greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid), u.get("salutation", ""), u.get("name", ""))
                     _auth_limiter.record(name, True, ip)
                     _log_auth_attempt(name, len(pin_clean), True, "verified_fuzzy", ip, ua)
                     return {
@@ -444,7 +474,7 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
                 return {
                     "verified": True,
                     "user": {"name": display, "role": role, "email": c.get("email", "")},
-                    "greeting": _get_greeting(role, c.get("firstName", "")),
+                    "greeting": _get_greeting(role, c.get("firstName", ""), c.get("salutation", ""), f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()),
                     "message": "Verified.",
                     "next_step": "proceed",
                 }
@@ -970,7 +1000,7 @@ async def _dispatch_vapi_webhook(request: Request, body: dict):
                 if vip_user:
                     role = vip_user.get("role", "")
                     display = vip_user.get("display_name") or vip_user.get("name", "")
-                    greeting = _get_greeting(role, display)
+                    greeting = _get_greeting(role, display, vip_user.get("salutation", ""), vip_user.get("name", ""))
                     _log_auth_attempt(display, 0, True, "verified_phone", ip, ua)
                     return {"result": json.dumps({
                         "verified": True,
@@ -1216,6 +1246,9 @@ async def _dispatch_vapi_webhook(request: Request, body: dict):
         elif fn_name == "resetUserPin":
             r = _admin_reset_pin(fn_args.get("name", ""), fn_args.get("new_pin", ""))
             return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
+        elif fn_name == "changeMyPin":
+            r = _change_my_pin(fn_args)
+            return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
         elif fn_name == "unlockUser":
             r = _admin_unlock_user(fn_args.get("name", ""))
             return {"result": json.dumps(r), "_metric_fn": fn_name}, "ok"
@@ -1301,6 +1334,7 @@ def _lookup_by_phone(phone: str) -> dict | None:
                 "role": role,
                 "email": c.get("email", ""),
                 "ez_id": c.get("ezId", ""),
+                "salutation": c.get("salutation", ""),
             }
 
     # Check PIN DB
@@ -1670,6 +1704,68 @@ def _normalize_name_entry(name):
     return _normalize_name(name) if name else ""
 
 # ─── Admin tool handlers (called by the dispatch above) ──────────────────────
+def _change_my_pin(args: dict) -> dict:
+    """Self-service PIN change for a VERIFIED caller — requires current PIN."""
+    ez_id = str(args.get("caller_ez_id") or args.get("ez_id") or "").strip()
+    name = (args.get("caller_name") or args.get("name") or "").strip()
+    current_pin = str(args.get("current_pin") or "").strip()
+    new_pin = str(args.get("new_pin") or "").strip()
+
+    if not new_pin.isdigit() or len(new_pin) != 4:
+        return {"success": False, "message": "The new PIN must be exactly 4 digits. Please try again."}
+
+    # DB is the single source of truth when the account has a users row.
+    try:
+        from modules.vapi_unified import _unified_query
+        r = _unified_query("change_pin", {"ez_id": ez_id, "current_pin": current_pin, "new_pin": new_pin})
+        if r.get("found"):
+            # Keep the legacy JSON in sync (unused for DB users, but stays truthful)
+            try:
+                users_legacy = _load_pin_db()
+                for k, u in users_legacy.items():
+                    if u.get("ez_id") and ez_id and str(u.get("ez_id", "")).strip().lower() == ez_id.lower():
+                        users_legacy[k]["pin_hash"] = _hash_pin(new_pin)
+                        PIN_DB_PATH.write_text(json.dumps(users_legacy, indent=2))
+                        _invalidate_cache(PIN_DB_PATH)
+                        break
+            except Exception:
+                pass
+            return {"success": bool(r.get("success")), "message": r.get("message", "")}
+    except Exception:
+        pass
+
+    # Legacy JSON path — Vapi-only identities without a users row.
+    users = _load_pin_db()
+    uid = None
+    if ez_id:
+        el = ez_id.lower()
+        for k, u in users.items():
+            db_ez = (u.get("ez_id") or "").strip().lower()
+            if db_ez and (db_ez == el or el in db_ez or db_ez in el):
+                uid = k
+                break
+    if not uid and name:
+        nl = _normalize_name(name).lower()
+        for k, u in users.items():
+            dbn = (u.get("name") or "").lower()
+            dbd = (u.get("display_name") or "").lower()
+            if nl and (nl == dbn or nl == dbd or (len(nl) >= 3 and (nl in dbn or dbn in nl or nl in dbd or dbd in nl))):
+                uid = k
+                break
+    if not uid:
+        return {"success": False, "message": "I couldn't find your account to change the PIN. Please verify your identity again."}
+
+    u = users[uid]
+    if not current_pin or u.get("pin_hash") != _hash_pin(current_pin):
+        return {"success": False, "message": "Your current PIN didn't match. Please try again."}
+
+    users[uid]["pin_hash"] = _hash_pin(new_pin)
+    PIN_DB_PATH.write_text(json.dumps(users, indent=2))
+    _invalidate_cache(PIN_DB_PATH)
+    audit_record("change_my_pin", user=uid)
+    return {"success": True, "message": "Your PIN has been changed. Please use your new 4-digit PIN going forward."}
+
+
 def _admin_reset_pin(name: str, new_pin: str) -> dict:
     if not name or not new_pin or len(new_pin) != 4 or not new_pin.isdigit():
         return {"success": False, "message": "Please provide a valid name and 4-digit PIN."}
@@ -1682,6 +1778,23 @@ def _admin_reset_pin(name: str, new_pin: str) -> dict:
             break
     if not found:
         return {"success": False, "message": f"Could not find user '{name}' in the system."}
+
+    # DB is the single source of truth when the account has a users row.
+    ez = str(users[found].get("ez_id") or "").strip()
+    if ez:
+        try:
+            from modules.vapi_unified import _unified_query
+            r = _unified_query("admin_set_pin", {"ez_id": ez, "new_pin": new_pin})
+            if r.get("found"):
+                users[found]["pin_hash"] = _hash_pin(new_pin)
+                PIN_DB_PATH.write_text(json.dumps(users, indent=2))
+                _invalidate_cache(PIN_DB_PATH)
+                audit_record("admin_reset_pin", user=found)
+                return {"success": True, "message": f"PIN reset for {users[found].get('name', found)}. New PIN is {new_pin}."}
+        except Exception:
+            pass
+
+    # Legacy JSON path — Vapi-only identities without a users row.
     users[found]["pin_hash"] = _hash_pin(new_pin)
     PIN_DB_PATH.write_text(json.dumps(users, indent=2))
     _invalidate_cache(PIN_DB_PATH)
