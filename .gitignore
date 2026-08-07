@@ -33,6 +33,9 @@ logs/
 reports/**
 !reports/.gitkeep
 
+# Sub-I exit interview .eml files (student PII/CVs — DO NOT push to public repo)
+data/subi_eml/
+
 # Debug / one-off scripts (superseded or contain secrets)
 calendar_mailer.py
 check_vapi.py

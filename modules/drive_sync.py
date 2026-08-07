@@ -39,13 +39,16 @@ def _get_workspace():
     try:
         sys.path.insert(0, _WORKSPACE)
         from modules.google_workspace import GoogleWorkspace
-        # Use token from shared workspace volume (accessible on both container and VPS)
-        tok = os.path.join(_WORKSPACE, "data", "google_token.json")
-        cred = os.path.join(_WORKSPACE, "data", "google_credentials.json")
-        if not os.path.exists(tok):
-            # Fallback to home dir
-            tok = os.path.expanduser("~/.hermes/google_token.json")
-            cred = os.path.expanduser("~/.hermes/google_credentials.json")
+        # Prefer the known-valid token in $HERMES_HOME; fall back to workspace volume copy.
+        # NOTE: HOME is overridden to $HERMES_HOME/home in cron, so never use expanduser('~').
+        _hh = os.environ.get("HERMES_HOME", "")
+        if _hh and os.path.exists(os.path.join(_hh, "google_token.json")):
+            tok = os.path.join(_hh, "google_token.json")
+            cred = os.path.join(_hh, "google_credentials.json")
+        else:
+            # Fallback to shared workspace volume (accessible on both container and VPS)
+            tok = os.path.join(_WORKSPACE, "data", "google_token.json")
+            cred = os.path.join(_WORKSPACE, "data", "google_credentials.json")
         _gw = GoogleWorkspace(
             user_id="urologyresidency",
             token_path=tok,
