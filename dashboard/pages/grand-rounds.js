@@ -396,11 +396,10 @@ async function viewMonday() {
 function openMondayOutlook(date, topic, resident, attending) {
   const loc = document.getElementById('grLocation')?.value || '';
   const rList = document.getElementById('grResidentList')?.value || '';
-  const fList = document.getElementById('grFacultyList')?.value || '';
-  const attendees = [rList, fList].filter(Boolean).join(',');
+  const attendees = rList;
   
   const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
-  const body = `Urology Department — Resident AM Conference\\nDate: ${date}\\nTime: 7:00-8:00 AM\\nTopic: ${topic || 'TBD'}\\nResident: ${resident || 'TBD'}\\nAttending: ${attending || 'TBD'}\\nLocation: ${loc}`;
+  const body = `Urology Department — Resident AM Conference\nDate: ${date}\nTime: 7:00-8:00 AM\nTopic: ${topic || 'TBD'}\nResident: ${resident || 'TBD'}\nAttending: ${attending || 'TBD'}\nLocation: ${loc}`.replace(/\\n/g, String.fromCharCode(13,10));
   const params = new URLSearchParams({
     subject: subj, body, location: loc,
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
@@ -485,7 +484,8 @@ function openOutlookForDate(date, title1, title2) {
   
   const isFaculty = /faculty\s*meeting/i.test(title1);
   const isPeds = /peds/i.test(title1);
-  const attendees = isFaculty ? facultyList : [residentList, facultyList].filter(Boolean).join(',');
+  // grand_rounds list already includes both residents and faculty — don't combine
+  const attendees = isFaculty ? facultyList : residentList;
   
   const dt = new Date(date + 'T12:00:00');
   const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -528,7 +528,7 @@ function openOutlookForDate(date, title1, title2) {
     '',
     'Montefiore Medical Center | Department of Urology',
     '1250 Waters Place, Tower One, PH-2, Bronx, NY 10461',
-  ].filter(function(l) { return l !== ''; }).join('\\n');
+  ].filter(function(l) { return l !== ''; }).join(String.fromCharCode(13,10));
   
   const params = new URLSearchParams({
     subject: subject,
