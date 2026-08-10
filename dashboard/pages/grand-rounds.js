@@ -399,7 +399,13 @@ function openMondayOutlook(date, topic, resident, attending) {
   const attendees = rList;
   
   const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
-  const body = `Urology Department — Resident AM Conference\\nDate: ${date}\\nTime: 7:00-8:00 AM\\nTopic: ${topic || 'TBD'}\\nResident: ${resident || 'TBD'}\\nAttending: ${attending || 'TBD'}\\nLocation: ${loc}`;
+  const body = `Urology Department — Resident AM Conference
+Date: ${date}
+Time: 7:00-8:00 AM
+Topic: ${topic || 'TBD'}
+Resident: ${resident || 'TBD'}
+Attending: ${attending || 'TBD'}
+Location: ${loc}`;
   const params = new URLSearchParams({
     subject: subj, body, location: loc,
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
@@ -528,7 +534,7 @@ function openOutlookForDate(date, title1, title2) {
     '',
     'Montefiore Medical Center | Department of Urology',
     '1250 Waters Place, Tower One, PH-2, Bronx, NY 10461',
-  ].filter(function(l) { return l !== ''; }).join('\\n');
+  ].filter(function(l) { return l !== ''; }).join(String.fromCharCode(10));
   
   const params = new URLSearchParams({
     subject: subject,
