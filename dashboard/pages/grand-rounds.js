@@ -86,67 +86,26 @@ content.innerHTML = `
     </div>
   </div>
 
-    <div style="display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start">
-      <!-- Sidebar Controls -->
-      <div class="card" style="position:sticky;top:70px">
-        <div class="card-header"><span class="card-title">⚙ Controls</span></div>
-        <div class="card-body" style="font-size:13px">
-          
-          <div style="margin-bottom:10px">
-            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Distribution Lists</label>
-            <input type="text" id="grResidentList" placeholder="Residents email" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px;margin-bottom:4px" value="residents@x.org" />
-            <input type="text" id="grFacultyList" placeholder="Faculty email" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px" value="faculty@x.org" />
-          </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--muted)">
+        <span id="grCount">${meetings.length}</span> meetings
+      </span>
+      <input type="text" placeholder="Search..." id="grSearch" oninput="grFilters.search=this.value;renderGrandRounds()" style="background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:4px 8px;font-size:12px;flex:1;min-width:120px" />
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap">
+        <input type="checkbox" id="grFilterNoGR" ${grFilters.skipNoGR?'checked':''} onchange="grFilters.skipNoGR=this.checked;renderGrandRounds()" />Hide NO-GR
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap">
+        <input type="checkbox" id="grFilterFaculty" ${grFilters.skipFaculty?'checked':''} onchange="grFilters.skipFaculty=this.checked;renderGrandRounds()" />Hide Faculty
+      </label>
+      <select id="grMonthJump" onchange="grFilters.month=this.value;renderGrandRounds()" style="background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:12px">
+        <option value="">All months</option>
+        ${['July','August','September','October','November','December','January','February','March','April','May','June','July 2027'].map(m => '<option value="' + m + '"' + (grFilters.month===m?' selected':'') + '>' + m + '</option>').join('')}
+      </select>
+      <button class="btn btn-sm" style="font-size:11px" onclick="openAllOutlook()">📧 All Outlook</button>
+      <button class="btn btn-sm" style="font-size:11px" onclick="downloadAllIcs()">📥 All .ics</button>
+    </div>
 
-          <div style="margin-bottom:10px">
-            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Location / Zoom</label>
-            <input type="text" id="grLocation" placeholder="Room or Zoom link" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px" />
-          </div>
-
-          <div style="margin-bottom:10px">
-            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Filters</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer">
-              <input type="checkbox" id="grFilterNoGR" ${grFilters.skipNoGR?'checked':''} onchange="grFilters.skipNoGR=this.checked;renderGrandRounds()" /> Hide "NO GRAND ROUNDS"
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer">
-              <input type="checkbox" id="grFilterFaculty" ${grFilters.skipFaculty?'checked':''} onchange="grFilters.skipFaculty=this.checked;renderGrandRounds()" /> Hide FACULTY MEETING
-            </label>
-          </div>
-
-          <div style="margin-bottom:10px">
-            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Month Jump</label>
-            <select id="grMonthJump" onchange="grFilters.month=this.value;renderGrandRounds()" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px">
-              <option value="">All months</option>
-              ${['July','August','September','October','November','December','January','February','March','April','May','June','July 2027'].map(m => 
-                '<option value="' + m + '"' + (grFilters.month===m?' selected':'') + '>' + m + '</option>'
-              ).join('')}
-            </select>
-          </div>
-
-          <div style="margin-bottom:10px">
-            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Bulk Paste CME Codes</label>
-            <textarea id="grBulkCodes" placeholder="YYYY-MM-DD, CODE1, CODE2" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:11px;min-height:60px;font-family:monospace"></textarea>
-            <button class="btn btn-sm" style="margin-top:4px;width:100%;font-size:11px" onclick="applyBulkCodes()">Apply Codes</button>
-          </div>
-
-          <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
-            <button class="btn btn-sm" style="font-size:11px" onclick="openAllOutlook()">📧 Open All in Outlook</button>
-            <button class="btn btn-sm" style="font-size:11px" onclick="downloadAllIcs()">📥 Download All .ics</button>
-            <button class="btn btn-sm" style="font-size:11px" onclick="saveCodesLocally()">💾 Save Codes</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Main Table -->
-      <div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-          <span style="font-size:13px;color:var(--muted)">
-            <span id="grCount">${meetings.length}</span> meetings visible
-          </span>
-          <input type="text" placeholder="Search..." id="grSearch" oninput="grFilters.search=this.value;renderGrandRounds()" style="background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:4px 8px;font-size:12px;flex:1;min-width:150px" />
-        </div>
-
-        <div style="overflow-x:auto;border:1px solid var(--line);border-radius:8px">
+    <div style="overflow-x:auto;border:1px solid var(--line);border-radius:8px">
           <table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead>
               <tr style="background:#0b1220;border-bottom:1px solid var(--line)">
@@ -163,8 +122,8 @@ content.innerHTML = `
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+    <input type="hidden" id="grResidentList" />
+    <input type="hidden" id="grFacultyList" />
   `;
 
   // Load saved codes from localStorage
@@ -237,14 +196,14 @@ function renderTableRows(meetings) {
           <div style="font-size:10px;color:var(--muted)">${getDayOfWeek(m.date)}</div>
         </td>
         <td style="padding:8px 10px;vertical-align:top">
-          ${escapeHtml(m.title1)}
+          ${m.title1 !== '\u2014' ? `<input type="text" value="${escapeHtml(m.title1)}" data-date="${m.date}" data-slot="title1" class="gr-title-input" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px" onchange="saveGrTitle('${m.date}','title1',this.value)" />` : '<span style="color:var(--muted)">\u2014</span>'}
           ${m.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(m.notes)}</div>` : ''}
           ${facBadge}
         </td>
         <td style="padding:8px 10px;vertical-align:top">
           ${m.title1 !== '—' ? `<input type="text" value="${code1}" data-date="${m.date}" data-slot="hour1" class="gr-code-input" style="width:80px;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px;font-family:monospace" onchange="updateCode('${m.date}','hour1',this.value)" />` : '<span style="color:var(--muted)">—</span>'}
         </td>
-        <td style="padding:8px 10px;vertical-align:top">${escapeHtml(m.title2)}</td>
+        <td style="padding:8px 10px;vertical-align:top">${m.title2 !== '\u2014' ? `<input type="text" value="${escapeHtml(m.title2)}" data-date="${m.date}" data-slot="title2" class="gr-title-input" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px" onchange="saveGrTitle('${m.date}','title2',this.value)" />` : '<span style="color:var(--muted)">\u2014</span>'}</td>
         <td style="padding:8px 10px;vertical-align:top">
           ${m.title2 !== '—' ? `<input type="text" value="${code2}" data-date="${m.date}" data-slot="hour2" class="gr-code-input" style="width:80px;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px;font-family:monospace" onchange="updateCode('${m.date}','hour2',this.value)" />` : '<span style="color:var(--muted)">—</span>'}
         </td>
@@ -640,5 +599,22 @@ async function loadGrEmailGroups() {
     }
   } catch(e) {
     console.warn('Could not load email groups:', e);
+  }
+}
+
+// ── Save editable title changes to GR_DATA via API ─────────
+async function saveGrTitle(date, slot, newValue) {
+  const payload = { date: date, type: 'grand_rounds' };
+  if (slot === 'title1') payload.topic_7_8 = newValue.trim();
+  else payload.topic_8_9 = newValue.trim();
+  try {
+    const res = await api.post('/api/crm/conference/update', payload);
+    if (res && res.success) {
+      showToast('✅ Saved', 'success');
+    } else {
+      showToast('❌ Save failed', 'error');
+    }
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Save failed'), 'error');
   }
 }
