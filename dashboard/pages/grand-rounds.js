@@ -400,7 +400,7 @@ function openMondayOutlook(date, topic, resident, attending) {
   
   const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
   const body = [
-    '<div style="text-align:center"><strong>Montefiore Urology - Resident AM Conference</strong></div>',
+    '<center><strong>Montefiore Urology - Resident AM Conference</strong></center>',
     '<br>',
     'Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + date,
     'Time&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 8:00 AM',
@@ -518,7 +518,7 @@ function openOutlookForDate(date, title1, title2) {
   const zoomLink = 'https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09';
   
   const body = [
-    '<div style="text-align:center"><strong>Montefiore Urology - Grand Rounds</strong></div>',
+    '<center><strong>Montefiore Urology - Grand Rounds</strong></center>',
     '<br>',
     'Date&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + formatted,
     'Time&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 9:00 AM (Eastern)',
@@ -532,12 +532,9 @@ function openOutlookForDate(date, title1, title2) {
     '<br>',
     '<strong>ZOOM MEETING DETAILS</strong>',
     '<br>',
-    'Join&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="' + zoomLink + '">Click here to join Zoom</a>',
+    '<a href="' + zoomLink + '">Click here to join Zoom</a>',
     '<br>',
-    '<div style="background:#f5f5f5;padding:8px 12px;border-radius:4px">',
-    'Meeting ID&nbsp;&nbsp;867 7387 8358<br>',
-    'Passcode&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;466916',
-    '</div>',
+    '<table style="background:#f5f5f5;padding:8px 12px;border:1px solid #ddd;border-radius:4px"><tr><td style="padding:4px 12px">Meeting ID&nbsp;&nbsp;867 7387 8358</td></tr><tr><td style="padding:4px 12px">Passcode&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;466916</td></tr></table>',
     '<br>',
     '<strong>PHONE DIAL-IN</strong>',
     '<br>',
