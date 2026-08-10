@@ -400,17 +400,17 @@ function openMondayOutlook(date, topic, resident, attending) {
   
   const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
   const body = [
-    '<strong>Montefiore Urology - Resident AM Conference</strong>',
+    '<div style="text-align:center"><strong>Montefiore Urology - Resident AM Conference</strong></div>',
     '<hr>',
-    '<strong>Date</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + date + '<br>',
-    '<strong>Time</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 8:00 AM<br>',
-    '<strong>Topic</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + (topic || 'TBD') + '<br>',
-    '<strong>Resident</strong>&nbsp;&nbsp;&nbsp;' + (resident || 'TBD') + '<br>',
-    '<strong>Attending</strong>&nbsp;&nbsp;' + (attending || 'TBD') + '<br>',
+    '<strong>Date</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + date,
+    '<strong>Time</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 8:00 AM',
+    '<strong>Topic</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + (topic || 'TBD'),
+    '<strong>Resident</strong>&nbsp;&nbsp;&nbsp;' + (resident || 'TBD'),
+    '<strong>Attending</strong>&nbsp;&nbsp;' + (attending || 'TBD'),
     '<strong>Location</strong>&nbsp;&nbsp;&nbsp;' + loc,
     '<hr>',
     'Montefiore Medical Center | Department of Urology',
-  ].join('<br>\n');
+  ].join('<br>');
   const params = new URLSearchParams({
     subject: subj, body, location: loc,
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
@@ -518,31 +518,35 @@ function openOutlookForDate(date, title1, title2) {
   const zoomLink = 'https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09';
   
   const body = [
-    '<strong>Montefiore Urology - Grand Rounds</strong>',
+    '<div style="text-align:center"><strong>Montefiore Urology - Grand Rounds</strong></div>',
     '<hr>',
-    '<strong>Date</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + formatted + '<br>',
-    '<strong>Time</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 9:00 AM (Eastern)<br>',
-    '<strong>Location</strong>&nbsp;&nbsp;&nbsp;' + locationStr + '<br>',
+    '<strong>Date</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + formatted,
+    '<strong>Time</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 9:00 AM (Eastern)',
+    '<strong>Location</strong>&nbsp;&nbsp;&nbsp;' + locationStr,
     '<strong>Type</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + typeLabel,
     '<hr>',
-    '<strong>AGENDA</strong><br><br>',
-    '<strong>7:00 - 8:00 AM</strong>&nbsp;&nbsp;' + topic7 + '<br>',
-    (topic8 ? '<strong>8:00 - 9:00 AM</strong>&nbsp;&nbsp;' + topic8 : ''),
+    '<strong>AGENDA</strong>',
+    '',
+    '<strong>7:00 - 8:00 AM</strong>&nbsp;&nbsp;' + topic7,
+    topic8 ? '<strong>8:00 - 9:00 AM</strong>&nbsp;&nbsp;' + topic8 : '',
     '<hr>',
-    '<strong>ZOOM MEETING DETAILS</strong><br><br>',
-    '<strong>Join</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="' + zoomLink + '">Click here to join Zoom</a><br>',
-    '<strong>Meeting ID</strong>&nbsp;&nbsp;<code>867 7387 8358</code><br>',
+    '<strong>ZOOM MEETING DETAILS</strong>',
+    '',
+    '<strong>Join</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="' + zoomLink + '">Click here to join Zoom</a>',
+    '<strong>Meeting ID</strong>&nbsp;&nbsp;<code>867 7387 8358</code>',
     '<strong>Passcode</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<code>466916</code>',
     '<hr>',
-    '<strong>PHONE DIAL-IN</strong><br><br>',
-    '&bull; +1 646-558-8656 (New York)<br>',
-    '&bull; +1 301-715-8592 (Washington, DC)<br>',
-    '&bull; +1 312-626-6799 (Chicago)<br><br>',
+    '<strong>PHONE DIAL-IN</strong>',
+    '',
+    '&bull; +1 646-558-8656 (New York)',
+    '&bull; +1 301-715-8592 (Washington, DC)',
+    '&bull; +1 312-626-6799 (Chicago)',
+    '',
     'Enter Meeting ID, then Passcode when prompted.',
     '<hr>',
-    'Montefiore Medical Center | Department of Urology<br>',
+    'Montefiore Medical Center | Department of Urology',
     '1250 Waters Place, Tower One, PH-2, Bronx, NY 10461',
-  ].filter(function(l) { return l !== ''; }).join('<br>\n');
+  ].filter(function(l) { return l !== ''; }).join('<br>');
   
   const params = new URLSearchParams({
     subject: subject,
