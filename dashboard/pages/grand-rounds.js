@@ -396,8 +396,7 @@ async function viewMonday() {
 function openMondayOutlook(date, topic, resident, attending) {
   const loc = document.getElementById('grLocation')?.value || '';
   const rList = document.getElementById('grResidentList')?.value || '';
-  const fList = document.getElementById('grFacultyList')?.value || '';
-  const attendees = [rList, fList].filter(Boolean).join(',');
+  const attendees = rList;
   
   const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
   const body = `Urology Department — Resident AM Conference\\nDate: ${date}\\nTime: 7:00-8:00 AM\\nTopic: ${topic || 'TBD'}\\nResident: ${resident || 'TBD'}\\nAttending: ${attending || 'TBD'}\\nLocation: ${loc}`;
@@ -485,7 +484,8 @@ function openOutlookForDate(date, title1, title2) {
   
   const isFaculty = /faculty\s*meeting/i.test(title1);
   const isPeds = /peds/i.test(title1);
-  const attendees = isFaculty ? facultyList : [residentList, facultyList].filter(Boolean).join(',');
+  // grand_rounds list already includes both residents and faculty
+  const attendees = isFaculty ? facultyList : residentList;
   
   const dt = new Date(date + 'T12:00:00');
   const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
