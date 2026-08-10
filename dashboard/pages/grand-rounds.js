@@ -169,6 +169,7 @@ content.innerHTML = `
 
   // Load saved codes from localStorage
   loadCodes();
+  loadGrEmailGroups();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -393,36 +394,15 @@ async function viewMonday() {
 }
 
 function openMondayOutlook(date, topic, resident, attending) {
+  const loc = document.getElementById('grLocation')?.value || '';
   const rList = document.getElementById('grResidentList')?.value || '';
   const fList = document.getElementById('grFacultyList')?.value || '';
   const attendees = [rList, fList].filter(Boolean).join(',');
   
-  const zoomLink = 'https://montefiore.zoom.us/j/92009850717?pwd=25ask1SzLX2SdSrTbbhzb159UsyDFY.1';
-  const meetingId = '920 0985 0717';
-  const passcode = '808018';
-  
-  const body = [
-    'Montefiore Urology — Resident AM Conference',
-    '\u2500'.repeat(39),
-    'Date: ' + date,
-    'Time: 7:00-8:00 AM',
-    'Topic: ' + (topic || 'TBD'),
-    'Resident: ' + (resident || 'TBD'),
-    'Attending: ' + (attending || 'TBD'),
-    'Location: Zoom',
-    '',
-    'ZOOM MEETING DETAILS',
-    '  Join: ' + zoomLink,
-    '  Meeting ID: ' + meetingId,
-    '  Passcode: ' + passcode,
-    '',
-    'Montefiore Medical Center',
-    'Department of Urology',
-  ].join('\\n');
-  
-  const subj = `Resident AM Conference: ${topic}`;
+  const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
+  const body = `Urology Department — Resident AM Conference\\nDate: ${date}\\nTime: 7:00-8:00 AM\\nTopic: ${topic || 'TBD'}\\nResident: ${resident || 'TBD'}\\nAttending: ${attending || 'TBD'}\\nLocation: ${loc}`;
   const params = new URLSearchParams({
-    subject: subj, body, location: 'Zoom',
+    subject: subj, body, location: loc,
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
     to: attendees
   });
@@ -508,49 +488,34 @@ function openOutlookForDate(date, title1, title2) {
   const isPeds = /peds/i.test(title1);
   const attendees = isFaculty ? facultyList : [residentList, facultyList].filter(Boolean).join(',');
   
-  const zoomLink = 'https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09';
-  const meetingId = '867 7387 8358';
-  const passcode = '466916';
-  const physicalLoc = 'Hutch | PH2 Conf A & Conf B';
-  const typePrefix = isFaculty ? '[FACULTY] ' : (isPeds ? '[PEDS] ' : '');
+  const prefix = isFaculty ? '[FACULTY] ' : (isPeds ? 'PEDS: ' : '');
+  const topics = [title1 !== '\u2014' ? title1 : '', title2 !== '\u2014' ? title2 : ''].filter(Boolean).join(' / ');
   
-  function bodyText(topic, timeLabel, isSecond) {
-    const prefix = codes.hour1 && !isSecond ? '[CME ' + codes.hour1 + '] ' : (codes.hour2 && isSecond ? '[CME ' + codes.hour2 + '] ' : '');
-    return [
-      'Montefiore Urology — Grand Rounds',
-      '\u2500'.repeat(39),
-      'Date: ' + date,
-      'Time: ' + timeLabel,
-      'Topic: ' + prefix + topic,
-      'Location: ' + physicalLoc + ' / Zoom',
-      '',
-      'ZOOM MEETING DETAILS',
-      '  Join: ' + zoomLink,
-      '  Meeting ID: ' + meetingId,
-      '  Passcode: ' + passcode,
-      '',
-      'Montefiore Medical Center',
-      'Department of Urology',
-    ].join('\\n');
-  }
-  
+  // Open 7-8 AM meeting
   if (title1 && title1 !== '\u2014') {
-    const subj1 = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${title1}` : `Grand Rounds: ${title1}`;
-    const body1 = bodyText(title1, '7:00-8:00 AM', false);
-    window.open(`https://outlook.office.com/calendar/deeplink/compose?${new URLSearchParams({
-      subject: typePrefix + subj1, body: body1, location: 'Zoom',
-      startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`, to: attendees
-    })}`, '_blank');
+    const subj = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${title1}` : `Grand Rounds: ${title1}`;
+    const body = `Urology Department — Grand Rounds\\nDate: ${date}\\nTime: 7:00-8:00 AM\\nTopic: ${title1}\\n${codes.hour1 ? `CME Code: ${codes.hour1}\\n` : ''}${title2 && title2 !== '\u2014' ? `8:00-9:00 AM — ${title2}\\n` : ''}Location: ${loc}`;
+    const params = new URLSearchParams({
+      subject: `${isFaculty ? 'Faculty Meeting' : prefix + 'Urology Grand Rounds [In-person] - ' + topics}`,
+      body, location: loc,
+      startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
+      to: attendees
+    });
+    window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
   }
   
-  if (title2 && title2 !== '\u2014') {
+  // Open 8-9 AM meeting after a delay (only if separate from 7-8 and has content)
+  if (title2 && title2 !== '\u2014' && title2 !== title1) {
     setTimeout(() => {
       const subj2 = codes.hour2 ? `[CME ${codes.hour2}] Grand Rounds Conference: ${title2}` : `Grand Rounds Conference: ${title2}`;
-      const body2 = bodyText(title2, '8:00-9:00 AM', true);
-      window.open(`https://outlook.office.com/calendar/deeplink/compose?${new URLSearchParams({
-        subject: typePrefix + subj2, body: body2, location: 'Zoom',
-        startdt: `${date}T08:00:00`, enddt: `${date}T09:00:00`, to: attendees
-      })}`, '_blank');
+      const body2 = `Urology Department — Grand Rounds Conference\\nDate: ${date}\\nTime: 8:00-9:00 AM\\nTopic: ${title2}\\n${codes.hour2 ? `CME Code: ${codes.hour2}\\n` : ''}Location: ${loc}`;
+      const params2 = new URLSearchParams({
+        subject: isFaculty ? 'Faculty Meeting' : `${prefix}Urology Grand Rounds [In-person] - ${title2}`,
+        body: body2, location: loc,
+        startdt: `${date}T08:00:00`, enddt: `${date}T09:00:00`,
+        to: attendees
+      });
+      window.open(`https://outlook.office.com/calendar/deeplink/compose?${params2}`, '_blank');
     }, 500);
   }
 }
@@ -630,3 +595,23 @@ function downloadAllIcs() {
   showToast(`✅ Downloaded ${meetings.length} meetings as .ics`, 'success');
 }
 
+
+// ── Load real email groups from API ─────────────────────────
+async function loadGrEmailGroups() {
+  try {
+    const data = await api.get('/api/crm/email-groups');
+    if (!data) return;
+    const resEl = document.getElementById('grResidentList');
+    const facEl = document.getElementById('grFacultyList');
+    const res = data.grand_rounds;
+    const fac = data.faculty;
+    if (resEl && res && res.emails && res.emails.length) {
+      resEl.value = res.emails.join(', ');
+    }
+    if (facEl && fac && fac.emails && fac.emails.length) {
+      facEl.value = fac.emails.join(', ');
+    }
+  } catch(e) {
+    console.warn('Could not load email groups:', e);
+  }
+}
