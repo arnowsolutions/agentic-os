@@ -7,59 +7,59 @@
 // Columns: 0=Month, 1=Monday Date, 2=Mon AM Conference, 3=Resident, 4=Attending,
 //          5=CME7-8, 6=CME8-9, 7=Friday Date, 8=GR 7-8, 9=GR 8-9, 10=Other
 const GR_DATA = [
-  ["July","2026-07-06","SASP - UTI/STD/Infections","Iskhakov","Edelblute","","","2026-07-03","NO GRAND ROUNDS","","7/4 - Independence Day"],
-  ["","2026-07-13","SASP - Nephrolithiasis","Capellan","Raskolnikov","","","2026-07-10","Peds","Peds Multidisciplinary","confirmed"],
-  ["","2026-07-20","SASP - Trauma","Murota","Donnelly","","","2026-07-17","Sankin expectations overview (1hr)","Sub-I talks - 0.75 hr (3)","TB"],
-  ["","2026-07-27","SASP - Embryology","Patel","Ohmann","","","2026-07-24","SASP Review with Dr. Lowe/Lipsky","",""],
-  ["August","2026-08-03","SASP - ED","Yim","Maria","","","2026-07-31","Quality Improvement: Stats/M&Ms/Indications June/ July","","TB"],
-  ["","2026-08-10","SASP - UDS","N/A","Abraham","","","2026-08-07","SASP Review with Dr. Lipsky","",""],
-  ["","2026-08-17","SASP - BPH/Obstructive Uropathy","Drobner","Theofanides","","","2026-08-14","SASP Review with Dr. Lipsky","Sub-I presentation","No PEDS GR"],
-  ["","2026-08-24","SASP - Neurogenic Bladder/Voiding Dysfunction","Aibel","Clearwater","","","2026-08-21","NO GRAND ROUNDS","",""],
-  ["","2026-08-31","SASP - Urethral Reconstruction","Patel","Cedars","","","2026-08-28","PGY-4 Subspeciality Presentations","Sub-I talks - 0.75 hr (3)","TB?"],
-  ["September","2026-09-07","Holiday","","","","","2026-09-04","NO GRAND ROUNDS vs QPS","","9/7 - Labor Day"],
-  ["","2026-09-14","SASP - Infertility","Kim","Lipsky","","","2026-09-11","Peds","Peds Multidisciplinary","Rosh Hashana Sept 12-13"],
-  ["","2026-09-21","SASP - Adrenal Tumors","Pak","?","","","2026-09-18","FACULTY MEETING","",""],
-  ["","2026-09-28","SASP - UTUC","Hordines","Small","","","2026-09-25","","Sub-I talks - 0.75 hr (3)","Yom Kipur 9/21; Sukkot 9/26-27"],
-  ["October","2026-10-05","SASP - NMIBC/MIBC","Hill","Sankin","","","2026-10-02","Quality Improvement: Stats/M&Ms/Indications Aug/ Sept","","Sukkot 10/3-4"],
-  ["","2026-10-12","SASP - Renal Tumors","Capellan","Aboumohamed","","","2026-10-09","Peds","Peds Multidisciplinary",""],
-  ["","2026-10-19","SASP - Penile Cancer","Murota","Lowe","","","2026-10-16","","",""],
-  ["","2026-10-26","SASP - Testicular Tumors","Iskhakov","Mallahan","","","2026-10-23","Sub-Intern Presentations - 1 hr (4)","",""],
-  ["November","2026-11-02","SASP - Prostate Cancer Workup/Treatment","Yim","Watts","","","2026-10-30","","PGY-4 Subspeciality Presentations",""],
-  ["","2026-11-09","pre-ISE crash review","","Lipsky","","","2026-11-06","FACULTY MEETING","","Diwali 11/8"],
-  ["","2026-11-16","pre-ISE crash review","","Lowe","","","2026-11-13","Peds","Peds Multidisciplinary","11/15 - ISE"],
-  ["","2026-11-23","post ise mental rest day","","","","","2026-11-20","","",""],
-  ["December","2026-11-30","SASP - Urinary Fistulae / Diversions","Patel","Waldschmidtt","","","2026-11-27","NO GRAND ROUNDS","","11/27 - Thanksgiving"],
-  ["","2026-12-07","SASP - Incontinence/OAB/POP","Drobner","Laudano","","","2026-12-04","Quality Improvement: Stats/M&Ms/Indications Oct-Nov","",""],
-  ["","2026-12-14","SASP - Lap/Robotic Surgery","Kim","Edelblute","","","2026-12-11","Peds","Peds Multidisciplinary",""],
-  ["","2026-12-21","SASP - Physiology (fluids, electrolytes, HTN/vascular disease, endocrinopathy)","Aibel","Donnelly","","","2026-12-18","Valentine Essay Submission Presentations","Resident QI Updates",""],
-  ["","2026-12-28","Holiday","","","","","2026-12-25","NO GRAND ROUNDS","","12/25 - Christmas"],
-  ["January","2027-01-04","SASP - Pediatric GU Onc","Patel","Ohmann","","","2027-01-01","NO GRAND ROUNDS","","1/1 - New Year"],
-  ["","2027-01-11","SASP - Congenital Anomalies","Hordines","Raskolnikov","","","2027-01-08","Peds","Peds Multidisciplinary",""],
-  ["","2027-01-18","Holiday","","","","","2027-01-15","FACULTY MEETING","","1/19 - MLK Day"],
-  ["","2027-01-25","SASP -","Hill","","","","2027-01-22","Journal Club","",""],
-  ["February","2027-02-01","SASP","Pak","","","","2027-01-29","","",""],
-  ["","2027-02-08","SASP","","","","","2027-02-05","Quality Improvement: Stats/M&Ms/Indications - Dec/Jan","",""],
-  ["","2027-02-15","SASP","","","","","2027-02-12","Peds","Peds Multidisciplinary",""],
-  ["","2027-02-22","Holiday","","","","","2027-02-19","PGY-4 Subspeciality Presentations (1 hr)","Visiting Lecture: Fed Ghali (Yale) - Uro-oncology","2/16 - President's Day"],
-  ["March","2027-03-01","SASP","","","","","2027-02-26","Prisoner Ethics - Ari","Prisoner Ethics - Small",""],
-  ["","2027-03-08","SASP","","","","","2027-03-05","FACULTY MEETING","","Inlexzo Mobile Lab 8-12"],
-  ["","2027-03-15","SASP","","","","","2027-03-12","Peds","Peds Multidisciplinary",""],
-  ["","2027-03-22","SASP","","","","","2027-03-19","Journal Club","","Eid al-Fitr 3-20"],
-  ["","2027-03-29","SASP","","","","","2027-03-26","Quality Improvement: Stats/M&Ms/Indications - Feb/ March","Sub-I Presentation (1 - 15 min)",""],
-  ["April","2027-04-05","SASP","","","","","2027-04-02","NO GRAND ROUNDS - Good Friday/ Passover","","GoodFriday 4/3; Passover 4/3-4/4"],
-  ["","2027-04-12","SASP","","","","","2027-04-09","Peds","Peds Multidisciplinary","Easter 4/5; 4/8-4/9 Passover"],
-  ["","2027-04-19","SASP","","","","","2027-04-16","Guest Speaker - Contract Negotiations","Prosthetics Talk - Dr. Pedro Maria",""],
-  ["","2027-04-26","SASP","","","","","2027-04-23","Sub-I Presentation (15 min)/PGY 4 Subspecialty","Dr Kelvin Davies - Testing a Paradigm Shift: Erectile Dysfunction as a Causal Driver of Cardiovascular Disease.",""],
-  ["May","2027-05-03","SASP -","","","","","2027-04-30","Quality Improvement: Stats/M&Ms/Indications - March/April","","Resident Anatomy Simulation - Ileal Ureter"],
-  ["","2027-05-10","SASP -","","","","","2027-05-07","Peds","Peds Multidisciplinary",""],
-  ["","2027-05-17","SASP -","","","","","2027-05-14","NO GRAND ROUNDS - AUA","","AUA 5/15-18"],
-  ["","2027-05-24","SASP -","","","","","2027-05-21","","",""],
-  ["","2027-05-31","Holiday","","","","","2027-05-28","Journal Club/ STATs with Dr. Aggaliu","","Eid al-adha 5/27 - Memorial Day - 5/25"],
-  ["June","2027-06-07","SKIT","","","","","2027-06-04","Quality Improvement: Stats/M&Ms/Indications - May","",""],
-  ["","2027-06-14","SKIT","","","","","2027-06-11","Dr. Kryger VP","Peds Multidisciplinary",""],
-  ["","2027-06-21","End of year debrief",":(","","","","2027-06-18","","","6/19 - Juneteenth, 6/17 - Graduation!"],
-  ["","2027-06-28","Expectations Meeting","","","","","2027-06-25","FACULTY MEETING","",""],
-  ["July","2027-07-05","[see next yr calendar]","","","","","2027-07-02","","","7/4 - July 4th"]
+  ["July", "2026-07-06", "SASP - UTI/STD/Infections", "Iskhakov", "Edelblute", "", "", "2026-07-03", "NO GRAND ROUNDS", "", "7/4 - Independence Day"],
+  ["", "2026-07-13", "SASP - Nephrolithiasis", "Capellan", "Raskolnikov", "", "", "2026-07-10", "Peds", "Peds Multidisciplinary", "confirmed"],
+  ["", "2026-07-20", "SASP - Trauma", "Murota", "Donnelly", "", "", "2026-07-17", "Sankin expectations overview (1hr)", "Sub-I talks - 0.75 hr (3)", "TB"],
+  ["", "2026-07-27", "SASP - Embryology", "Patel", "Ohmann", "", "", "2026-07-24", "SASP Review with Dr. Lowe/Lipsky", "", ""],
+  ["August", "2026-08-03", "SASP - ED", "Yim", "Maria", "", "", "2026-07-31", "Quality Improvement: Stats/M&Ms/Indications June/ July", "", "TB"],
+  ["", "2026-08-10", "SASP - UDS", "N/A", "Abraham", "", "", "2026-08-07", "SASP Review with Dr. Lipsky", "", ""],
+  ["", "2026-08-17", "SASP - BPH/Obstructive Uropathy", "Drobner", "Theofanides", "", "", "2026-08-14", "SASP Review with Dr. Lipsky", "Sub-I presentation", "No PEDS GR"],
+  ["", "2026-08-24", "SASP - Neurogenic Bladder/Voiding Dysfunction", "Aibel", "Clearwater", "", "", "2026-08-21", "NO GRAND ROUNDS", "", ""],
+  ["", "2026-08-31", "SASP - Urethral Reconstruction", "Patel", "Cedars", "", "", "2026-08-28", "PGY-4 Subspeciality Presentations", "Sub-I talks - 0.75 hr (3)", "TB?"],
+  ["September", "2026-09-07", "Holiday", "", "", "", "", "2026-09-04", "NO GRAND ROUNDS vs QPS", "", "9/7 - Labor Day"],
+  ["", "2026-09-14", "SASP - Infertility", "Kim", "Lipsky", "", "", "2026-09-11", "Peds", "Peds Multidisciplinary", "Rosh Hashana Sept 12-13"],
+  ["", "2026-09-21", "SASP - Adrenal Tumors", "Pak", "?", "", "", "2026-09-18", "FACULTY MEETING", "", ""],
+  ["", "2026-09-28", "SASP - UTUC", "Hordines", "Small", "", "", "2026-09-25", "", "Sub-I talks - 0.75 hr (3)", "Yom Kipur 9/21; Sukkot 9/26-27"],
+  ["October", "2026-10-05", "SASP - NMIBC/MIBC", "Hill", "Sankin", "", "", "2026-10-02", "Quality Improvement: Stats/M&Ms/Indications Aug/ Sept", "", "Sukkot 10/3-4"],
+  ["", "2026-10-12", "SASP - Renal Tumors", "Capellan", "Aboumohamed", "", "", "2026-10-09", "Peds", "Peds Multidisciplinary", ""],
+  ["", "2026-10-19", "SASP - Penile Cancer", "Murota", "Lowe", "", "", "2026-10-16", "", "", ""],
+  ["", "2026-10-26", "SASP - Testicular Tumors", "Iskhakov", "Mallahan", "", "", "2026-10-23", "Sub-Intern Presentations - 1 hr (4)", "", ""],
+  ["November", "2026-11-02", "SASP - Prostate Cancer Workup/Treatment", "Yim", "Watts", "", "", "2026-10-30", "", "PGY-4 Subspeciality Presentations", ""],
+  ["", "2026-11-09", "pre-ISE crash review", "", "Lipsky", "", "", "2026-11-06", "FACULTY MEETING", "", "Diwali 11/8"],
+  ["", "2026-11-16", "pre-ISE crash review", "", "Lowe", "", "", "2026-11-13", "Peds", "Peds Multidisciplinary", "11/15 - ISE"],
+  ["", "2026-11-23", "post ise mental rest day", "", "", "", "", "2026-11-20", "", "", ""],
+  ["December", "2026-11-30", "SASP - Urinary Fistulae / Diversions", "Patel", "Waldschmidtt", "", "", "2026-11-27", "NO GRAND ROUNDS", "", "11/27 - Thanksgiving"],
+  ["", "2026-12-07", "SASP - Incontinence/OAB/POP", "Drobner", "Laudano", "", "", "2026-12-04", "Quality Improvement: Stats/M&Ms/Indications Oct-Nov", "", ""],
+  ["", "2026-12-14", "SASP - Lap/Robotic Surgery", "Kim", "Edelblute", "", "", "2026-12-11", "Peds", "Peds Multidisciplinary", ""],
+  ["", "2026-12-21", "SASP - Physiology (fluids, electrolytes, HTN/vascular disease, endocrinopathy)", "Aibel", "Donnelly", "", "", "2026-12-18", "Valentine Essay Submission Presentations", "Resident QI Updates", ""],
+  ["", "2026-12-28", "Holiday", "", "", "", "", "2026-12-25", "NO GRAND ROUNDS", "", "12/25 - Christmas"],
+  ["January", "2027-01-04", "SASP - Pediatric GU Onc", "Patel", "Ohmann", "", "", "2027-01-01", "NO GRAND ROUNDS", "", "1/1 - New Year"],
+  ["", "2027-01-11", "SASP - Congenital Anomalies", "Hordines", "Raskolnikov", "", "", "2027-01-08", "Peds", "Peds Multidisciplinary", ""],
+  ["", "2027-01-18", "Holiday", "", "", "", "", "2027-01-15", "FACULTY MEETING", "", "1/19 - MLK Day"],
+  ["", "2027-01-25", "SASP -", "Hill", "", "", "", "2027-01-22", "Journal Club", "", ""],
+  ["February", "2027-02-01", "SASP", "Pak", "", "", "", "2027-01-29", "", "", ""],
+  ["", "2027-02-08", "SASP", "", "", "", "", "2027-02-05", "Quality Improvement: Stats/M&Ms/Indications - Dec/Jan", "", ""],
+  ["", "2027-02-15", "SASP", "", "", "", "", "2027-02-12", "Peds", "Peds Multidisciplinary", ""],
+  ["", "2027-02-22", "Holiday", "", "", "", "", "2027-02-19", "PGY-4 Subspeciality Presentations (1 hr)", "Visiting Lecture: Fed Ghali (Yale) - Uro-oncology", "2/16 - President's Day"],
+  ["March", "2027-03-01", "SASP", "", "", "", "", "2027-02-26", "Prisoner Ethics - Ari", "Prisoner Ethics - Small", ""],
+  ["", "2027-03-08", "SASP", "", "", "", "", "2027-03-05", "FACULTY MEETING", "", "Inlexzo Mobile Lab 8-12"],
+  ["", "2027-03-15", "SASP", "", "", "", "", "2027-03-12", "Peds", "Peds Multidisciplinary", ""],
+  ["", "2027-03-22", "SASP", "", "", "", "", "2027-03-19", "Journal Club", "", "Eid al-Fitr 3-20"],
+  ["", "2027-03-29", "SASP", "", "", "", "", "2027-03-26", "Quality Improvement: Stats/M&Ms/Indications - Feb/ March", "Sub-I Presentation (1 - 15 min)", ""],
+  ["April", "2027-04-05", "SASP", "", "", "", "", "2027-04-02", "NO GRAND ROUNDS - Good Friday/ Passover", "", "GoodFriday 4/3; Passover 4/3-4/4"],
+  ["", "2027-04-12", "SASP", "", "", "", "", "2027-04-09", "Peds", "Peds Multidisciplinary", "Easter 4/5; 4/8-4/9 Passover"],
+  ["", "2027-04-19", "SASP", "", "", "", "", "2027-04-16", "Guest Speaker - Contract Negotiations", "Prosthetics Talk - Dr. Pedro Maria", ""],
+  ["", "2027-04-26", "SASP", "", "", "", "", "2027-04-23", "Sub-I Presentation (15 min)/PGY 4 Subspecialty", "Dr Kelvin Davies - Testing a Paradigm Shift: Erectile Dysfunction as a Causal Driver of Cardiovascular Disease.", ""],
+  ["May", "2027-05-03", "SASP -", "", "", "", "", "2027-04-30", "Quality Improvement: Stats/M&Ms/Indications - March/April", "", "Resident Anatomy Simulation - Ileal Ureter"],
+  ["", "2027-05-10", "SASP -", "", "", "", "", "2027-05-07", "Peds", "Peds Multidisciplinary", ""],
+  ["", "2027-05-17", "SASP -", "", "", "", "", "2027-05-14", "NO GRAND ROUNDS - AUA", "", "AUA 5/15-18"],
+  ["", "2027-05-24", "SASP -", "", "", "", "", "2027-05-21", "", "", ""],
+  ["", "2027-05-31", "Holiday", "", "", "", "", "2027-05-28", "Journal Club/ STATs with Dr. Aggaliu", "", "Eid al-adha 5/27 - Memorial Day - 5/25"],
+  ["June", "2027-06-07", "SKIT", "", "", "", "", "2027-06-04", "Quality Improvement: Stats/M&Ms/Indications - May", "", ""],
+  ["", "2027-06-14", "SKIT", "", "", "", "", "2027-06-11", "Dr. Kryger VP", "Peds Multidisciplinary", ""],
+  ["", "2027-06-21", "End of year debrief", ":(", "", "", "", "2027-06-18", "", "", "6/19 - Juneteenth, 6/17 - Graduation!"],
+  ["", "2027-06-28", "Expectations Meeting", "", "", "", "", "2027-06-25", "FACULTY MEETING", "", ""],
+  ["July", "2027-07-05", "[see next yr calendar]", "", "", "", "", "2027-07-02", "", "", "7/4 - July 4th"]
 ];
 
 let grFilters = { skipNoGR: true, skipFaculty: false, skipHoliday: true, search: '', month: '' };
@@ -74,16 +74,17 @@ async function renderGrandRounds() {
   // Build the parsed meeting list from embedded data
   const meetings = parseGrandRoundsData();
   
-  content.innerHTML = `
-    <div class="page-header">
-      <div class="page-header-left">
-        <h1 class="page-title">📋 Grand Rounds Schedule Manager</h1>
-        <p class="page-subtitle">Urology Academic Schedule 2026-2027 — Edit CME codes & send invites</p>
-      </div>
-      <div class="btn-group">
-        <button class="btn" onclick="renderGrandRounds()">🔄 Refresh</button>
-      </div>
+content.innerHTML = `
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1 class="page-title">📋 Grand Rounds Schedule Manager</h1>
+      <p class="page-subtitle">Urology Academic Schedule 2026-2027 — Edit CME codes & send invites</p>
     </div>
+    <div class="btn-group">
+      <button class="btn" onclick="renderGrandRounds()">🔄 Refresh</button>
+      <button class="btn" onclick="viewMonday()">📋 View Monday SASP</button>
+    </div>
+  </div>
 
     <div style="display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start">
       <!-- Sidebar Controls -->
@@ -117,7 +118,7 @@ async function renderGrandRounds() {
             <select id="grMonthJump" onchange="grFilters.month=this.value;renderGrandRounds()" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px">
               <option value="">All months</option>
               ${['July','August','September','October','November','December','January','February','March','April','May','June','July 2027'].map(m => 
-                `<option value="${m}" ${grFilters.month===m?'selected':''}>${m}</option>`
+                '<option value="' + m + '"' + (grFilters.month===m?' selected':'') + '>' + m + '</option>'
               ).join('')}
             </select>
           </div>
@@ -261,11 +262,30 @@ function getDayOfWeek(dateStr) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Monday Resident Conference Table
+// Monday Resident Conference Table + ICS Sent Status
 // ──────────────────────────────────────────────────────────────
-function renderMondayTable() {
+let monIcsProgress = null;
+
+async function loadMonIcsProgress() {
+  try {
+    const resp = await fetch('/api/progress/ics');
+    monIcsProgress = await resp.json();
+  } catch { monIcsProgress = null; }
+}
+
+function icsSentBadge(date) {
+  if (!monIcsProgress) return '<span style="color:var(--muted);font-size:11px">⋯</span>';
+  const sent = monIcsProgress.monday_sasp?.ics_sent_dates || [];
+  return sent.includes(date)
+    ? '<span style="color:var(--green);font-weight:600;font-size:13px">✅ Sent</span>'
+    : '<span style="color:var(--muted);font-size:11px">—</span>';
+}
+
+async function renderMondayTable() {
   const tbody = document.getElementById('grTableBody');
   if (!tbody) return;
+  
+  await loadMonIcsProgress();
   
   const rows = [];
   
@@ -301,41 +321,110 @@ function renderMondayTable() {
   const countEl = document.getElementById('grCount');
   if (countEl) countEl.textContent = rows.length;
   
-  if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--muted)">No matching Monday conferences</td></tr>`;
-    return;
-  }
+if (rows.length === 0) {
+  tbody.innerHTML = `<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--muted)">No matching Monday conferences</td></tr>`;
+  return;
+}
   
-  tbody.innerHTML = rows.map(r => `
-    <tr style="border-bottom:1px solid var(--line-soft)">
-      <td style="padding:8px 10px;white-space:nowrap;vertical-align:top">
-        <strong>${r.date}</strong>
-        <div style="font-size:10px;color:var(--muted)">${getDayOfWeek(r.date)}</div>
-      </td>
-      <td style="padding:8px 10px;vertical-align:top">
-        <strong>${escapeHtml(r.topic)}</strong>
-        ${r.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(r.notes)}</div>` : ''}
-      </td>
-      <td style="padding:8px 10px;vertical-align:top">${escapeHtml(r.resident)}</td>
-      <td style="padding:8px 10px;vertical-align:top">${escapeHtml(r.attending)}</td>
-      <td style="padding:8px 10px;text-align:center;white-space:nowrap">
-        <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMondayOutlook('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Open in Outlook">📧</button>
-        <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadMondayIcs('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Download .ics">📥</button>
-      </td>
-    </tr>
-  `).join('');
+tbody.innerHTML = rows.map(r => `
+  <tr style="border-bottom:1px solid var(--line-soft)">
+    <td style="padding:8px 10px;white-space:nowrap;vertical-align:top">
+      <strong>${r.date}</strong>
+      <div style="font-size:10px;color:var(--muted)">${getDayOfWeek(r.date)}</div>
+    </td>
+    <td style="padding:8px 10px;vertical-align:top">
+      <strong>${escapeHtml(r.topic)}</strong>
+      ${r.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(r.notes)}</div>` : ''}
+    </td>
+    <td style="padding:8px 10px;vertical-align:top">${escapeHtml(r.resident)}</td>
+    <td style="padding:8px 10px;vertical-align:top">${escapeHtml(r.attending)}</td>
+    <td style="padding:8px 10px;text-align:center;vertical-align:top">${icsSentBadge(r.date)}</td>
+    <td style="padding:8px 10px;text-align:center;white-space:nowrap">
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMondayOutlook('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Open in Outlook">📧</button>
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadMondayIcs('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Download .ics">📥</button>
+    </td>
+  </tr>
+`).join('');
+}
+
+// ─── View Monday SASP table ─────────────────────────────────
+
+async function viewMonday() {
+  const content = document.getElementById('pageContent');
+  content.innerHTML = `
+    <div class="page-header">
+      <div class="page-header-left">
+        <h1 class="page-title">📋 Monday SASP Conferences</h1>
+        <p class="page-subtitle">Urology Resident Monday Morning Conferences 2026-2027</p>
+      </div>
+      <div class="btn-group">
+        <button class="btn" onclick="renderGrandRounds()">📋 View Grand Rounds</button>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--muted)">
+          <span id="grCount">0</span> Monday meetings
+        </span>
+        <input type="text" placeholder="Search..." id="grSearch" oninput="grFilters.search=this.value;renderMondayTable()" style="background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:4px 8px;font-size:12px;flex:1;min-width:150px" />
+      </div>
+
+      <div style="overflow-x:auto;border:1px solid var(--line);border-radius:8px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:#0b1220;border-bottom:1px solid var(--line)">
+              <th style="padding:8px 10px;text-align:left;white-space:nowrap">Date</th>
+              <th style="padding:8px 10px;text-align:left">Topic</th>
+              <th style="padding:8px 10px;text-align:left">Resident</th>
+              <th style="padding:8px 10px;text-align:left">Attending</th>
+              <th style="padding:8px 10px;text-align:center">ICS Sent</th>
+              <th style="padding:8px 10px;text-align:center;width:90px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="grTableBody">
+            <tr><td colspan="6" style="padding:30px;text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  await renderMondayTable();
 }
 
 function openMondayOutlook(date, topic, resident, attending) {
-  const loc = document.getElementById('grLocation')?.value || '';
   const rList = document.getElementById('grResidentList')?.value || '';
+  const fList = document.getElementById('grFacultyList')?.value || '';
+  const attendees = [rList, fList].filter(Boolean).join(',');
+  
+  const zoomLink = 'https://montefiore.zoom.us/j/92009850717?pwd=25ask1SzLX2SdSrTbbhzb159UsyDFY.1';
+  const meetingId = '920 0985 0717';
+  const passcode = '808018';
+  
+  const body = [
+    'Montefiore Urology — Resident AM Conference',
+    '\u2500'.repeat(39),
+    'Date: ' + date,
+    'Time: 7:00-8:00 AM',
+    'Topic: ' + (topic || 'TBD'),
+    'Resident: ' + (resident || 'TBD'),
+    'Attending: ' + (attending || 'TBD'),
+    'Location: Zoom',
+    '',
+    'ZOOM MEETING DETAILS',
+    '  Join: ' + zoomLink,
+    '  Meeting ID: ' + meetingId,
+    '  Passcode: ' + passcode,
+    '',
+    'Montefiore Medical Center',
+    'Department of Urology',
+  ].join('\\n');
   
   const subj = `Resident AM Conference: ${topic}`;
-  const body = `Urology Department — Resident AM Conference\nDate: ${date}\nTime: 7:00-8:00 AM\nResident: ${resident}\nAttending: ${attending}\nLocation: ${loc}`;
   const params = new URLSearchParams({
-    subject: subj, body, location: loc,
+    subject: subj, body, location: 'Zoom',
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
-    to: rList
+    to: attendees
   });
   window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
 }
@@ -416,31 +505,52 @@ function openOutlookForDate(date, title1, title2) {
   const facultyList = document.getElementById('grFacultyList')?.value || '';
   
   const isFaculty = /faculty\s*meeting/i.test(title1);
-  const attendees = isFaculty ? facultyList : residentList;
+  const isPeds = /peds/i.test(title1);
+  const attendees = isFaculty ? facultyList : [residentList, facultyList].filter(Boolean).join(',');
   
-  // Open 7-8 AM meeting
-  if (title1 && title1 !== '—') {
-    const subj = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${title1}` : `Grand Rounds: ${title1}`;
-    const body = `Urology Department — Grand Rounds\nDate: ${date}\nTime: 7:00-8:00 AM\n${codes.hour1 ? `CME Code: ${codes.hour1}\n` : ''}Location: ${loc}`;
-    const params = new URLSearchParams({
-      subject: subj, body, location: loc,
-      startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
-      to: attendees
-    });
-    window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
+  const zoomLink = 'https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09';
+  const meetingId = '867 7387 8358';
+  const passcode = '466916';
+  const physicalLoc = 'Hutch | PH2 Conf A & Conf B';
+  const typePrefix = isFaculty ? '[FACULTY] ' : (isPeds ? '[PEDS] ' : '');
+  
+  function bodyText(topic, timeLabel, isSecond) {
+    const prefix = codes.hour1 && !isSecond ? '[CME ' + codes.hour1 + '] ' : (codes.hour2 && isSecond ? '[CME ' + codes.hour2 + '] ' : '');
+    return [
+      'Montefiore Urology — Grand Rounds',
+      '\u2500'.repeat(39),
+      'Date: ' + date,
+      'Time: ' + timeLabel,
+      'Topic: ' + prefix + topic,
+      'Location: ' + physicalLoc + ' / Zoom',
+      '',
+      'ZOOM MEETING DETAILS',
+      '  Join: ' + zoomLink,
+      '  Meeting ID: ' + meetingId,
+      '  Passcode: ' + passcode,
+      '',
+      'Montefiore Medical Center',
+      'Department of Urology',
+    ].join('\\n');
   }
   
-  // Open 8-9 AM meeting after a delay
-  if (title2 && title2 !== '—') {
+  if (title1 && title1 !== '\u2014') {
+    const subj1 = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${title1}` : `Grand Rounds: ${title1}`;
+    const body1 = bodyText(title1, '7:00-8:00 AM', false);
+    window.open(`https://outlook.office.com/calendar/deeplink/compose?${new URLSearchParams({
+      subject: typePrefix + subj1, body: body1, location: 'Zoom',
+      startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`, to: attendees
+    })}`, '_blank');
+  }
+  
+  if (title2 && title2 !== '\u2014') {
     setTimeout(() => {
       const subj2 = codes.hour2 ? `[CME ${codes.hour2}] Grand Rounds Conference: ${title2}` : `Grand Rounds Conference: ${title2}`;
-      const body2 = `Urology Department — Grand Rounds Conference\nDate: ${date}\nTime: 8:00-9:00 AM\n${codes.hour2 ? `CME Code: ${codes.hour2}\n` : ''}Location: ${loc}`;
-      const params2 = new URLSearchParams({
-        subject: subj2, body, location: loc,
-        startdt: `${date}T08:00:00`, enddt: `${date}T09:00:00`,
-        to: attendees
-      });
-      window.open(`https://outlook.office.com/calendar/deeplink/compose?${params2}`, '_blank');
+      const body2 = bodyText(title2, '8:00-9:00 AM', true);
+      window.open(`https://outlook.office.com/calendar/deeplink/compose?${new URLSearchParams({
+        subject: typePrefix + subj2, body: body2, location: 'Zoom',
+        startdt: `${date}T08:00:00`, enddt: `${date}T09:00:00`, to: attendees
+      })}`, '_blank');
     }, 500);
   }
 }
@@ -519,3 +629,4 @@ function downloadAllIcs() {
   URL.revokeObjectURL(url);
   showToast(`✅ Downloaded ${meetings.length} meetings as .ics`, 'success');
 }
+
