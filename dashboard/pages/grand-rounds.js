@@ -169,6 +169,7 @@ content.innerHTML = `
 
   // Load saved codes from localStorage
   loadCodes();
+  loadGrEmailGroups();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -395,13 +396,15 @@ async function viewMonday() {
 function openMondayOutlook(date, topic, resident, attending) {
   const loc = document.getElementById('grLocation')?.value || '';
   const rList = document.getElementById('grResidentList')?.value || '';
+  const fList = document.getElementById('grFacultyList')?.value || '';
+  const attendees = [rList, fList].filter(Boolean).join(',');
   
-  const subj = `Resident AM Conference: ${topic}`;
-  const body = `Urology Department — Resident AM Conference\nDate: ${date}\nTime: 7:00-8:00 AM\nResident: ${resident}\nAttending: ${attending}\nLocation: ${loc}`;
+  const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
+  const body = `Urology Department — Resident AM Conference\\nDate: ${date}\\nTime: 7:00-8:00 AM\\nTopic: ${topic || 'TBD'}\\nResident: ${resident || 'TBD'}\\nAttending: ${attending || 'TBD'}\\nLocation: ${loc}`;
   const params = new URLSearchParams({
     subject: subj, body, location: loc,
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
-    to: rList
+    to: attendees
   });
   window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
 }
@@ -477,38 +480,65 @@ function applyBulkCodes() {
 // ──────────────────────────────────────────────────────────────
 function openOutlookForDate(date, title1, title2) {
   const codes = grCmeCodes[date] || {};
-  const loc = document.getElementById('grLocation')?.value || '';
   const residentList = document.getElementById('grResidentList')?.value || '';
   const facultyList = document.getElementById('grFacultyList')?.value || '';
   
   const isFaculty = /faculty\s*meeting/i.test(title1);
-  const attendees = isFaculty ? facultyList : residentList;
+  const isPeds = /peds/i.test(title1);
+  const attendees = isFaculty ? facultyList : [residentList, facultyList].filter(Boolean).join(',');
   
-  // Open 7-8 AM meeting
-  if (title1 && title1 !== '—') {
-    const subj = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${title1}` : `Grand Rounds: ${title1}`;
-    const body = `Urology Department — Grand Rounds\nDate: ${date}\nTime: 7:00-8:00 AM\n${codes.hour1 ? `CME Code: ${codes.hour1}\n` : ''}Location: ${loc}`;
-    const params = new URLSearchParams({
-      subject: subj, body, location: loc,
-      startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
-      to: attendees
-    });
-    window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
-  }
+  const dt = new Date(date + 'T12:00:00');
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const formatted = dayNames[dt.getDay()] + ', ' + months[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear();
   
-  // Open 8-9 AM meeting after a delay
-  if (title2 && title2 !== '—') {
-    setTimeout(() => {
-      const subj2 = codes.hour2 ? `[CME ${codes.hour2}] Grand Rounds Conference: ${title2}` : `Grand Rounds Conference: ${title2}`;
-      const body2 = `Urology Department — Grand Rounds Conference\nDate: ${date}\nTime: 8:00-9:00 AM\n${codes.hour2 ? `CME Code: ${codes.hour2}\n` : ''}Location: ${loc}`;
-      const params2 = new URLSearchParams({
-        subject: subj2, body, location: loc,
-        startdt: `${date}T08:00:00`, enddt: `${date}T09:00:00`,
-        to: attendees
-      });
-      window.open(`https://outlook.office.com/calendar/deeplink/compose?${params2}`, '_blank');
-    }, 500);
-  }
+  const topic7 = (title1 && title1 !== '\u2014') ? title1 : '';
+  const topic8 = (title2 && title2 !== '\u2014' && title2 !== title1) ? title2 : '';
+  const mainTopic = topic7 || topic8;
+  
+  const loc7 = 'Hutch I PH2 Conf A';
+  const loc8 = 'Hutch I PH2 Conf B';
+  const locationStr = topic8 ? loc7 + ' (7-8) / ' + loc8 + ' (8-9)' : loc7;
+  
+  const prefix = isFaculty ? 'Faculty Meeting' : (isPeds ? 'PEDS: Urology Grand Rounds - ' : 'Urology Grand Rounds - ');
+  const subject = 'Invitation: ' + prefix + mainTopic;
+  
+  const body = [
+    'Montefiore Urology - Grand Rounds',
+    '',
+    'Date        ' + formatted,
+    'Time        7:00 - 9:00 AM (Eastern)',
+    'Location    ' + locationStr,
+    'Type        ' + (isFaculty ? 'Faculty Meeting' : (isPeds ? 'Peds Grand Rounds' : 'Grand Rounds')),
+    '',
+    'AGENDA',
+    '7:00 - 8:00 AM  ' + topic7,
+    (topic8 ? '8:00 - 9:00 AM  ' + topic8 : ''),
+    '',
+    'ZOOM MEETING DETAILS',
+    'Join          https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09',
+    'Meeting ID    867 7387 8358',
+    'Passcode      466916',
+    '',
+    'PHONE DIAL-IN',
+    '\u2022 +1 646-558-8656 (New York)',
+    '\u2022 +1 301-715-8592 (Washington, DC)',
+    '\u2022 +1 312-626-6799 (Chicago)',
+    'Enter Meeting ID, then Passcode when prompted.',
+    '',
+    'Montefiore Medical Center | Department of Urology',
+    '1250 Waters Place, Tower One, PH-2, Bronx, NY 10461',
+  ].filter(function(l) { return l !== ''; }).join('\\n');
+  
+  const params = new URLSearchParams({
+    subject: subject,
+    body: body,
+    location: locationStr,
+    startdt: date + 'T07:00:00',
+    enddt: date + 'T09:00:00',
+    to: attendees
+  });
+  window.open('https://outlook.office.com/calendar/deeplink/compose?' + params.toString(), '_blank');
 }
 
 function downloadIcsForDate(date, title1, title2) {
@@ -586,3 +616,23 @@ function downloadAllIcs() {
   showToast(`✅ Downloaded ${meetings.length} meetings as .ics`, 'success');
 }
 
+
+// ── Load real email groups from API ─────────────────────────
+async function loadGrEmailGroups() {
+  try {
+    const data = await api.get('/api/crm/email-groups');
+    if (!data) return;
+    const resEl = document.getElementById('grResidentList');
+    const facEl = document.getElementById('grFacultyList');
+    const res = data.grand_rounds;
+    const fac = data.faculty;
+    if (resEl && res && res.emails && res.emails.length) {
+      resEl.value = res.emails.join(', ');
+    }
+    if (facEl && fac && fac.emails && fac.emails.length) {
+      facEl.value = fac.emails.join(', ');
+    }
+  } catch(e) {
+    console.warn('Could not load email groups:', e);
+  }
+}
