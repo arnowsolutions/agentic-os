@@ -480,7 +480,6 @@ function applyBulkCodes() {
 // ──────────────────────────────────────────────────────────────
 function openOutlookForDate(date, title1, title2) {
   const codes = grCmeCodes[date] || {};
-  const loc = document.getElementById('grLocation')?.value || '';
   const residentList = document.getElementById('grResidentList')?.value || '';
   const facultyList = document.getElementById('grFacultyList')?.value || '';
   
@@ -488,36 +487,58 @@ function openOutlookForDate(date, title1, title2) {
   const isPeds = /peds/i.test(title1);
   const attendees = isFaculty ? facultyList : [residentList, facultyList].filter(Boolean).join(',');
   
-  const prefix = isFaculty ? '[FACULTY] ' : (isPeds ? 'PEDS: ' : '');
-  const topics = [title1 !== '\u2014' ? title1 : '', title2 !== '\u2014' ? title2 : ''].filter(Boolean).join(' / ');
+  const dt = new Date(date + 'T12:00:00');
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const formatted = dayNames[dt.getDay()] + ', ' + months[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear();
   
-  // Open 7-8 AM meeting
-  if (title1 && title1 !== '\u2014') {
-    const subj = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${title1}` : `Grand Rounds: ${title1}`;
-    const body = `Urology Department — Grand Rounds\\nDate: ${date}\\nTime: 7:00-8:00 AM\\nTopic: ${title1}\\n${codes.hour1 ? `CME Code: ${codes.hour1}\\n` : ''}${title2 && title2 !== '\u2014' ? `8:00-9:00 AM — ${title2}\\n` : ''}Location: ${loc}`;
-    const params = new URLSearchParams({
-      subject: `${isFaculty ? 'Faculty Meeting' : prefix + 'Urology Grand Rounds [In-person] - ' + topics}`,
-      body, location: loc,
-      startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
-      to: attendees
-    });
-    window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
-  }
+  const topic7 = (title1 && title1 !== '\u2014') ? title1 : '';
+  const topic8 = (title2 && title2 !== '\u2014' && title2 !== title1) ? title2 : '';
+  const mainTopic = topic7 || topic8;
   
-  // Open 8-9 AM meeting after a delay (only if separate from 7-8 and has content)
-  if (title2 && title2 !== '\u2014' && title2 !== title1) {
-    setTimeout(() => {
-      const subj2 = codes.hour2 ? `[CME ${codes.hour2}] Grand Rounds Conference: ${title2}` : `Grand Rounds Conference: ${title2}`;
-      const body2 = `Urology Department — Grand Rounds Conference\\nDate: ${date}\\nTime: 8:00-9:00 AM\\nTopic: ${title2}\\n${codes.hour2 ? `CME Code: ${codes.hour2}\\n` : ''}Location: ${loc}`;
-      const params2 = new URLSearchParams({
-        subject: isFaculty ? 'Faculty Meeting' : `${prefix}Urology Grand Rounds [In-person] - ${title2}`,
-        body: body2, location: loc,
-        startdt: `${date}T08:00:00`, enddt: `${date}T09:00:00`,
-        to: attendees
-      });
-      window.open(`https://outlook.office.com/calendar/deeplink/compose?${params2}`, '_blank');
-    }, 500);
-  }
+  const loc7 = 'Hutch I PH2 Conf A';
+  const loc8 = 'Hutch I PH2 Conf B';
+  const locationStr = topic8 ? loc7 + ' (7-8) / ' + loc8 + ' (8-9)' : loc7;
+  
+  const prefix = isFaculty ? 'Faculty Meeting' : (isPeds ? 'PEDS: Urology Grand Rounds - ' : 'Urology Grand Rounds - ');
+  const subject = 'Invitation: ' + prefix + mainTopic;
+  
+  const body = [
+    'Montefiore Urology - Grand Rounds',
+    '',
+    'Date        ' + formatted,
+    'Time        7:00 - 9:00 AM (Eastern)',
+    'Location    ' + locationStr,
+    'Type        ' + (isFaculty ? 'Faculty Meeting' : (isPeds ? 'Peds Grand Rounds' : 'Grand Rounds')),
+    '',
+    'AGENDA',
+    '7:00 - 8:00 AM  ' + topic7,
+    (topic8 ? '8:00 - 9:00 AM  ' + topic8 : ''),
+    '',
+    'ZOOM MEETING DETAILS',
+    'Join          https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09',
+    'Meeting ID    867 7387 8358',
+    'Passcode      466916',
+    '',
+    'PHONE DIAL-IN',
+    '\u2022 +1 646-558-8656 (New York)',
+    '\u2022 +1 301-715-8592 (Washington, DC)',
+    '\u2022 +1 312-626-6799 (Chicago)',
+    'Enter Meeting ID, then Passcode when prompted.',
+    '',
+    'Montefiore Medical Center | Department of Urology',
+    '1250 Waters Place, Tower One, PH-2, Bronx, NY 10461',
+  ].filter(function(l) { return l !== ''; }).join('\\n');
+  
+  const params = new URLSearchParams({
+    subject: subject,
+    body: body,
+    location: locationStr,
+    startdt: date + 'T07:00:00',
+    enddt: date + 'T09:00:00',
+    to: attendees
+  });
+  window.open('https://outlook.office.com/calendar/deeplink/compose?' + params.toString(), '_blank');
 }
 
 function downloadIcsForDate(date, title1, title2) {
