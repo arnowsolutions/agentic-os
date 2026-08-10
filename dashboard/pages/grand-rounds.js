@@ -248,6 +248,7 @@ function renderTableRows(meetings) {
           ${m.title2 !== '—' ? `<input type="text" value="${code2}" data-date="${m.date}" data-slot="hour2" class="gr-code-input" style="width:80px;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px;font-family:monospace" onchange="updateCode('${m.date}','hour2',this.value)" />` : '<span style="color:var(--muted)">—</span>'}
         </td>
         <td style="padding:8px 10px;text-align:center;white-space:nowrap">
+          <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openGrEdit('${m.date}')" title="Edit this week's schedule">✏️</button>
           <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openOutlookForDate('${m.date}','${m.title1}','${m.title2}')" title="Open in Outlook">📧</button>
           <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadIcsForDate('${m.date}','${m.title1}','${m.title2}')" title="Download .ics">📥</button>
         </td>
@@ -340,6 +341,7 @@ tbody.innerHTML = rows.map(r => `
     <td style="padding:8px 10px;vertical-align:top">${escapeHtml(r.attending)}</td>
     <td style="padding:8px 10px;text-align:center;vertical-align:top">${icsSentBadge(r.date)}</td>
     <td style="padding:8px 10px;text-align:center;white-space:nowrap">
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMonEdit('${r.date}')" title="Edit this week's schedule">✏️</button>
       <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMondayOutlook('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Open in Outlook">📧</button>
       <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadMondayIcs('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Download .ics">📥</button>
     </td>
@@ -584,4 +586,94 @@ function downloadAllIcs() {
   a.click();
   URL.revokeObjectURL(url);
   showToast(`✅ Downloaded ${meetings.length} meetings as .ics`, 'success');
+}
+
+// ──────────────────────────────────────────────────────────────
+// Weekly Conference Editor — auto-populates current data, saves via API
+// ──────────────────────────────────────────────────────────────
+let grEditMode = null; // { date, isMonday }
+
+function openGrEdit(date) {
+  grEditMode = { date, isMonday: false };
+  const row = GR_DATA.find(r => (r[7] || '') === date);
+  if (!row) { showToast('Row not found', 'warning'); return; }
+  showGrEditModal({
+    title: `✏️ Edit Grand Rounds — ${date}`,
+    fields: [
+      { key: 'gr78', label: '7-8 AM Topic', value: row[8] || '' },
+      { key: 'gr89', label: '8-9 AM Topic', value: row[9] || '' },
+      { key: 'grNotes', label: 'Notes', value: row[10] || '' },
+    ],
+  });
+}
+
+function openMonEdit(date) {
+  grEditMode = { date, isMonday: true };
+  const row = GR_DATA.find(r => (r[1] || '') === date);
+  if (!row) { showToast('Row not found', 'warning'); return; }
+  showGrEditModal({
+    title: `✏️ Edit Monday Conference — ${date}`,
+    fields: [
+      { key: 'grTopic', label: 'Topic', value: row[2] || '' },
+      { key: 'grResident', label: 'Resident', value: row[3] || '' },
+      { key: 'grAttending', label: 'Attending', value: row[4] || '' },
+      { key: 'grNotes', label: 'Notes', value: row[10] || '' },
+    ],
+  });
+}
+
+function showGrEditModal(opts) {
+  closeGrEditModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'grEditOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+  const body = opts.fields.map(f => `
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">${f.label}</label>
+      <input id="${f.key}" value="${escapeHtml(f.value)}" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:6px 8px;font-size:13px" />
+    </div>`).join('');
+  overlay.innerHTML = `
+    <div style="background:#0f172a;border:1px solid var(--line);border-radius:10px;padding:18px;width:460px;max-width:94vw">
+      <div style="font-weight:600;font-size:14px;margin-bottom:14px">${opts.title}</div>
+      ${body}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn" onclick="closeGrEditModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveGrEdit()">💾 Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function closeGrEditModal() {
+  const el = document.getElementById('grEditOverlay');
+  if (el) el.remove();
+  grEditMode = null;
+}
+
+async function saveGrEdit() {
+  if (!grEditMode) return;
+  const m = grEditMode;
+  const payload = { date: m.date, type: m.isMonday ? 'monday' : 'grand_rounds' };
+  if (m.isMonday) {
+    payload.monday_topic = document.getElementById('grTopic').value.trim();
+    payload.resident = document.getElementById('grResident').value.trim();
+    payload.attending = document.getElementById('grAttending').value.trim();
+  } else {
+    payload.topic_7_8 = document.getElementById('gr78').value.trim();
+    payload.topic_8_9 = document.getElementById('gr89').value.trim();
+  }
+  payload.notes = document.getElementById('grNotes').value.trim();
+
+  try {
+    const res = await api.post('/api/crm/conference/update', payload);
+    if (res && res.success) {
+      closeGrEditModal();
+      showToast('✅ Saved — schedule updated', 'success');
+      renderGrandRounds();
+    } else {
+      showToast('❌ ' + ((res && res.detail) || 'Save failed'), 'error');
+    }
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Save failed'), 'error');
+  }
 }

@@ -7,6 +7,7 @@ import csv as _csv_module
 import io as _io
 import json
 import os
+import re
 import uuid as _uuid
 import time as _time
 from datetime import datetime, timezone
@@ -627,3 +628,96 @@ def execute_workflow(data: dict):
     kwargs = {k: v for k, v in data.items() if k != "workflow_id" and v is not None}
     result = run_workflow(workflow_id, **kwargs)
     return result
+
+
+# ─── Weekly Conference Schedule Editor (Grand Rounds / Monday) ───
+
+GR_DATA_FILE = Path(__file__).resolve().parent.parent / "dashboard" / "pages" / "grand-rounds.js"
+
+
+def _parse_gr_data_from_js():
+    """Parse the GR_DATA array out of grand-rounds.js.
+    Returns (rows, start_index, end_index) where start/end bracket the array text."""
+    js = GR_DATA_FILE.read_text(encoding="utf-8")
+    start = js.index("const GR_DATA = ")
+    start = js.index("[", start)
+    depth = 0
+    end = start
+    for i, c in enumerate(js[start:]):
+        if c == "[":
+            depth += 1
+        elif c == "]":
+            depth -= 1
+            if depth == 0:
+                end = start + i + 1
+                break
+    array_str = js[start:end]
+    array_str = re.sub(r",\s*]", "]", array_str)
+    array_str = re.sub(r"//.*", "", array_str)
+    return json.loads(array_str), start, end
+
+
+def _write_gr_data(rows, start, end):
+    """Rebuild the GR_DATA array block in grand-rounds.js (one row per line, 2-space indent)."""
+    js = GR_DATA_FILE.read_text(encoding="utf-8")
+    block = "[\n" + ",\n".join("  " + json.dumps(r, ensure_ascii=False) for r in rows) + "\n]"
+    js = js[:start] + block + js[end:]
+    GR_DATA_FILE.write_text(js, encoding="utf-8")
+
+
+class ConferenceUpdateRequest(BaseModel):
+    date: str  # YYYY-MM-DD (Friday date for grand_rounds, Monday date for monday)
+    type: str = "grand_rounds"  # grand_rounds | monday
+    topic_7_8: Optional[str] = None
+    topic_8_9: Optional[str] = None
+    notes: Optional[str] = None
+    monday_topic: Optional[str] = None
+    resident: Optional[str] = None
+    attending: Optional[str] = None
+
+
+@router.post("/conference/update")
+def update_conference(req: ConferenceUpdateRequest):
+    """Update a weekly Grand Rounds (Friday) or Monday conference row in GR_DATA.
+
+    Body: {date, type: 'grand_rounds'|'monday', topic_7_8?, topic_8_9?,
+           monday_topic?, resident?, attending?, notes?}
+    Only fields provided are changed.
+    """
+    if req.type not in ("grand_rounds", "monday"):
+        raise HTTPException(400, "type must be 'grand_rounds' or 'monday'")
+    try:
+        rows, start, end = _parse_gr_data_from_js()
+    except Exception as e:
+        raise HTTPException(500, f"Could not parse GR_DATA: {e}")
+
+    target_idx = 7 if req.type == "grand_rounds" else 1
+    row = next((r for r in rows if len(r) > target_idx and r[target_idx] == req.date), None)
+    if row is None:
+        raise HTTPException(404, f"No {req.type} row found for date {req.date}")
+
+    while len(row) < 11:
+        row.append("")
+
+    if req.type == "grand_rounds":
+        if req.topic_7_8 is not None:
+            row[8] = req.topic_7_8
+        if req.topic_8_9 is not None:
+            row[9] = req.topic_8_9
+    else:
+        if req.monday_topic is not None:
+            row[2] = req.monday_topic
+        if req.resident is not None:
+            row[3] = req.resident
+        if req.attending is not None:
+            row[4] = req.attending
+    if req.notes is not None:
+        row[10] = req.notes
+
+    try:
+        _write_gr_data(rows, start, end)
+    except Exception as e:
+        raise HTTPException(500, f"Could not write GR_DATA: {e}")
+
+    return {"success": True, "date": req.date, "type": req.type, "row": row}
+
