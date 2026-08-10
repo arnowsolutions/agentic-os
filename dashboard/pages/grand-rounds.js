@@ -86,26 +86,67 @@ content.innerHTML = `
     </div>
   </div>
 
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-      <span style="font-size:13px;color:var(--muted)">
-        <span id="grCount">${meetings.length}</span> meetings
-      </span>
-      <input type="text" placeholder="Search..." id="grSearch" oninput="grFilters.search=this.value;renderGrandRounds()" style="background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:4px 8px;font-size:12px;flex:1;min-width:120px" />
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap">
-        <input type="checkbox" id="grFilterNoGR" ${grFilters.skipNoGR?'checked':''} onchange="grFilters.skipNoGR=this.checked;renderGrandRounds()" />Hide NO-GR
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;color:var(--muted);white-space:nowrap">
-        <input type="checkbox" id="grFilterFaculty" ${grFilters.skipFaculty?'checked':''} onchange="grFilters.skipFaculty=this.checked;renderGrandRounds()" />Hide Faculty
-      </label>
-      <select id="grMonthJump" onchange="grFilters.month=this.value;renderGrandRounds()" style="background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:12px">
-        <option value="">All months</option>
-        ${['July','August','September','October','November','December','January','February','March','April','May','June','July 2027'].map(m => '<option value="' + m + '"' + (grFilters.month===m?' selected':'') + '>' + m + '</option>').join('')}
-      </select>
-      <button class="btn btn-sm" style="font-size:11px" onclick="openAllOutlook()">📧 All Outlook</button>
-      <button class="btn btn-sm" style="font-size:11px" onclick="downloadAllIcs()">📥 All .ics</button>
-    </div>
+    <div style="display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start">
+      <!-- Sidebar Controls -->
+      <div class="card" style="position:sticky;top:70px">
+        <div class="card-header"><span class="card-title">⚙ Controls</span></div>
+        <div class="card-body" style="font-size:13px">
+          
+          <div style="margin-bottom:10px">
+            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Distribution Lists</label>
+            <input type="text" id="grResidentList" placeholder="Residents email" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px;margin-bottom:4px" value="residents@x.org" />
+            <input type="text" id="grFacultyList" placeholder="Faculty email" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px" value="faculty@x.org" />
+          </div>
 
-    <div style="overflow-x:auto;border:1px solid var(--line);border-radius:8px">
+          <div style="margin-bottom:10px">
+            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Location / Zoom</label>
+            <input type="text" id="grLocation" placeholder="Room or Zoom link" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px" />
+          </div>
+
+          <div style="margin-bottom:10px">
+            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Filters</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer">
+              <input type="checkbox" id="grFilterNoGR" ${grFilters.skipNoGR?'checked':''} onchange="grFilters.skipNoGR=this.checked;renderGrandRounds()" /> Hide "NO GRAND ROUNDS"
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;cursor:pointer">
+              <input type="checkbox" id="grFilterFaculty" ${grFilters.skipFaculty?'checked':''} onchange="grFilters.skipFaculty=this.checked;renderGrandRounds()" /> Hide FACULTY MEETING
+            </label>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Month Jump</label>
+            <select id="grMonthJump" onchange="grFilters.month=this.value;renderGrandRounds()" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12px">
+              <option value="">All months</option>
+              ${['July','August','September','October','November','December','January','February','March','April','May','June','July 2027'].map(m => 
+                '<option value="' + m + '"' + (grFilters.month===m?' selected':'') + '>' + m + '</option>'
+              ).join('')}
+            </select>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <label style="display:block;color:var(--muted);margin-bottom:4px;font-size:12px">Bulk Paste CME Codes</label>
+            <textarea id="grBulkCodes" placeholder="YYYY-MM-DD, CODE1, CODE2" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:11px;min-height:60px;font-family:monospace"></textarea>
+            <button class="btn btn-sm" style="margin-top:4px;width:100%;font-size:11px" onclick="applyBulkCodes()">Apply Codes</button>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
+            <button class="btn btn-sm" style="font-size:11px" onclick="openAllOutlook()">📧 Open All in Outlook</button>
+            <button class="btn btn-sm" style="font-size:11px" onclick="downloadAllIcs()">📥 Download All .ics</button>
+            <button class="btn btn-sm" style="font-size:11px" onclick="saveCodesLocally()">💾 Save Codes</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Table -->
+      <div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--muted)">
+            <span id="grCount">${meetings.length}</span> meetings visible
+          </span>
+          <input type="text" placeholder="Search..." id="grSearch" oninput="grFilters.search=this.value;renderGrandRounds()" style="background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:4px 8px;font-size:12px;flex:1;min-width:150px" />
+        </div>
+
+        <div style="overflow-x:auto;border:1px solid var(--line);border-radius:8px">
           <table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead>
               <tr style="background:#0b1220;border-bottom:1px solid var(--line)">
@@ -122,13 +163,12 @@ content.innerHTML = `
             </tbody>
           </table>
         </div>
-    <input type="hidden" id="grResidentList" />
-    <input type="hidden" id="grFacultyList" />
+      </div>
+    </div>
   `;
 
   // Load saved codes from localStorage
   loadCodes();
-  loadGrEmailGroups();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -196,14 +236,14 @@ function renderTableRows(meetings) {
           <div style="font-size:10px;color:var(--muted)">${getDayOfWeek(m.date)}</div>
         </td>
         <td style="padding:8px 10px;vertical-align:top">
-          ${m.title1 !== '\u2014' ? `<input type="text" value="${escapeHtml(m.title1)}" data-date="${m.date}" data-slot="title1" class="gr-title-input" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px" onchange="saveGrTitle('${m.date}','title1',this.value)" />` : '<span style="color:var(--muted)">\u2014</span>'}
+          ${escapeHtml(m.title1)}
           ${m.notes ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${escapeHtml(m.notes)}</div>` : ''}
           ${facBadge}
         </td>
         <td style="padding:8px 10px;vertical-align:top">
           ${m.title1 !== '—' ? `<input type="text" value="${code1}" data-date="${m.date}" data-slot="hour1" class="gr-code-input" style="width:80px;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px;font-family:monospace" onchange="updateCode('${m.date}','hour1',this.value)" />` : '<span style="color:var(--muted)">—</span>'}
         </td>
-        <td style="padding:8px 10px;vertical-align:top">${m.title2 !== '\u2014' ? `<input type="text" value="${escapeHtml(m.title2)}" data-date="${m.date}" data-slot="title2" class="gr-title-input" style="width:100%;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px" onchange="saveGrTitle('${m.date}','title2',this.value)" />` : '<span style="color:var(--muted)">\u2014</span>'}</td>
+        <td style="padding:8px 10px;vertical-align:top">${escapeHtml(m.title2)}</td>
         <td style="padding:8px 10px;vertical-align:top">
           ${m.title2 !== '—' ? `<input type="text" value="${code2}" data-date="${m.date}" data-slot="hour2" class="gr-code-input" style="width:80px;background:#0b1220;color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 5px;font-size:12px;font-family:monospace" onchange="updateCode('${m.date}','hour2',this.value)" />` : '<span style="color:var(--muted)">—</span>'}
         </td>
@@ -355,14 +395,13 @@ async function viewMonday() {
 function openMondayOutlook(date, topic, resident, attending) {
   const loc = document.getElementById('grLocation')?.value || '';
   const rList = document.getElementById('grResidentList')?.value || '';
-  const attendees = rList;
   
-  const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
-  const body = `Urology Department — Resident AM Conference\nDate: ${date}\nTime: 7:00-8:00 AM\nTopic: ${topic || 'TBD'}\nResident: ${resident || 'TBD'}\nAttending: ${attending || 'TBD'}\nLocation: ${loc}`.replace(/\\n/g, String.fromCharCode(13,10));
+  const subj = `Resident AM Conference: ${topic}`;
+  const body = `Urology Department — Resident AM Conference\nDate: ${date}\nTime: 7:00-8:00 AM\nResident: ${resident}\nAttending: ${attending}\nLocation: ${loc}`;
   const params = new URLSearchParams({
     subject: subj, body, location: loc,
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
-    to: attendees
+    to: rList
   });
   window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
 }
@@ -438,66 +477,38 @@ function applyBulkCodes() {
 // ──────────────────────────────────────────────────────────────
 function openOutlookForDate(date, title1, title2) {
   const codes = grCmeCodes[date] || {};
+  const loc = document.getElementById('grLocation')?.value || '';
   const residentList = document.getElementById('grResidentList')?.value || '';
   const facultyList = document.getElementById('grFacultyList')?.value || '';
   
   const isFaculty = /faculty\s*meeting/i.test(title1);
-  const isPeds = /peds/i.test(title1);
-  // grand_rounds list already includes both residents and faculty
   const attendees = isFaculty ? facultyList : residentList;
   
-  const dt = new Date(date + 'T12:00:00');
-  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const formatted = dayNames[dt.getDay()] + ', ' + months[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear();
+  // Open 7-8 AM meeting
+  if (title1 && title1 !== '—') {
+    const subj = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${title1}` : `Grand Rounds: ${title1}`;
+    const body = `Urology Department — Grand Rounds\nDate: ${date}\nTime: 7:00-8:00 AM\n${codes.hour1 ? `CME Code: ${codes.hour1}\n` : ''}Location: ${loc}`;
+    const params = new URLSearchParams({
+      subject: subj, body, location: loc,
+      startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
+      to: attendees
+    });
+    window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
+  }
   
-  const topic7 = (title1 && title1 !== '\u2014') ? title1 : '';
-  const topic8 = (title2 && title2 !== '\u2014' && title2 !== title1) ? title2 : '';
-  const mainTopic = topic7 || topic8;
-  
-  const loc7 = 'Hutch I PH2 Conf A';
-  const loc8 = 'Hutch I PH2 Conf B';
-  const locationStr = topic8 ? loc7 + ' (7-8) / ' + loc8 + ' (8-9)' : loc7;
-  
-  const prefix = isFaculty ? 'Faculty Meeting' : (isPeds ? 'PEDS: Urology Grand Rounds - ' : 'Urology Grand Rounds - ');
-  const subject = 'Invitation: ' + prefix + mainTopic;
-  
-  const body = [
-    'Montefiore Urology - Grand Rounds',
-    '',
-    'Date        ' + formatted,
-    'Time        7:00 - 9:00 AM (Eastern)',
-    'Location    ' + locationStr,
-    'Type        ' + (isFaculty ? 'Faculty Meeting' : (isPeds ? 'Peds Grand Rounds' : 'Grand Rounds')),
-    '',
-    'AGENDA',
-    '7:00 - 8:00 AM  ' + topic7,
-    (topic8 ? '8:00 - 9:00 AM  ' + topic8 : ''),
-    '',
-    'ZOOM MEETING DETAILS',
-    'Join          https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09',
-    'Meeting ID    867 7387 8358',
-    'Passcode      466916',
-    '',
-    'PHONE DIAL-IN',
-    '\u2022 +1 646-558-8656 (New York)',
-    '\u2022 +1 301-715-8592 (Washington, DC)',
-    '\u2022 +1 312-626-6799 (Chicago)',
-    'Enter Meeting ID, then Passcode when prompted.',
-    '',
-    'Montefiore Medical Center | Department of Urology',
-    '1250 Waters Place, Tower One, PH-2, Bronx, NY 10461',
-  ].filter(function(l) { return l !== ''; }).join(String.fromCharCode(13,10));
-  
-  const params = new URLSearchParams({
-    subject: subject,
-    body: body,
-    location: locationStr,
-    startdt: date + 'T07:00:00',
-    enddt: date + 'T09:00:00',
-    to: attendees
-  });
-  window.open('https://outlook.office.com/calendar/deeplink/compose?' + params.toString(), '_blank');
+  // Open 8-9 AM meeting after a delay
+  if (title2 && title2 !== '—') {
+    setTimeout(() => {
+      const subj2 = codes.hour2 ? `[CME ${codes.hour2}] Grand Rounds Conference: ${title2}` : `Grand Rounds Conference: ${title2}`;
+      const body2 = `Urology Department — Grand Rounds Conference\nDate: ${date}\nTime: 8:00-9:00 AM\n${codes.hour2 ? `CME Code: ${codes.hour2}\n` : ''}Location: ${loc}`;
+      const params2 = new URLSearchParams({
+        subject: subj2, body, location: loc,
+        startdt: `${date}T08:00:00`, enddt: `${date}T09:00:00`,
+        to: attendees
+      });
+      window.open(`https://outlook.office.com/calendar/deeplink/compose?${params2}`, '_blank');
+    }, 500);
+  }
 }
 
 function downloadIcsForDate(date, title1, title2) {
@@ -575,40 +586,3 @@ function downloadAllIcs() {
   showToast(`✅ Downloaded ${meetings.length} meetings as .ics`, 'success');
 }
 
-
-// ── Load real email groups from API ─────────────────────────
-async function loadGrEmailGroups() {
-  try {
-    const data = await api.get('/api/crm/email-groups');
-    if (!data) return;
-    const resEl = document.getElementById('grResidentList');
-    const facEl = document.getElementById('grFacultyList');
-    const res = data.grand_rounds;
-    const fac = data.faculty;
-    if (resEl && res && res.emails && res.emails.length) {
-      resEl.value = res.emails.join(', ');
-    }
-    if (facEl && fac && fac.emails && fac.emails.length) {
-      facEl.value = fac.emails.join(', ');
-    }
-  } catch(e) {
-    console.warn('Could not load email groups:', e);
-  }
-}
-
-// ── Save editable title changes to GR_DATA via API ─────────
-async function saveGrTitle(date, slot, newValue) {
-  const payload = { date: date, type: 'grand_rounds' };
-  if (slot === 'title1') payload.topic_7_8 = newValue.trim();
-  else payload.topic_8_9 = newValue.trim();
-  try {
-    const res = await api.post('/api/crm/conference/update', payload);
-    if (res && res.success) {
-      showToast('✅ Saved', 'success');
-    } else {
-      showToast('❌ Save failed', 'error');
-    }
-  } catch (err) {
-    showToast('❌ ' + (err.message || 'Save failed'), 'error');
-  }
-}
