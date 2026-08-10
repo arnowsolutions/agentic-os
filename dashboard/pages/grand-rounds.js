@@ -13,7 +13,7 @@ const GR_DATA = [
   ["", "2026-07-27", "SASP - Embryology", "Patel", "Ohmann", "", "", "2026-07-24", "SASP Review with Dr. Lowe/Lipsky", "", ""],
   ["August", "2026-08-03", "SASP - ED", "Yim", "Maria", "", "", "2026-07-31", "Quality Improvement: Stats/M&Ms/Indications June/ July", "", "TB"],
   ["", "2026-08-10", "SASP - UDS", "N/A", "Abraham", "", "", "2026-08-07", "SASP Review with Dr. Lipsky", "", ""],
-  ["", "2026-08-17", "SASP - BPH/Obstructive Uropathy", "Drobner", "Theofanides", "", "", "2026-08-14", "", "Sub-I talks - 0.5 hr (2)", "No PEDS GR"],
+  ["", "2026-08-17", "SASP - BPH/Obstructive Uropathy", "Drobner", "Theofanides", "", "", "2026-08-14", "SASP Review with Dr. Lipsky", "Sub-I presentation", "No PEDS GR"],
   ["", "2026-08-24", "SASP - Neurogenic Bladder/Voiding Dysfunction", "Aibel", "Clearwater", "", "", "2026-08-21", "NO GRAND ROUNDS", "", ""],
   ["", "2026-08-31", "SASP - Urethral Reconstruction", "Patel", "Cedars", "", "", "2026-08-28", "PGY-4 Subspeciality Presentations", "Sub-I talks - 0.75 hr (3)", "TB?"],
   ["September", "2026-09-07", "Holiday", "", "", "", "", "2026-09-04", "NO GRAND ROUNDS vs QPS", "", "9/7 - Labor Day"],
@@ -564,3 +564,24 @@ function downloadAllIcs() {
   let combinedIcs = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Grand Rounds Scheduler//EN\r\n';
   const loc = document.getElementById('grLocation')?.value || '';
   
+  for (const m of meetings) {
+    const codes = grCmeCodes[m.date] || {};
+    if (m.title1 && m.title1 !== '—') {
+      const subj = codes.hour1 ? `[CME ${codes.hour1}] Grand Rounds: ${m.title1}` : `Grand Rounds: ${m.title1}`;
+      combinedIcs += `BEGIN:VEVENT\r\nUID:${m.date}-1@gr\r\nDTSTART:${m.date.replace(/-/g,'')}T070000\r\nDTEND:${m.date.replace(/-/g,'')}T080000\r\nSUMMARY:${subj}\r\nLOCATION:${loc}\r\nEND:VEVENT\r\n`;
+    }
+    if (m.title2 && m.title2 !== '—') {
+      const subj2 = codes.hour2 ? `[CME ${codes.hour2}] Grand Rounds Conference: ${m.title2}` : `Grand Rounds Conference: ${m.title2}`;
+      combinedIcs += `BEGIN:VEVENT\r\nUID:${m.date}-2@gr\r\nDTSTART:${m.date.replace(/-/g,'')}T080000\r\nDTEND:${m.date.replace(/-/g,'')}T090000\r\nSUMMARY:${subj2}\r\nLOCATION:${loc}\r\nEND:VEVENT\r\n`;
+    }
+  }
+  combinedIcs += 'END:VCALENDAR';
+  
+  const blob = new Blob([combinedIcs], {type: 'text/calendar'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'all-grand-rounds-2026-2027.ics';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Downloaded ${meetings.length} meetings as .ics`, 'success');
+}
