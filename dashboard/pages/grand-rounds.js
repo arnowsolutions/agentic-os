@@ -399,7 +399,18 @@ function openMondayOutlook(date, topic, resident, attending) {
   const attendees = rList;
   
   const subj = `Urology Monday Conference — ${topic}${attending ? ', Dr. ' + attending : ''}`;
-  const body = `Urology Department — Resident AM Conference<br>\nDate: ${date}<br>\nTime: 7:00-8:00 AM<br>\nTopic: ${topic || 'TBD'}<br>\nResident: ${resident || 'TBD'}<br>\nAttending: ${attending || 'TBD'}<br>\nLocation: ${loc}`;
+  const body = [
+    '<strong>Montefiore Urology - Resident AM Conference</strong>',
+    '<hr>',
+    '<strong>Date</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + date + '<br>',
+    '<strong>Time</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 8:00 AM<br>',
+    '<strong>Topic</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + (topic || 'TBD') + '<br>',
+    '<strong>Resident</strong>&nbsp;&nbsp;&nbsp;' + (resident || 'TBD') + '<br>',
+    '<strong>Attending</strong>&nbsp;&nbsp;' + (attending || 'TBD') + '<br>',
+    '<strong>Location</strong>&nbsp;&nbsp;&nbsp;' + loc,
+    '<hr>',
+    'Montefiore Medical Center | Department of Urology',
+  ].join('<br>\n');
   const params = new URLSearchParams({
     subject: subj, body, location: loc,
     startdt: `${date}T07:00:00`, enddt: `${date}T08:00:00`,
@@ -503,30 +514,33 @@ function openOutlookForDate(date, title1, title2) {
   const prefix = isFaculty ? 'Faculty Meeting' : (isPeds ? 'PEDS: Urology Grand Rounds - ' : 'Urology Grand Rounds - ');
   const subject = 'Invitation: ' + prefix + mainTopic;
   
+  const typeLabel = isFaculty ? 'Faculty Meeting' : (isPeds ? 'Peds Grand Rounds' : 'Grand Rounds');
+  const zoomLink = 'https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09';
+  
   const body = [
-    'Montefiore Urology - Grand Rounds',
-    '',
-    'Date        ' + formatted,
-    'Time        7:00 - 9:00 AM (Eastern)',
-    'Location    ' + locationStr,
-    'Type        ' + (isFaculty ? 'Faculty Meeting' : (isPeds ? 'Peds Grand Rounds' : 'Grand Rounds')),
-    '',
-    'AGENDA',
-    '7:00 - 8:00 AM  ' + topic7,
-    (topic8 ? '8:00 - 9:00 AM  ' + topic8 : ''),
-    '',
-    'ZOOM MEETING DETAILS',
-    'Join          https://us02web.zoom.us/j/86773878358?pwd=RUxySVVzUjFWL0lyRWtjdDBacTVPZz09',
-    'Meeting ID    867 7387 8358',
-    'Passcode      466916',
-    '',
-    'PHONE DIAL-IN',
-    '\u2022 +1 646-558-8656 (New York)',
-    '\u2022 +1 301-715-8592 (Washington, DC)',
-    '\u2022 +1 312-626-6799 (Chicago)',
+    '<strong>Montefiore Urology - Grand Rounds</strong>',
+    '<hr>',
+    '<strong>Date</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + formatted + '<br>',
+    '<strong>Time</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7:00 - 9:00 AM (Eastern)<br>',
+    '<strong>Location</strong>&nbsp;&nbsp;&nbsp;' + locationStr + '<br>',
+    '<strong>Type</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + typeLabel,
+    '<hr>',
+    '<strong>AGENDA</strong><br><br>',
+    '<strong>7:00 - 8:00 AM</strong>&nbsp;&nbsp;' + topic7 + '<br>',
+    (topic8 ? '<strong>8:00 - 9:00 AM</strong>&nbsp;&nbsp;' + topic8 : ''),
+    '<hr>',
+    '<strong>ZOOM MEETING DETAILS</strong><br><br>',
+    '<strong>Join</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="' + zoomLink + '">Click here to join Zoom</a><br>',
+    '<strong>Meeting ID</strong>&nbsp;&nbsp;<code>867 7387 8358</code><br>',
+    '<strong>Passcode</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<code>466916</code>',
+    '<hr>',
+    '<strong>PHONE DIAL-IN</strong><br><br>',
+    '&bull; +1 646-558-8656 (New York)<br>',
+    '&bull; +1 301-715-8592 (Washington, DC)<br>',
+    '&bull; +1 312-626-6799 (Chicago)<br><br>',
     'Enter Meeting ID, then Passcode when prompted.',
-    '',
-    'Montefiore Medical Center | Department of Urology',
+    '<hr>',
+    'Montefiore Medical Center | Department of Urology<br>',
     '1250 Waters Place, Tower One, PH-2, Bronx, NY 10461',
   ].filter(function(l) { return l !== ''; }).join('<br>\n');
   
