@@ -1,17 +1,17 @@
 #!/bin/bash
 # Deploy Vapi server to VPS - run from the container
-# This script SSHs into the VPS and sets up the Vapi FastAPI server
+# Password read from vps_config.json, NOT hardcoded
 
 VPS_IP="147.93.113.241"
-VPS_PASS="e't64)QQ#-aWExcT"
+VPS_PASS=$(python3 -c "import json; print(json.load(open('/workspace/agentic-os/data/vps_config.json'))['password'])")
 WORKSPACE="/var/lib/docker/volumes/hermes-webui-gsga_hermes-workspace/_data"
 
 python3 -c "
-import pexpect, time, sys
+import pexpect, time, sys, os
 
 child = pexpect.spawn('ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@${VPS_IP}', timeout=120)
 child.expect('password:', timeout=15)
-child.sendline('${VPS_PASS}')
+child.sendline(os.environ.get('VPS_PASS', ''))
 child.expect('root@', timeout=10)
 
 def run(cmd, timeout=30):

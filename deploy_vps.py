@@ -12,14 +12,25 @@ import json
 import os
 
 VPS_IP = "147.93.113.241"
-VPS_PASS = "QzexH#s488Ipynh5"  # updated 2026-07-18; runbook: /workspace/obsidian-vault/Reference/VPS-SSH-Access.md (key auth preferred — restore_vps_ssh.sh)
 WORKSPACE = "/var/lib/docker/volumes/hermes-webui-gsga_hermes-workspace/_data"
 COMPOSE_DIR = "/docker/hermes-webui-gsga"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "vps_config.json")
+
+def _get_vps_password():
+    """Read VPS root password from config file (NOT hardcoded)."""
+    try:
+        with open(CONFIG_FILE) as f:
+            return json.load(f).get("password", "")
+    except Exception:
+        return os.environ.get("VPS_ROOT_PASSWORD", "")
 
 def ssh():
+    pw = _get_vps_password()
+    if not pw:
+        raise RuntimeError("VPS root password not found — set VPS_ROOT_PASSWORD or check data/vps_config.json")
     child = pexpect.spawn(f'ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@{VPS_IP}', timeout=120)
     child.expect('password:', timeout=15)
-    child.sendline(VPS_PASS)
+    child.sendline(pw)
     child.expect('root@', timeout=10)
     return child
 

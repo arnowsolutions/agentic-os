@@ -1,14 +1,16 @@
 #!/bin/bash
 # Deploy updated Agentic OS to VPS - restart the server on port 8090
+# Password read from vps_config.json, NOT hardcoded
 VPS_IP="147.93.113.241"
-VPS_PASS="e't64)QQ#-aWExcT"
 WORKSPACE="/var/lib/docker/volumes/hermes-webui-gsga_hermes-workspace/_data"
 
-python3 << 'PYEOF'
-import pexpect, time, sys
+VPS_PASS=$(python3 -c "import json; print(json.load(open('/workspace/agentic-os/data/vps_config.json'))['password'])")
 
-vps_ip = "147.93.113.241"
-vps_pass = "e" + "'" + "t64)QQ#-aWExcT"
+python3 << 'PYEOF'
+import pexpect, time, sys, os
+
+vps_ip = os.environ.get("VPS_IP", "147.93.113.241")
+vps_pass = os.environ.get("VPS_PASS", "")
 workspace = "/var/lib/docker/volumes/hermes-webui-gsga_hermes-workspace/_data"
 
 child = pexpect.spawn(f'ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@{vps_ip}', timeout=120)

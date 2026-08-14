@@ -1,0 +1,433 @@
+{
+  "audit_summary": {
+    "date": "2026-08-08",
+    "repo": "/workspace/agentic-os",
+    "fork_source": "modimihir07/agentic-os",
+    "total_python_files": 110,
+    "total_dashboard_pages": 78,
+    "server_lines": 4405,
+    "server_size_kb": 183,
+    "total_skills": 325,
+    "skill_categories": 48,
+    "hermes_profiles": 3,
+    "vapi_deploy_versions": 9,
+    "send_email_variants": 8,
+    "root_shell_scripts": 11,
+    "criticality_legend": "P0=Blocking/DataLoss, P1=ArchitecturalEmergency, P2=QualityDebt, P3=Cleanup"
+  },
+
+  "findings": [
+    {
+      "id": "F1",
+      "category": "3-agent_model_vs_reality",
+      "severity": "P1",
+      "title": "Documented 3-Agent Model Is Dead Code — Hermes Does Everything",
+      "description": "AGENTS.md documents a 3-agent execution engine (opencode + Hermes + Gemini CLI) with routing rules and agent responsibilities. In reality, Hermes is the only agent actively used. The agent_executor.py module and server.py routing logic exist but opencode and Gemini CLI are effectively dead code paths. The 3-agent handoff protocol, capability manager, and smart router are all aspirational documentation with no operational counterpart.",
+      "evidence": [
+        "AGENTS.md lines 27-73 document 3-agent architecture with routing rules",
+        "server.py has agent_executor imports and multi-agent routing logic (lines at @app.post('/api/router/suggest') and @app.post('/api/router/route'))",
+        "modules/agent_executor.py exists (286 lines) but Hermes handles everything",
+        "No Gemini CLI or opencode binary paths are actively invoked outside the dead routing code",
+        "Hermes config.yaml has full provider setup (deepseek, openrouter, opencode-go, opencode-go-acct2) — it IS the agent"
+      ],
+      "recommendation": "Either implement true multi-agent routing or simplify AGENTS.md to reflect the Hermes-only reality. Remove dead router/agent-executor code or repurpose it for subagent delegation within Hermes."
+    },
+    {
+      "id": "F2",
+      "category": "7_layer_architecture_vs_reality",
+      "severity": "P2",
+      "title": "7-Layer Architecture Is Aspirational Documentation, Not Implemented",
+      "description": "AGENTS.md describes a 7-layer stacked architecture (Identity, Self-Evolution, Scheduler, Memory Graph, Skills Hub, Business Brain, Agent Router). In practice there is a single FastAPI monolith (server.py, 4405 lines, 128 routes) with no layer separation, no clear boundaries, and no enforcement of the documented layer interactions.",
+      "evidence": [
+        "AGENTS.md lines 45-56 documents Layer 1-7",
+        "server.py contains ALL logic inline — identity, scheduling, skills, memory, routing, health checks, email, kanban, goals, journal, Vapi bridge, CRM, calendar, reports, PDFs, and more",
+        "No layer-specific packages or enforcement mechanisms exist",
+        "modules/ directory has topic-based extraction (auth.py, crm.py, kanban.py) but no layered architecture",
+        "The 'layers' only manifest as NAV_CONFIG sidebar groups in the dashboard UI"
+      ],
+      "recommendation": "Either implement actual layer separation (separate packages with clear dependencies) or remove the 7-layer claim from AGENTS.md. The current modules/ extraction is pragmatic but doesn't match the documented architecture."
+    },
+    {
+      "id": "F3",
+      "category": "dashboard_pages",
+      "severity": "P2",
+      "title": "8 Stale/Unlisted Dashboard Pages Among 78 Total",
+      "description": "The dashboard has 78 JS page files but only 73 are registered in NAV_CONFIG (70 visible + 3 hidden). 8 pages are either duplicates, unlisted, or only accessible via CUSTOM_PAGES hash.",
+      "evidence": [
+        "Total page JS files: 78 in dashboard/pages/",
+        "NAV_CONFIG pages: 73 (70 grouped + 3 hiddenRoutes)",
+        "Stale duplicates: cal-new.js (416 lines), calendar2.js (416 lines) — both identical to calendar.js (425 lines), sharing the same category detection logic",
+        "manager-command-center.js (469 lines) — likely duplicate of manager.js (418 lines)",
+        "Unlisted: data-gaps.js (96 lines), email-groups.js (221 lines), subi-exit-interviews.js (22 lines)",
+        "CUSTOM_PAGES hardcoded in app.js: tasks (311 lines), social-media-hub (134 lines)"
+      ],
+      "recommendation": "Remove cal-new.js, calendar2.js, and manager-command-center.js (duplicates). Add data-gaps, email-groups, and subi-exit-interviews to NAV_CONFIG or archive them. Avoid hardcoded CUSTOM_PAGES — use NAV_CONFIG.hiddenRoutes instead."
+    },
+    {
+      "id": "F4",
+      "category": "dashboard_pages",
+      "severity": "P3",
+      "title": "Dashboard Page Size Imbalance — Many Thin Shells",
+      "description": "Page sizes range from 4 lines (prompt-tools-video.js) to 735 lines (omniroute.js). 13 pages are under 100 lines — likely stub/placeholder pages with minimal functionality.",
+      "evidence": [
+        "Under 100 lines: prompt-tools-video (4), calendar-invites (19), subi-exit-interviews (22), vs-coder (45), claude-code (58), pdf-archive (58), memory (67), standards (68), plugins (71), backups (77), system-overview (81), staff-schedule (82), audit (85)",
+        "Many of these match AGENTS.md v0.2.0 features that were 'planned but not built'",
+        "vs-coder.js (45 lines) references VS Code integration but is a thin wrapper",
+        "memory.js (67 lines) claims Obsidian-like memory but is mostly empty"
+      ],
+      "recommendation": "Audit thin pages for actual functionality. Either implement them properly or merge into related pages. Consider a 'utilities' page that consolidates multiple small tools."
+    },
+    {
+      "id": "F5",
+      "category": "python_modules_coupling",
+      "severity": "P1",
+      "title": "183KB Monolithic server.py Defeats Module Extraction Effort",
+      "description": "Despite extracting 38 modules into modules/, server.py remains 183KB with 4,405 lines and 128 route handlers. The module extraction is incomplete — core business logic, Vapi integration, email handling, calendar, and report generation all remain inline in server.py. The modules that were extracted (auth, crm, kanban, vapi_bridge) are themselves tightly coupled via shared config and metrics singletons.",
+      "evidence": [
+        "server.py: 4405 lines, 183KB, 128 @app route decorators",
+        "Inline routes include: /api/cron/jobs, /api/status, /api/selftest, /api/health/full, /api/swap/process, /api/audit, /api/cost, /api/cost/record, /api/plugins, /api/backup, /api/drive/sync, /api/prompts, /api/settings, /api/standards, /api/reports, /api/goals, /api/tasks, /api/journal, /api/agents/health, /api/router, /api/progress/ics, /api/chief-meetings, /api/letters, /api/analytics, /api/sessions, /api/tools, /api/oncall, /api/email, /api/google, /api/gemini, /api/quick-action, /api/eval, /hermes-webui proxy, and more",
+        "session_enforcement middleware has 40+ allowlist path checks inline",
+        "Cron health, cost tracking, and backup logic all inline rather than in modules",
+        "modules/vapi_bridge.py (1928 lines) is itself a monolith within the module system"
+      ],
+      "recommendation": "Complete the module extraction: move all remaining route handlers out of server.py into domain-specific route modules. server.py should be ~200 lines: app creation, middleware registration, module router inclusion. Each domain should have its own router module."
+    },
+    {
+      "id": "F6",
+      "category": "python_modules_duplication",
+      "severity": "P1",
+      "title": "10 Vapi Modules With Overlapping Responsibilities",
+      "description": "The modules/ directory contains 10 vapi_*.py files with significant overlap: vapi_bridge.py (1928 lines), vapi_unified.py (1048 lines), vapi_email.py (731 lines), vapi_knowledge.py (387 lines), vapi_realtime.py (354 lines), vapi_swap.py (207 lines), vapi_realtime_bridge_patch.py (160 lines), vapi_data.py, vapi_call_summary.py, vapi_concierge.py. Many share the same helper functions and config access patterns.",
+      "evidence": [
+        "10 vapi_*.py files in modules/",
+        "vapi_bridge.py (1928 lines) is the main entry point but vapi_unified.py (1048 lines) partially duplicates its role",
+        "vapi_realtime.py and vapi_realtime_bridge_patch.py both handle real-time functionality",
+        "All Vapi modules independently import config, load env vars, and set up logging",
+        "Root vapi_*.py scripts (vapi_bridge_patch_new.py, vapi_deploy_full.py, vapi_health_check.py, vapi_url_watchdog.py) add another layer of duplication"
+      ],
+      "recommendation": "Consolidate into vapi/ package with clear sub-modules: vapi/bridge.py (core), vapi/email.py, vapi/knowledge.py, vapi/tools.py, vapi/realtime.py. Create a shared vapi/client.py for API key management and HTTP helpers."
+    },
+    {
+      "id": "F7",
+      "category": "python_modules_duplication",
+      "severity": "P1",
+      "title": "8 send_*.py Email Scripts Should Be One Module",
+      "description": "Eight root-level send_*.py scripts each independently implement email sending with duplicated SMTP connection, authentication, .ics generation, HTML templating, and batching logic. A shared smtp_sender.py module exists but is inconsistently used. Each script is 97-619 lines with significant copy-paste overlap.",
+      "evidence": [
+        "send_chief_meeting_email.py (permission denied but exists)",
+        "send_grand_rounds_email.py (277 lines)",
+        "send_individual_invites.py (97 lines)",
+        "send_individual_monday.py (134 lines)",
+        "send_missed_invites.py (121 lines)",
+        "send_monday_sasp_email.py (429 lines)",
+        "send_report.py (619 lines)",
+        "send_subi_exit_email.py (346 lines)",
+        "All implement: .env loading, SMTP/Gmail OAuth connection, .ics generation, HTML rendering, batching",
+        "modules/smtp_sender.py (205 lines) exists as a library but is not the single source of truth"
+      ],
+      "recommendation": "Create a single modules/email_sender.py with parameterized send methods. Each use case becomes a thin wrapper (5-10 lines) that calls the shared module. Delete all 8 send_*.py files and replace with a single cli.py entry point using subcommands."
+    },
+    {
+      "id": "F8",
+      "category": "vapi_deploy_sprawl",
+      "severity": "P2",
+      "title": "9 Vapi Deploy Versions (v2-v8 + working) — Copy-Paste Proliferation",
+      "description": "There are 9 Vapi deploy scripts across root and legacy/ directories. Each is a copy-paste variant of the previous with incremental changes. v5 uses requests library, v6-v8 use urllib.request. All target the same assistant ID. The 'v8' deploy script claims idempotency but there's no shared base.",
+      "evidence": [
+        "Active: deploy_vapi_v5.py (165 lines), deploy_vapi_v6_admin.py (198 lines), deploy_vapi_v7_personal.py (118 lines), deploy_vapi_v8_livedata.py (117 lines)",
+        "Legacy: deploy_vapi.py (211 lines), deploy_vapi_v2.py (218 lines), deploy_vapi_v3.py (161 lines), deploy_vapi_v4.py (159 lines), deploy_vapi_working.py (54 lines)",
+        "All target ASSISTANT_ID = '9b00342e-1951-4bd0-b4a5-5ca4c9827bd0'",
+        "v5 imports requests, v6-v8 use urllib.request — inconsistent HTTP client",
+        "v5 loads prompt from vapi_assistant_v5.md, v6-v8 inline the prompt modifications",
+        "Each duplicates: API key extraction from ~/.hermes/.env, HTTP GET→modify→PUT pattern"
+      ],
+      "recommendation": "Create a single modules/vapi_deploy.py with a VapiDeployer class. Each version becomes a method or configuration. Run the latest version only; archive all legacy scripts. Use the shared Vapi client for API key management."
+    },
+    {
+      "id": "F9",
+      "category": "skills_organizational_sprawl",
+      "severity": "P2",
+      "title": "325 Skills Across 48 Categories — 28% Are Social Media",
+      "description": "The skills directory has 48 categories but the distribution is extremely unbalanced. Social media dominates with 92 skills (28%). 17 categories have zero skills (empty directories). The .archive has 53 archived skills. Only 10 categories have more than 5 skills.",
+      "evidence": [
+        "Top categories: social-media (92), .archive (53), software-development (33), devops (30), productivity (26), creative (19), hermes (12), research (10), autonomous-ai-agents (10)",
+        "Empty categories (0 skills): smart-home, red-teaming, mlops, media, email, data-science, apple, .hub, .curator_backups",
+        "Singleton categories (1 skill): vps-port-map, vps-infrastructure-map, vapi-bridge, vapi-assistant-api, upstream-skill-tracking, unified-reimbursement-data, traycer-review-plan-flow, reimbursement-workflow, qgenda-sync, premium-product-stack, or-schedule-pipeline, or-schedule-briefing-parser, note-taking, memory-hygiene, marketing, last30days-pro, huggingface-inference, hermes-config, gemini-nano-banana-image, fal-ai-video-generation, dogfood, dockerize-host-service, crm-api, container-browser-setup, auto-generated",
+        "The 'social-media' category alone has more skills than the bottom 40 categories combined"
+      ],
+      "recommendation": "Merge singleton categories into parent categories. Remove empty directories. Apply a minimum threshold (e.g., 5 skills) for a new category. Consider flat organization with tags instead of deep directory nesting. Clean up .archive."
+    },
+    {
+      "id": "F10",
+      "category": "hermes_profiles",
+      "severity": "P3",
+      "title": "3 Hermes Profiles Are Justified But Poorly Documented",
+      "description": "Three Hermes profiles exist: default (deepseek-v4-flash), opencode-acct1, and opencode-acct2 (kimi-k2.7-code for subagent delegation). These serve legitimate purposes: default for daily operations, acct2 for subagent delegation with a separate API key. acct1 exists but its purpose is unclear from configuration.",
+      "evidence": [
+        "default: model=deepseek-v4-flash, provider=deepseek — used for this session",
+        "opencode-acct2: model=kimi-k2.7-code, provider=opencode-acct2 — used for subagent delegation (delegation.model=kimi-k2.6, delegation.provider=opencode-go-acct2 in config.yaml)",
+        "opencode-acct1: directory exists with full Hermes profile structure but purpose undocumented",
+        "config.yaml delegation section references opencode-go-acct2",
+        "Each profile has independent state (state.db, cron, skills, sessions)"
+      ],
+      "recommendation": "Document the purpose of each profile in a README. If opencode-acct1 is unused, archive it. Ensure API key separation is intentional (separate free tier accounts for cost management)."
+    },
+    {
+      "id": "F11",
+      "category": "cron_architecture",
+      "severity": "P2",
+      "title": "Cron Infrastructure Exists But Jobs Are Missing/Unused",
+      "description": "The codebase references cron jobs extensively (NAV_CONFIG, server.py health checks, AGENTS.md scheduler layer) but the actual jobs.json file is missing from the expected path (~/.hermes/cron/jobs.json). The cron-data directory is nearly empty. This means scheduled automation is non-functional.",
+      "evidence": [
+        "server.py cron_health() function checks for ~/.hermes/cron/jobs.json — will return error",
+        "server.py _get_cron_jobs_list() has fallback to Docker volume path — both likely missing",
+        "NAV_CONFIG has 'morning-briefing' page for 'Briefings & Cron'",
+        "AGENTS.md documents scheduler/ with APScheduler and jobs/*.json (lines 240-246)",
+        "~/.hermes/cron-data/ contains only .upstream-ce-review-sha (41 bytes)",
+        "No jobs.json found anywhere in ~/.hermes/ tree",
+        "config.yaml has full cron section (wrap_response, max_parallel_jobs) but no jobs defined"
+      ],
+      "recommendation": "Either populate cron jobs or remove the cron health infrastructure. If Hermes native cron is used (via Hermes config), document this and update server.py to query the Hermes cron API rather than looking for a flat file."
+    },
+    {
+      "id": "F12",
+      "category": "deployment_model",
+      "severity": "P2",
+      "title": "Single-Container Docker Compose on VPS — No Staging, No Orchestration",
+      "description": "The deployment model is a single docker-compose.yml with one service (agentic-os). Deployment to the Hostinger VPS is done via a Python script (deploy_vps.py) that SSH's in and runs manual commands. There is no staging environment, no CI/CD pipeline, no container orchestration, and no rollback mechanism beyond git.",
+      "evidence": [
+        "docker-compose.yml: single service 'agentic-os' on port 8090",
+        "deploy_vps.py: SSH-based deployment with hardcoded IP and password (147.93.113.241, password in plaintext)",
+        "deploy_vps_script.sh, deploy_aos_vps.sh, deploy_to_vps.sh: multiple redundant deploy scripts",
+        "No docker-compose.override.yml for staging",
+        "No GitHub Actions, GitLab CI, or any CI/CD configuration",
+        "Dockerfile is 985 bytes — simple Python image build",
+        "backups are tar.gz archives in backups/ directory — manual"
+      ],
+      "recommendation": "Add a docker-compose.staging.yml for testing. Set up GitHub Actions for CI (lint, test) and CD (deploy on merge). Use Docker secrets or environment variables instead of hardcoded passwords. Consider watchtower or similar for automated container updates."
+    },
+    {
+      "id": "F13",
+      "category": "data_architecture",
+      "severity": "P1",
+      "title": "Three Data Stores (Supabase, SQLite, JSON) With No Unified Access Layer",
+      "description": "The application uses three completely different data storage mechanisms with no unified access pattern: (1) Supabase/PostgreSQL via direct connection (modules/supabase_data.py, hardcoded IP 147.93.113.241), (2) SQLite via data/sync_cache.db, (3) Flat JSON files in data/ directory (15+ files). Sync between them is ad-hoc and inconsistent.",
+      "evidence": [
+        "modules/supabase_data.py: direct psycopg2 connection to postgresql://postgres@147.93.113.241:5432/postgres",
+        "modules/supabase_client.py: optional supabase SDK wrapper with httpx fallback",
+        "data/sync_cache.db: SQLite database for sync caching",
+        "15+ JSON files in data/: user_pins.json, settings.json, crm_contacts.fallback.json, calendar_events.json, sessions.json, goals.json, email_groups.json, notifications.json, etc.",
+        "server.py reads settings.json directly but also calls supabase_data queries",
+        "No ORM, no migration system, no schema versioning",
+        "The 'unified' supabase_data.py module reads passwords from 3 different env files"
+      ],
+      "recommendation": "Choose one primary data store (recommend Supabase/PostgreSQL). Create a data access layer (DAL) that all modules use. Migrate JSON files to database tables. Add Alembic for migrations. Remove the direct PostgreSQL connection and use the Supabase SDK uniformly."
+    },
+    {
+      "id": "F14",
+      "category": "shell_vs_python",
+      "severity": "P2",
+      "title": "11 Shell Scripts + 49 Root Python Scripts = No Clear Entry Point",
+      "description": "The project has 11 .sh scripts for deployment, installation, and startup, alongside 49 root-level .py scripts. There is no single entry point, no CLI framework, and no clear distinction between 'application code' and 'utility scripts'. Many .sh scripts overlap with .py counterparts.",
+      "evidence": [
+        "11 .sh scripts: backup.sh, restore.sh, install.sh, start.sh, start_aos.sh, start_vapi.sh, deploy_aos_vps.sh, deploy_to_vps.sh, deploy_vps_script.sh, vps_traefik_setup.sh, vps_tunnel.sh",
+        "49 root .py scripts: deploy, email, sync, calendar, vapi, report generation — all mixed together",
+        "deploy_vps.py and deploy_vps_script.sh both handle VPS deployment",
+        "start.sh, start_aos.sh, start_vapi.sh — 3 different start scripts for different contexts",
+        "No setup.py, pyproject.toml, or console_scripts entry points"
+      ],
+      "recommendation": "Create a proper Python package with a CLI entry point (click or typer). Move utility scripts to scripts/ or tools/ directory. Use a single start script. Document the entry point in README.md."
+    },
+    {
+      "id": "F15",
+      "category": "security",
+      "severity": "P0",
+      "title": "Hardcoded Credentials and Overly Permissive Auth Bypass",
+      "description": "The VPS deployment script contains a hardcoded root password. The session enforcement middleware has 20+ path allowlist entries that bypass authentication, including /api/skills, /api/scheduler, /api/chat, /api/goals, /api/kanban, /api/cron, /api/tasks, /api/user, and more. This effectively makes the API public for most operations.",
+      "evidence": [
+        "deploy_vps.py line 16: VPS_PASS = 'QzexH#s488Ipynh5' (hardcoded root password)",
+        "server.py session middleware allows /api/skills, /api/scheduler, /api/chat, /api/goals, /api/kanban, /api/cron, /api/crm/tasks, /api/crm/workflows, /api/user/, /api/tasks, /api/eval/, /api/conference/, /api/calendar/, /api/staff-schedule, /api/oncall/ without authentication",
+        "server.py also allows /api/brain, /api/selftest, /api/pdf/images2pdf, /chat, /api/omniroute-chat without auth",
+        "Supabase password lookup searches 3 env files on disk"
+      ],
+      "recommendation": "IMMEDIATE: Remove the hardcoded VPS password. Use SSH key-based authentication. IMMEDIATE: Add authentication to all API endpoints except /api/status and /login. Use proper role-based access control."
+    },
+    {
+      "id": "F16",
+      "category": "root_owned_files",
+      "severity": "P1",
+      "title": "Critical Files Owned by Root — Permission Denied for Application User",
+      "description": "server.py (183KB, 0600 permissions) and dashboard/utils.js (22KB) are owned by root:root with restrictive permissions. The application user (hermeswebui) cannot read or modify these files, causing operational issues and preventing normal maintenance.",
+      "evidence": [
+        "server.py: -rw------- 1 root root 183358 Aug 6 14:11",
+        "dashboard/utils.js: -rw------- 1 root root 22165 Aug 6 12:09",
+        "dashboard/app.js.bak: -rw------- 1 root root 11478",
+        "dashboard/index.html.bak: -rw------- 1 root root 4047",
+        "All other project files are owned by hermeswebui:hermeswebui"
+      ],
+      "recommendation": "chown all files to hermeswebui:hermeswebui. Investigate how root ownership occurred (likely Docker volume mount or sudo operation). Add a pre-commit hook or CI check to prevent root-owned files."
+    },
+    {
+      "id": "F17",
+      "category": "architectural_drift",
+      "severity": "P2",
+      "title": "AGENTS.md Documents 51+10 Features From 6 Sources — Most Are Stubs",
+      "description": "AGENTS.md claims 51 features from 6 external sources (YouTube video, MindStudio, Superpowers, Hermes Agent, Claude-OS, BuilderMethods) plus 10 extra features. In reality, many of these are aspirational or implemented as thin stubs.",
+      "evidence": [
+        "F12 (Heartbeat Pattern): 'skills/heartbeat/' directory doesn't exist in the working tree",
+        "F14 (Multi-Agent Coordination): dead code as per F1",
+        "F20 (Subagent-Driven Development): only works within Hermes, not across agents",
+        "F29 (Messaging Channels): Hermes native, but Telegram/Discord state is minimal",
+        "F30 (Voice Mode): referenced but not operational",
+        "F32 (Checkpoints): git auto-versioning disabled (checkpoints.enabled: false in config.yaml)",
+        "F34 (Code Execution): Python sandbox exists but is thin",
+        "F38-F43 (Awareness Engine, Health Guardian, etc.): mostly dashboard UI stubs",
+        "E1-E10 (Extra Features): mixed implementation — cost analytics and backups are real, others are stubs"
+      ],
+      "recommendation": "Conduct a feature audit: tag each of the 61 features as IMPLEMENTED, PARTIAL, or NOT_IMPLEMENTED. Remove not-implemented features from AGENTS.md or mark them clearly as ROADMAP. Focus on the 15-20 features that actually work."
+    }
+  ],
+
+  "dashboard_page_analysis": {
+    "total_pages": 78,
+    "in_nav_config": 73,
+    "visible_in_sidebar": 70,
+    "hidden_routes": 3,
+    "external_links": 3,
+    "stale_duplicates": [
+      {"file": "cal-new.js", "lines": 416, "reason": "Duplicate of calendar.js — identical category detection logic"},
+      {"file": "calendar2.js", "lines": 416, "reason": "Duplicate of calendar.js — identical header and structure"},
+      {"file": "manager-command-center.js", "lines": 469, "reason": "Likely duplicate of manager.js (418 lines) — same Urology domain"}
+    ],
+    "unlisted_pages": [
+      {"file": "data-gaps.js", "lines": 96, "reason": "CRM data gap analysis — not in NAV_CONFIG, no sidebar link"},
+      {"file": "email-groups.js", "lines": 221, "reason": "Email group management — not in NAV_CONFIG"},
+      {"file": "subi-exit-interviews.js", "lines": 22, "reason": "Sub-I exit interview deeplink generator — not in NAV_CONFIG"}
+    ],
+    "custom_pages_hardcoded_in_app_js": [
+      {"file": "tasks.js", "lines": 311, "access": "CUSTOM_PAGES hash in app.js line 152"},
+      {"file": "social-media-hub.js", "lines": 134, "access": "CUSTOM_PAGES hash in app.js line 153"}
+    ],
+    "thin_pages_under_100_lines": [
+      "prompt-tools-video (4)", "calendar-invites (19)", "subi-exit-interviews (22)", "vs-coder (45)", 
+      "claude-code (58)", "pdf-archive (58)", "memory (67)", "standards (68)", "plugins (71)", 
+      "backups (77)", "system-overview (81)", "staff-schedule (82)", "audit (85)"
+    ]
+  },
+
+  "python_module_analysis": {
+    "root_py_files": 49,
+    "modules_py_files": 38,
+    "total": 110,
+    "email_variants": {
+      "count": 8,
+      "files": ["send_chief_meeting_email.py", "send_grand_rounds_email.py", "send_individual_invites.py", "send_individual_monday.py", "send_missed_invites.py", "send_monday_sasp_email.py", "send_report.py", "send_subi_exit_email.py"],
+      "shared_module_exists": "modules/smtp_sender.py (205 lines)",
+      "issue": "Each script independently duplicates SMTP auth, .ics generation, HTML templating, batching logic"
+    },
+    "vapi_deploy_versions": {
+      "active": 4,
+      "legacy": 5,
+      "total": 9,
+      "files": {
+        "v5": {"lines": 165, "http_client": "requests"},
+        "v6": {"lines": 198, "http_client": "urllib.request", "title": "Admin Tools"},
+        "v7": {"lines": 118, "http_client": "urllib.request", "title": "Personalized Greetings"},
+        "v8": {"lines": 117, "http_client": "urllib.request", "title": "Live Data Awareness"},
+        "legacy": ["deploy_vapi.py (211)", "deploy_vapi_v2.py (218)", "deploy_vapi_v3.py (161)", "deploy_vapi_v4.py (159)", "deploy_vapi_working.py (54)"]
+      }
+    },
+    "vapi_modules": {
+      "count": 10,
+      "files": ["vapi_bridge.py (1928L)", "vapi_unified.py (1048L)", "vapi_email.py (731L)", "vapi_knowledge.py (387L)", "vapi_realtime.py (354L)", "vapi_swap.py (207L)", "vapi_realtime_bridge_patch.py (160L)", "vapi_data.py", "vapi_call_summary.py", "vapi_concierge.py"]
+    },
+    "server_monolith": {
+      "lines": 4405,
+      "size_kb": 183,
+      "routes": 128,
+      "ownership": "root:root (0600 — application cannot read)",
+      "extracted_modules_loaded": ["crm", "kanban", "vapi_bridge", "schedule", "auth", "skill_runner", "cost_tracker", "brain_routes", "skills_routes", "scheduler_routes", "chat_routes"],
+      "inline_logic": ["cron health", "cost tracking", "backups", "plugins", "settings", "standards", "reports", "goals", "tasks", "journal", "agent health", "smart router", "analytics", "sessions", "tools", "oncall", "email", "google", "gemini chat", "quick actions", "eval"]
+    }
+  },
+
+  "skills_analysis": {
+    "total_skills": 325,
+    "total_categories": 48,
+    "active_categories": 39,
+    "empty_categories": 9,
+    "archived_skills": 53,
+    "distribution": {
+      "social-media": 92,
+      "archived": 53,
+      "software-development": 33,
+      "devops": 30,
+      "productivity": 26,
+      "creative": 19,
+      "hermes": 12,
+      "research": 10,
+      "autonomous-ai-agents": 10,
+      "healthcare": 7,
+      "infrastructure": 3,
+      "github": 3,
+      "maintenance": 2,
+      "singletons": 17,
+      "empty": 9
+    },
+    "recommendation": "Merge singleton categories, remove empty dirs, consider flat tag-based organization"
+  },
+
+  "data_architecture": {
+    "stores": {
+      "supabase_postgresql": {
+        "connection": "direct psycopg2 to 147.93.113.241:5432",
+        "module": "modules/supabase_data.py",
+        "password_source": "scanned from 3 env files on disk"
+      },
+      "sqlite": {
+        "file": "data/sync_cache.db",
+        "purpose": "sync caching"
+      },
+      "json_files": {
+        "count": "15+",
+        "files": ["user_pins.json", "settings.json", "crm_contacts.fallback.json", "calendar_events.json", "sessions.json", "goals.json", "email_groups.json", "notifications.json", "cost-history.json", "crm_access_log.json", "identity_map.json", "chief_meeting_progress.json", "subi_exit_progress.json", "voice_messages.json", "gme_detail.json"]
+      }
+    },
+    "issues": [
+      "No unified data access layer",
+      "No ORM or migration system",
+      "Supabase password discovered by scanning 3 different .env files",
+      "JSON files used as primary storage with no schema validation",
+      "sync_cache.db has no documented schema"
+    ]
+  },
+
+  "profiles_analysis": {
+    "count": 3,
+    "profiles": {
+      "default": {"model": "deepseek-v4-flash", "provider": "deepseek", "purpose": "primary operations"},
+      "opencode-acct1": {"purpose": "unclear — full profile structure exists but undocumented"},
+      "opencode-acct2": {"model": "kimi-k2.7-code", "provider": "opencode-acct2", "purpose": "subagent delegation"}
+    },
+    "verdict": "3 profiles are justified for API key separation and subagent delegation, but acct1 purpose should be documented"
+  },
+
+  "cron_analysis": {
+    "jobs_file_expected": "~/.hermes/cron/jobs.json",
+    "jobs_file_exists": false,
+    "cron_data_dir_contents": "only .upstream-ce-review-sha (41 bytes)",
+    "server_health_check": "cron_health() will return error — jobs.json not found",
+    "config_cron_section": "fully configured in config.yaml (wrap_response, max_parallel_jobs)",
+    "verdict": "Cron infrastructure exists but no jobs are actually defined. Either Hermes native cron handles jobs differently or scheduled automation is non-functional."
+  },
+
+  "deployment_analysis": {
+    "orchestration": "Single docker-compose.yml, one service",
+    "staging": "None",
+    "ci_cd": "None",
+    "vps_deployment": "SSH-based Python script with hardcoded root password",
+    "backup": "Manual tar.gz archives in backups/",
+    "container_count_claimed": 23,
+    "container_count_observed": "docker ps returned 0 (daemon inaccessible or no containers)"
+  }
+}

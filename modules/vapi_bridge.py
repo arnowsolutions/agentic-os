@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Vapi bridge - handles Vapi.ai webhooks and routes tool calls to modules."""
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import bcrypt
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -36,7 +38,32 @@ PIN_DB_PATH = settings.PIN_DB_PATH
 
 
 def _hash_pin(pin: str) -> str:
-    return hashlib.sha256(pin.encode()).hexdigest()
+    """Hash a PIN using bcrypt (strong, salted, resistant to brute-force)."""
+    return bcrypt.hashpw(pin.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify_pin(stored_hash: str, pin: str) -> bool:
+    """Verify a PIN against a stored hash.
+    
+    Handles both bcrypt hashes (new) and SHA-256 hashes (legacy).
+    On successful SHA-256 match, returns True — caller should re-hash with bcrypt.
+    """
+    if not stored_hash or not pin:
+        return False
+    # bcrypt hashes start with $2b$ or $2a$
+    if stored_hash.startswith("$2"):
+        try:
+            return bcrypt.checkpw(pin.encode(), stored_hash.encode())
+        except Exception:
+            return False
+    # Legacy SHA-256 (unsalted) — still accepted but should be upgraded
+    legacy_match = (hashlib.sha256(pin.encode()).hexdigest() == stored_hash)
+    return legacy_match
+
+
+def _is_legacy_hash(stored_hash: str) -> bool:
+    """Check if a stored hash uses legacy SHA-256 (no bcrypt prefix)."""
+    return bool(stored_hash and not stored_hash.startswith("$2"))
 
 
 # ─── Simple file cache ──────────────────────────────────────────────────────
@@ -333,7 +360,7 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
                 name_lower = u.get("name", "").lower().strip()
                 pin_ok = _db_pin_ok(u, pin_clean)
                 if pin_ok is None:
-                    pin_ok = u.get("pin_hash") == _hash_pin(pin_clean)
+                    pin_ok = _verify_pin(u.get("pin_hash"), pin_clean)
                 if pin_ok:
                     profile = {k: v for k, v in u.items() if k != "pin_hash"}
                     greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid), u.get("salutation", ""), u.get("name", ""))
@@ -393,7 +420,7 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
             had = True
             pin_ok = _db_pin_ok(u, pin_clean)
             if pin_ok is None:
-                pin_ok = u.get("pin_hash") == _hash_pin(pin_clean)
+                pin_ok = _verify_pin(u.get("pin_hash"), pin_clean)
             if pin_ok:
                 profile = {k: v for k, v in u.items() if k != "pin_hash"}
                 greeting = _get_greeting(u.get("role", ""), u.get("display_name", uid), u.get("salutation", ""), u.get("name", ""))
@@ -433,7 +460,7 @@ def _handle_auth_inner(name: str, pin: str, ez_id: str = "", client_ip: str = ""
         dbd = u.get("display_name", "").lower().strip()
         pin_ok = _db_pin_ok(u, pin_clean)
         if pin_ok is None:
-            pin_ok = u.get("pin_hash") == _hash_pin(pin_clean)
+            pin_ok = _verify_pin(u.get("pin_hash"), pin_clean)
         for w in words:
             for dw in (dbn + " " + dbd).replace("-", " ").split():
                 if len(dw) >= 3 and _fuzzy(w, dw) and pin_ok:
@@ -910,11 +937,27 @@ async def first_message():
 @router.post("")
 @router.post("/")
 async def vapi_webhook(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        collector.observe_vapi_webhook("parse", "error")
-        return {"error": "invalid JSON"}
+    # ── Webhook signature verification ──
+    secret = settings.WEBHOOK_SECRET
+    if secret:
+        body_bytes = await request.body()
+        sig_header = request.headers.get("x-signature-sha256", "")
+        expected = hmac.new(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig_header):
+            logger.warning("vapi webhook: invalid signature", extra={"remote": request.client.host if request.client else "unknown"})
+            return JSONResponse(status_code=403, content={"error": "invalid signature"})
+        # Re-parse body from bytes since we consumed it
+        try:
+            body = json.loads(body_bytes)
+        except Exception:
+            collector.observe_vapi_webhook("parse", "error")
+            return {"error": "invalid JSON"}
+    else:
+        try:
+            body = await request.json()
+        except Exception:
+            collector.observe_vapi_webhook("parse", "error")
+            return {"error": "invalid JSON"}
 
     # Capture Vapi tool-call metadata before dispatch so we can shape the response.
     msg = body.get("message", body) if isinstance(body, dict) else {}
@@ -1756,7 +1799,7 @@ def _change_my_pin(args: dict) -> dict:
         return {"success": False, "message": "I couldn't find your account to change the PIN. Please verify your identity again."}
 
     u = users[uid]
-    if not current_pin or u.get("pin_hash") != _hash_pin(current_pin):
+    if not current_pin or not _verify_pin(u.get("pin_hash"), current_pin):
         return {"success": False, "message": "Your current PIN didn't match. Please try again."}
 
     users[uid]["pin_hash"] = _hash_pin(new_pin)
