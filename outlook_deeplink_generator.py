@@ -168,6 +168,11 @@ def get_grand_rounds_events(start_date=None):
         if not gr_7_8 and not gr_8_9:
             continue
         meeting_type = "Grand Rounds"
+        is_interview_day = False
+        _int = (gr_7_8 + " " + gr_8_9)
+        if "Residency Interview Day" in _int:
+            is_interview_day = True
+            meeting_type = "Interview Day"
         if "Peds" in gr_7_8 or "Peds" in gr_8_9:
             meeting_type = "Peds Grand Rounds"
         elif "FACULTY MEETING" in gr_7_8 or "FACULTY MEETING" in gr_8_9:
@@ -176,9 +181,12 @@ def get_grand_rounds_events(start_date=None):
             meeting_type = "Journal Club"
         elif "Quality Improvement" in gr_7_8 or "Quality Improvement" in gr_8_9:
             meeting_type = "QI"
+        elif is_interview_day:
+            meeting_type = "Interview Day"
         events.append({
             "date": fri_date, "type": "grand-rounds", "meeting_type": meeting_type,
             "topic_7_8": gr_7_8, "topic_8_9": gr_8_9,
+            "is_interview_day": is_interview_day,
             "zoom_link": GR_ZOOM_LINK, "meeting_id": GR_MEETING_ID, "passcode": GR_PASSCODE,
         })
     events.sort(key=lambda e: e["date"])
@@ -293,6 +301,9 @@ def build_grand_rounds_subject(event):
     mt = event["meeting_type"]
     t7 = event["topic_7_8"]
     t8 = event["topic_8_9"]
+    if event.get("is_interview_day"):
+        topic = (t7 or t8 or "").strip()
+        return f"Invitation: Urology Residency Interview Day {get_interview_day_number(topic)}"
     if "Faculty" in mt:
         summary = "[FACULTY] Faculty Meeting"
     elif "Peds" in mt:
@@ -318,6 +329,9 @@ def build_grand_rounds_body(event):
     zoom_link = event['zoom_link']
     def esc(s):
         return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    if event.get("is_interview_day"):
+        topic = (t7 or t8 or "").strip()
+        return _build_interview_day_body(formatted, topic)
     return (
         f"<strong>Montefiore Urology - Grand Rounds</strong>"
         f"<hr>"
@@ -462,9 +476,14 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
         subject = build_grand_rounds_subject(ev)
         update_subject = f"**UPDATE** {subject}"
         body = build_grand_rounds_body(ev)
-        location = "Hutch I PH2 Conf A (7-8) / Conf B (8-9)"
-        start_dt = f"{ev['date']}T07:00:00"
-        end_dt = f"{ev['date']}T09:00:00"
+        if ev.get("is_interview_day"):
+            location = "Montefiore Medical Center - Urology (interview day)"
+            start_dt = f"{ev['date']}T08:00:00"
+            end_dt = f"{ev['date']}T16:00:00"
+        else:
+            location = "Hutch I PH2 Conf A (7-8) / Conf B (8-9)"
+            start_dt = f"{ev['date']}T07:00:00"
+            end_dt = f"{ev['date']}T09:00:00"
         url = build_deeplink(subject, body, to_param, start_dt, end_dt, location)
         update_url = build_deeplink(update_subject, body, to_param, start_dt, end_dt, location)
         eid = f"fri_{ev['date']}"
@@ -1026,3 +1045,27 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ── Interview-day helpers (appended) ──────────────────────────
+import re as _re
+def get_interview_day_number(topic):
+    m = _re.search(r"Day\s*(\d+)", topic or "")
+    return m.group(1) if m else ""
+
+def _build_interview_day_body(formatted, topic):
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return (
+        f"<strong>Montefiore Urology - Urology Residency Interview Day</strong>"
+        f"<hr>"
+        f"<table cellpadding='4' style='border-collapse:collapse;'>"
+        f"<tr><td><strong>Date</strong></td><td>{esc(formatted)}</td></tr>"
+        f"<tr><td><strong>Time</strong></td><td>8:00 AM - 4:00 PM (Eastern)</td></tr>"
+        f"<tr><td><strong>Location</strong></td><td>Montefiore Medical Center - Urology (interview day)</td></tr>"
+        f"</table>"
+        f"<hr>"
+        f"All faculty and residents are expected to participate in the interview day."
+        f"<hr>"
+        f"<strong>Montefiore Medical Center | Department of Urology</strong>"
+    )
