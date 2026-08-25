@@ -1,5 +1,16 @@
 # Sub-I Exit Interview Workflow — Dr. Schoenberg
 
+> ## ⚠️ REVIEW-BEFORE-SEND (2026-08-21) — MANDATORY
+> **Never email Dr. Schoenberg, a student, or any external recipient directly from an agent run.**
+> On 2026-08-21 an autonomous agent emailed Dr. Schoenberg about a Sub-I exit interview at ~5am and
+> Shareef never saw the message before it went out. That must not happen again.
+> - ANY one-off outbound email (Sub-I invites, availability requests, etc.) MUST be routed through
+>   `/workspace/agentic-os/review_gate.py --draft`, which queues it and emails Shareef a preview.
+> - Shareef reviews and then the gate is run with `--approve <id>` — ONLY THEN is it delivered.
+> - Never call `smtp_send.py`, `send_email_smart`, or `email_helper.py` directly for a one-off outbound
+>   email to an external address without going through the gate.
+> - Automated reports/briefings (morning briefing, digests) are NOT affected by this rule.
+
 ## Overview
 When a Sub-I / visiting medical student rotates through the department, an **Exit Interview with Dr. Schoenberg** must be scheduled during the **last week of their rotation**. This is added to the onboarding checklist.
 

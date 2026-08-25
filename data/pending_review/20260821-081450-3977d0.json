@@ -1,0 +1,12 @@
+{
+  "id": "20260821-081450-3977d0",
+  "created": 1787314490.7702317,
+  "status": "rejected",
+  "to": "matthew.yang@hmhn.org",
+  "cc": "mschoenb@montefiore.org",
+  "subject": "Test \u2014 review gate check",
+  "body": "This preview tests that the review gate emails Shareef a preview before anything is sent to the student or Dr. Schoenberg.",
+  "html": false,
+  "attachments": [],
+  "rejected_at": 1787314502.5569503
+}

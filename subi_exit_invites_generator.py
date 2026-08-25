@@ -24,6 +24,11 @@ CV_DIR = BASE_DIR / "data" / "subi-cvs"
 
 TEST_EMAIL = "sfrasier@montefiore.org"
 
+
+def esc(s):
+    """HTML-escape for embedding values in data attributes."""
+    return str(s).replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+
 # ── Fixed Sub-I Exit Interview Zoom template (does NOT change per row) ──────
 ZOOM_JOIN_URL = "https://us02web.zoom.us/j/5172907646?pwd=SVRqbElnTHRUNGxLL3B3bVZFVFYzUT09&omn=81977282270"
 ZOOM_MEETING_ID = "517 290 7646"
@@ -250,6 +255,12 @@ def generate_html_page(test_mode=True):
         eml_label = "⬇ .eml (CV)" if has_cv else "⬇ .eml"
         eml_link = f'<a href="/api/subi-exit/eml?id={r["id"]}" style="display:inline-block;color:#94a3b8;font-size:11px;margin-left:8px;text-decoration:none;border:1px solid #475569;padding:3px 10px;border-radius:4px" title="Download .eml file — double-click in Outlook to open with CV attached">{eml_label}</a>' if has_date else ''
         action_cell = f'{outlook_btn}{eml_link}' if has_date else '<span style="color:#64748b;font-size:12px">TBD — date not set</span>'
+        edit_btn = (f'<a href="#" data-edit-id="{r["id"]}" class="edit-btn" '
+                    f'data-interviewee="{esc(r["interviewee"])}" data-email="{esc(r["recipient_email"])}" '
+                    f'data-date="{esc(r["date"])}" data-time="{esc(r["time"])}" '
+                    f'data-duration="{r["duration_minutes"]}" data-notes="{esc(r["notes"])}" '
+                    f'style="display:inline-block;color:#fbbf24;font-size:12px;margin-left:8px;text-decoration:none;border:1px solid #f59e0b;padding:3px 10px;border-radius:4px;cursor:pointer">✎ Edit</a>')
+        action_cell += edit_btn
         time_display = r["time"] if r["time"] != "TBD" else "TBD"
         # Show rotation dates as subtitle under interviewee name (from notes)
         rot_dates = ""
@@ -327,16 +338,50 @@ def generate_html_page(test_mode=True):
 
   <div class="count">{len(rows)} interviews · Zoom Meeting ID {ZOOM_MEETING_ID} · {TEST_EMAIL if test_mode else 'live recipients + Dr. Schoenberg'}</div>
   <table>
-    <thead><tr>
-      <th style="width:110px">Date</th>
-      <th style="width:90px">Time</th>
-      <th>Interviewee</th>
-      <th style="width:260px">To</th>
-      <th style="width:140px">Action</th>
-    </tr></thead>
-    <tbody>
-{rows_html}    </tbody>
+  <thead><tr>
+    <th style="width:110px">Date</th>
+    <th style="width:90px">Time</th>
+    <th>Interviewee</th>
+    <th style="width:250px">To</th>
+    <th style="width:250px">Action</th>
+  </tr></thead>
+  <tbody>
+  {rows_html}    </tbody>
   </table>
+
+  <!-- ✎ Inline Edit Modal -->
+  <div id="editModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.6);align-items:center;justify-content:center">
+  <div style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:22px;max-width:500px;width:92%;max-height:90vh;overflow:auto">
+    <h3 style="margin:0 0 4px;color:#fbbf24">✎ Edit Interview</h3>
+    <p style="color:#64748b;font-size:12px;margin:0 0 16px" id="editSubtitle">Update the row — changes save to the database and reflect on this page.</p>
+    <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Interviewee</label>
+    <input id="eInterviewee" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+    <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Recipient Email</label>
+    <input id="eEmail" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+    <div style="display:flex;gap:10px">
+      <div style="flex:1">
+        <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Date</label>
+        <input id="eDate" type="date" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+      </div>
+      <div style="flex:1">
+        <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Time</label>
+        <input id="eTime" placeholder="e.g. 12:00 PM" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+      </div>
+      <div style="width:90px">
+        <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Min</label>
+        <input id="eDuration" type="number" min="5" max="120" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+      </div>
+    </div>
+    <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Notes</label>
+    <textarea id="eNotes" rows="3" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px;resize:vertical"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
+      <button id="editCancel" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer">Cancel</button>
+      <button id="editDelete" style="background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer">Delete</button>
+      <button id="editSave" style="background:#f59e0b;color:#0f172a;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer">Save</button>
+    </div>
+    <p id="editMsg" style="font-size:12px;margin-top:10px;color:#34d399"></p>
+  </div>
+  </div>
 
   <div class="footer">
     {len(rows)} total interviews · Location field auto-filled with Zoom Meeting ID · Generated by subi_exit_invites_generator.py
@@ -353,6 +398,85 @@ def generate_html_page(test_mode=True):
         document.getElementById('status-' + eid).innerHTML = '<span class="sent-badge">Sent</span>';
         document.getElementById('row-' + eid).classList.add('row-sent');
       }});
+    }});
+
+    // ── ✎ Inline Edit (uses existing PUT/DELETE /api/subi-exit-interviews/{id}) ──
+    const modal = document.getElementById('editModal');
+    let editingId = null;
+    modal.style.display = 'none';
+
+    document.querySelectorAll('.edit-btn').forEach(btn => {{
+      btn.addEventListener('click', function(e) {{
+        e.preventDefault(); e.stopPropagation();
+        editingId = this.dataset.editId;
+        document.getElementById('eInterviewee').value = this.dataset.interviewee || '';
+        document.getElementById('eEmail').value = this.dataset.email || '';
+        const d = this.dataset.date || '';
+        document.getElementById('eDate').value = (d.match(/^\d{{4}}-\d{{2}}-\d{{2}}$/)) ? d : '';
+        document.getElementById('eTime').value = (this.dataset.time || '').toLowerCase() === 'tbd' ? '12:00 PM' : (this.dataset.time || '');
+        document.getElementById('eDuration').value = this.dataset.duration || 10;
+        document.getElementById('eNotes').value = this.dataset.notes || '';
+        document.getElementById('editMsg').textContent = '';
+        modal.style.display = 'flex';
+      }});
+    }});
+
+    document.getElementById('editCancel').addEventListener('click', function(){{
+      modal.style.display = 'none'; editingId = null;
+    }});
+    modal.addEventListener('click', function(e){{
+      if (e.target === modal) {{ modal.style.display = 'none'; editingId = null; }}
+    }});
+
+    document.getElementById('editSave').addEventListener('click', async function(){{
+      const payload = {{
+        interviewee: document.getElementById('eInterviewee').value,
+        recipient_email: document.getElementById('eEmail').value,
+        interview_date: document.getElementById('eDate').value || null,
+        interview_time: document.getElementById('eTime').value || '12:00 PM',
+        duration_minutes: parseInt(document.getElementById('eDuration').value || '10', 10),
+        notes: document.getElementById('eNotes').value,
+      }};
+      const msg = document.getElementById('editMsg');
+      try {{
+        const resp = await fetch('/api/subi-exit-interviews/' + editingId, {{
+          method: 'PUT',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify(payload),
+        }});
+        const res = await resp.json();
+        if (res.success) {{
+          msg.style.color = '#34d399';
+          msg.textContent = '✓ Saved. Reloading…';
+          setTimeout(() => location.reload(), 600);
+        }} else {{
+          msg.style.color = '#f87171';
+          msg.textContent = 'Save failed: ' + (res.error || 'unknown');
+        }}
+      }} catch (err) {{
+        msg.style.color = '#f87171';
+        msg.textContent = 'Save error: ' + err;
+      }}
+    }});
+
+    document.getElementById('editDelete').addEventListener('click', async function(){{
+      if (!confirm('Delete this interview row? This cannot be undone.')) return;
+      const msg = document.getElementById('editMsg');
+      try {{
+        const resp = await fetch('/api/subi-exit-interviews/' + editingId, {{ method: 'DELETE' }});
+        const res = await resp.json();
+        if (res.success) {{
+          msg.style.color = '#34d399';
+          msg.textContent = '✓ Deleted. Reloading…';
+          setTimeout(() => location.reload(), 500);
+        }} else {{
+          msg.style.color = '#f87171';
+          msg.textContent = 'Delete failed: ' + (res.error || 'unknown');
+        }}
+      }} catch (err) {{
+        msg.style.color = '#f87171';
+        msg.textContent = 'Delete error: ' + err;
+      }}
     }});
   </script>
 </body>

@@ -1,0 +1,12 @@
+{
+  "id": "20260821-081418-13d9b4",
+  "created": 1787314458.24876,
+  "status": "rejected",
+  "to": "test@example.com",
+  "cc": "mschoenb@montefiore.org",
+  "subject": "Gate smoke test",
+  "body": "This is a test of the review gate.",
+  "html": false,
+  "attachments": [],
+  "rejected_at": 1787314464.107418
+}

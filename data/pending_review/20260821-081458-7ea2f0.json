@@ -1,0 +1,13 @@
+{
+  "id": "20260821-081458-7ea2f0",
+  "created": 1787314498.4937775,
+  "status": "approved",
+  "to": "gate.test.shareef@gmail.com",
+  "cc": "",
+  "subject": "Approve-path test",
+  "body": "Confirming the approve path delivers.",
+  "html": false,
+  "attachments": [],
+  "approved_at": 1787314501.6851392,
+  "message_id": "smtp_sent"
+}

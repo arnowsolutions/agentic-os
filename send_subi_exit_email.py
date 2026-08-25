@@ -327,19 +327,61 @@ def generate_eml_files(target_date=None, target_id=None):
     return generated
 
 
+def send_via_review_gate(target_date=None, target_id=None):
+    """REVIEW-BEFORE-SEND mode.
+
+    For each interview, build the full invite (To = student, Cc = Dr. Schoenberg)
+    and queue it through review_gate.py --draft. The gate emails Shareef a preview
+    and does NOT deliver to the student/Schoenberg until he explicitly approves.
+    This prevents silent autonomous sends (the 2026-08-21 incident).
+    """
+    import subprocess
+    interviews = get_interviews(target_date=target_date, target_id=target_id)
+    if not interviews:
+        print("No interviews found"
+              + (f" for date {target_date}" if target_date else f" for id {target_id}" if target_id else ""))
+        return
+    gate = str(BASE_DIR / "review_gate.py")
+    for iv in interviews:
+        recipients = [iv.get("recipient_email", "").strip(), CC_ATTENDEE]
+        to = next((r for r in recipients if r), "")
+        cc = CC_ATTENDEE if to != CC_ATTENDEE else ""
+        subject = build_subject(iv)
+        # Strip HTML to a readable preview body (gate re-wraps for review).
+        body = f"Sub-I Exit Interview for {iv.get('interviewee') or 'student'}.\n" \
+               f"Date: {iv.get('date') or 'TBD'}\nTime: {iv.get('time') or '12:00 PM'}\n\n" \
+               f"{iv.get('notes') or ''}\n\nZoom link and full HTML invite are previewed on approve."
+        cmd = [sys.executable, gate, "--draft", "--to", to]
+        if cc:
+            cmd += ["--cc", cc]
+        cmd += ["--subject", subject, "--body", body, "--html"]
+        print(f"  📥 queueing {iv.get('date')} [{iv['id']}] {iv.get('interviewee','?')} -> {to} cc={cc or '(none)'} via review gate")
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        out = (r.stdout + r.stderr).strip()
+        print(f"     {out.splitlines()[-1] if out else '(no output)'}")
+    print("\nDone. Each invite is PENDING in review_gate — nothing sent until you approve.")
+    print(f"Approve/cancel: python3 {gate} --list | --approve <id> | --reject <id>")
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Generate Sub-I Exit Interview .eml files")
     parser.add_argument("--date", type=str, default="", help="Filter by date (YYYY-MM-DD)")
     parser.add_argument("--id", type=int, default=0, help="Filter by row id")
     parser.add_argument("--output-dir", type=str, default="", help="Override output dir")
+    parser.add_argument("--send", action="store_true",
+                        help="REVIEW-BEFORE-SEND: queue each invite through review_gate.py "
+                             "(preview to Shareef) instead of sending directly. Requires per-draft approval.")
     args = parser.parse_args()
 
     global EML_DIR
     if args.output_dir:
         EML_DIR = Path(args.output_dir)
 
-    generate_eml_files(target_date=args.date or None, target_id=args.id or None)
+    if args.send:
+        send_via_review_gate(target_date=args.date or None, target_id=args.id or None)
+    else:
+        generate_eml_files(target_date=args.date or None, target_id=args.id or None)
 
 
 if __name__ == "__main__":
