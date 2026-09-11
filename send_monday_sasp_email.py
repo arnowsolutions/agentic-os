@@ -49,96 +49,15 @@ def _load_prod_recipients():
 
 _resident_lookup = None
 
-# Hardcoded map of all GR_DATA resident entries → "Dr. LastName" format.
-# Keys: both the old first names (backward compat) and current last names.
-# Values: final "Dr. LastName" string.
-_KNOWN_RESIDENT_NAMES = {
-    # Last names (current GR_DATA values)
-    "iskhakov": "Dr. Iskhakov",
-    "capellan": "Dr. Capellan",
-    "murota": "Dr. Murota",
-    "yim": "Dr. Yim",
-    "drobner": "Dr. Drobner",
-    "aibel": "Dr. Aibel",
-    "kim": "Dr. Kim",
-    "hordines": "Dr. Hordines",
-    "hill": "Dr. Hill",
-    # Multiple Patels — use first-initial disambiguation
-    "patel": "Dr. Patel",  # generic — caller uses specific name for disambiguation
-    "valpatel": "Dr. V. Patel",
-    "rutupatel": "Dr. R. Patel",
-    # "Pak" appears twice (Jen Pak and standalone) — same person
-    "pak": "Dr. Pak",
-    # Old first-name keys (backward compatibility if GR_DATA reverts)
-    "nate": "Dr. Iskhakov",
-    "nathaniel": "Dr. Iskhakov",
-    "jasmin": "Dr. Capellan",
-    "dinora": "Dr. Murota",
-    "val": "Dr. V. Patel",
-    "valmic": "Dr. V. Patel",
-    "sam": "Dr. Yim",
-    "samuel": "Dr. Yim",
-    "jake": "Dr. Drobner",
-    "kelli": "Dr. Aibel",
-    "rutul": "Dr. R. Patel",
-    "joe": "Dr. Kim",
-    "joseph": "Dr. Kim",
-    "jen": "Dr. Pak",
-    "jennifer": "Dr. Pak",
-}
-
-# Nickname → first-name mapping for PDF shorthand names (kept for backward compat)
-_RESIDENT_NICKNAMES = {
-    "nate": "nathaniel",
-    "sam": "samuel",
-    "val": "valmic",
-    "joe": "joseph",
-    "jen": "jennifer",
-}
-
-def _load_resident_lookup():
-    """Build a first-name → last-name map from CRM contacts (Resident category)."""
-    global _resident_lookup
-    if _resident_lookup is not None:
-        return _resident_lookup
-    _resident_lookup = {}
-    try:
-        for c in get_contacts():
-            if c.get("category") == "Resident":
-                fn = (c.get("firstName") or "").strip().lower()
-                ln = (c.get("lastName") or "").strip()
-                if fn and ln:
-                    _resident_lookup[fn] = ln
-    except Exception:
-        pass
-    return _resident_lookup
-
+# Resident display names resolve through the CANONICAL map in gr_schedule.py
+# (gr_schedule.dr_resident) — no resident name map lives in this file.
+# Single source of truth (2026-09-09): schedule = unified.grand_rounds,
+# resident display = gr_schedule.dr_resident.
 def _resolve_resident(name):
-    """Given a resident name (first or last), return 'Dr. LastName' format.
-    Resolution order: 1) Hardcoded KNOWN_RESIDENT_NAMES map (most reliable)
-    2) CRM lookup (when PG is up) 3) Fallback: 'Dr. {name}' for last names."""
-    if not name or name.strip().lower() in ("n/a", ":(", "?"):
-        return ""
-    clean = name.strip().lower()
+    """Given a resident name (first or last), return 'Dr. LastName' ('' if N/A)."""
+    from gr_schedule import dr_resident
+    return dr_resident(name)
 
-    # 1) Hardcoded map — always works, even when CRM is down
-    result = _KNOWN_RESIDENT_NAMES.get(clean)
-    if result:
-        return result
-
-    # 2) Try nickname → first name → CRM lookup (backward compat)
-    lookup = _load_resident_lookup()
-    resolved_fn = _RESIDENT_NICKNAMES.get(clean, clean)
-    ln = lookup.get(resolved_fn, "")
-    if ln:
-        dupes = sum(1 for v in lookup.values() if v.lower() == ln.lower())
-        if dupes > 1:
-            initial = resolved_fn[0].upper()
-            return f"Dr. {initial}. {ln}"
-        return f"Dr. {ln}"
-
-    # 3) Name is already a last name (Hordines, Hill, Pak, new additions)
-    return f"Dr. {name.strip()}"
 
 _faculty_lookup = None
 
@@ -171,23 +90,20 @@ def _resolve_attending_email(attending_name):
 # ── Parse GR data (contains Monday data too) ──────────────
 
 def parse_gr_data():
-    with open("/workspace/agentic-os/dashboard/pages/grand-rounds.js") as f:
-        js = f.read()
-    start = js.index("const GR_DATA = ")
-    start = js.index("[", start)
-    depth = 0
-    end = start
-    for i, c in enumerate(js[start:]):
-        if c == "[": depth += 1
-        elif c == "]":
-            depth -= 1
-            if depth == 0:
-                end = start + i + 1
-                break
-    array_str = js[start:end]
-    array_str = re.sub(r",\s*]", "]", array_str)
-    array_str = re.sub(r"//.*", "", array_str)
-    return json.loads(array_str)
+    """Schedule now comes ONLY from the CANONICAL store: unified.grand_rounds."""
+    from gr_schedule import fetch_rows
+    return fetch_rows(include_tb=False)
+
+
+def _stamp(kind, date_iso):
+    """Stamp the canonical send tracker — only for REAL sends (never TEST_MODE)."""
+    if TEST_MODE:
+        return
+    try:
+        from gr_schedule import mark_sent
+        mark_sent(date_iso, kind)
+    except Exception as e:
+        print(f"  ⚠ tracker stamp failed ({kind} {date_iso}): {e}")
 
 def get_all_mondays():
     """Extract Monday SASP meetings from GR_DATA."""
@@ -394,6 +310,8 @@ def main():
                 print(f"📅 Monday reminder for {monday}")
                 ok, err = send_monday_reminder(event, monday)
                 print(f"  {'✅' if ok else '❌'} {event['title'][:40]} (err: {err[:60] if err else 'none'})")
+                if ok:
+                    _stamp("mon_reminder", monday)
                 return
         print(f"No Monday meeting found for {monday}")
         return
@@ -412,6 +330,7 @@ def main():
         ok, err = send_monday_ics(event, event["date"])
         if ok:
             progress.setdefault("ics_sent_dates", []).append(event["date"])
+            _stamp("mon_invite", event["date"])
             sent_count += 1
             print(f"  ✅ {event['date']}: {event['title'][:40]}")
         else:

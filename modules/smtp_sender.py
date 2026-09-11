@@ -27,9 +27,19 @@ from email import encoders
 from pathlib import Path
 from typing import List, Optional, Dict
 
-# Load .env if available
+# Load .env if available.
+# A STALE SMTP_APP_PASSWORD is inherited into the process env from ~/.hermes/.env
+# (0b5ff... — Gmail returns 535 BadCredentials for it). The authoritative,
+# WORKING password lives in the agentic-os .env (acac5c...). We MUST override
+# the inherited stale value so every caller (VAPI voice, Telegram, reports) uses
+# credentials Gmail actually accepts.
 try:
     from dotenv import load_dotenv
+    _ag_env = Path(__file__).resolve().parent.parent / ".env"  # agentic-os/.env
+    if _ag_env.exists():
+        # override=True so the authoritative agentic-os value beats any stale
+        # inherited SMTP_APP_PASSWORD/SMTP_USER in the process environment.
+        load_dotenv(_ag_env, override=True)
     load_dotenv()
 except ImportError:
     pass

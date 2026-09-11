@@ -2,42 +2,11 @@
 """Parse Grand Rounds data from dashboard JS and create Google Calendar events + cron."""
 import re, json, subprocess, os, sys
 
-# ── Read the Grand Rounds data more robustly ──────────────
+# ── Read the Grand Rounds data — CANONICAL source (unified.grand_rounds) ──
 def parse_gr_data():
-    """Parse GR_DATA from JS file, handling trailing commas JS-style."""
-    with open("/workspace/agentic-os/dashboard/pages/grand-rounds.js") as f:
-        js = f.read()
-    
-    # Extract the array content between [ and ]; (handle nested brackets)
-    start = js.find("const GR_DATA = ")
-    if start < 0:
-        print("ERROR: GR_DATA not found")
-        sys.exit(1)
-    start = js.index("[", start)
-    # Find the matching closing bracket
-    depth = 0
-    end = start
-    for i, c in enumerate(js[start:]):
-        if c == "[":
-            depth += 1
-        elif c == "]":
-            depth -= 1
-            if depth == 0:
-                end = start + i + 1
-                break
-    
-    array_str = js[start:end]
-    # Convert JS array to JSON: wrap strings, remove trailing commas
-    # First handle the easy case - it's mostly string arrays
-    # Replace JS-style strings (double quotes work in both)
-    # Remove trailing commas before ] or }
-    import re as regex
-    array_str = regex.sub(r",\s*]", "]", array_str)  # trailing comma in outer array
-    array_str = regex.sub(r",\s*\]", "]", array_str)  # in nested arrays too
-    # Remove comments (// style)
-    array_str = regex.sub(r"//.*", "", array_str)
-    
-    return json.loads(array_str)
+    """Schedule now comes ONLY from the CANONICAL store: unified.grand_rounds."""
+    from gr_schedule import fetch_rows
+    return fetch_rows(include_tb=False)
 
 gr_data = parse_gr_data()
 print(f"Found {len(gr_data)} Grand Rounds entries")

@@ -4,68 +4,48 @@
 // Data is embedded from the send log JSON + GR schedule.
 // ──────────────────────────────────────────────────────────────
 
-// Real sends (from /workspace/agentic-os/data/grand_rounds_send_log.json)
-const SEND_LOG = {
-  realSends: [
-    { date: "2026-07-10", title: "[ PEDS ] Urology Grand Rounds - Peds / Peds Multidisciplinary", emails: 43, failed: 0, sentAt: "2026-07-08" },
-    { date: "2026-07-17", title: "[ GR ] Urology Grand Rounds - Sankin expectations overview (1hr) / Sub-I talks - 0.75 hr (3)", emails: 43, failed: 0, sentAt: "2026-07-08" },
-  ],
-  testOnlyDates: [
-    "2026-07-17","2026-07-24","2026-07-31","2026-08-07","2026-08-14","2026-08-28",
-    "2026-09-11","2026-09-18","2026-09-25","2026-10-02","2026-10-09","2026-10-23",
-    "2026-10-30","2026-11-06","2026-11-13","2026-12-04","2026-12-11","2026-12-18",
-    "2027-01-08","2027-01-15","2027-01-22","2027-02-05","2027-02-12","2027-02-19",
-    "2027-02-26","2027-03-05","2027-03-12","2027-03-19","2027-03-26"
-  ]
-};
+// Send history loads from the CANONICAL tracker + legacy JSON via API
+// (GET /api/email/send-log + /api/conference/events). Single source of truth.
+let SEND_LOG = { realSends: [], testOnlyDates: [] };
+let ALL_GR_EVENTS = [];
+let sendLogReady = false;
 
-// All Grand Rounds events from the schedule (re-extracted from GR_DATA)
-const ALL_GR_EVENTS = [
-  { date: "2026-07-10", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2026-07-17", topic: "Sankin expectations overview (1hr) / Sub-I talks - 0.75 hr (3)", type: "Grand Rounds" },
-  { date: "2026-07-31", topic: "Quality Improvement: Stats/M&Ms/Indications June/ July", type: "Grand Rounds" },
-  { date: "2026-08-07", topic: "SASP Review with Dr. Lipsky", type: "Grand Rounds" },
-  { date: "2026-08-14", topic: "Sub-I talks - 0.5 hr (2)", type: "Grand Rounds" },
-  { date: "2026-08-28", topic: "PGY-4 Subspeciality Presentations / Sub-I talks - 0.75 hr (3)", type: "Grand Rounds" },
-  { date: "2026-09-11", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2026-09-18", topic: "FACULTY MEETING", type: "Faculty Meeting" },
-  { date: "2026-09-25", topic: "Sub-I talks - 0.75 hr (3)", type: "Grand Rounds" },
-  { date: "2026-10-02", topic: "Quality Improvement: Stats/M&Ms/Indications Aug/ Sept", type: "Grand Rounds" },
-  { date: "2026-10-09", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2026-10-23", topic: "Sub-Intern Presentations - 1 hr (4)", type: "Grand Rounds" },
-  { date: "2026-10-30", topic: "PGY-4 Subspeciality Presentations", type: "Grand Rounds" },
-  { date: "2026-11-06", topic: "FACULTY MEETING", type: "Faculty Meeting" },
-  { date: "2026-11-13", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2026-12-04", topic: "Quality Improvement: Stats/M&Ms/Indications Oct-Nov", type: "Grand Rounds" },
-  { date: "2026-12-11", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2026-12-18", topic: "Valentine Essay Submission Presentations / Resident QI Updates", type: "Grand Rounds" },
-  { date: "2027-01-08", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2027-01-15", topic: "FACULTY MEETING", type: "Faculty Meeting" },
-  { date: "2027-01-22", topic: "Journal Club", type: "Journal Club" },
-  { date: "2027-02-05", topic: "Quality Improvement: Stats/M&Ms/Indications - Dec/Jan", type: "Grand Rounds" },
-  { date: "2027-02-12", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2027-02-19", topic: "PGY-4 Subspeciality Presentations (1 hr) / Visiting Lecture: Fed Ghali (Yale) - Uro-oncology", type: "Grand Rounds" },
-  { date: "2027-02-26", topic: "Prisoner Ethics - Ari / Prisoner Ethics - Small", type: "Grand Rounds" },
-  { date: "2027-03-05", topic: "FACULTY MEETING", type: "Faculty Meeting" },
-  { date: "2027-03-12", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2027-03-19", topic: "Journal Club", type: "Journal Club" },
-  { date: "2027-03-26", topic: "Quality Improvement: Stats/M&Ms/Indications - Feb/ March / Sub-I Presentation (1 - 15 min)", type: "Grand Rounds" },
-  { date: "2027-04-09", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2027-04-16", topic: "Guest Speaker - Contract Negotiations / Prosthetics Talk - Dr. Pedro Maria", type: "Grand Rounds" },
-  { date: "2027-04-23", topic: "Sub-I Presentation (15 min)/PGY 4 Subspecialty / Dr Kelvin Davies - Testing a Paradigm Shift: Erectile Dysfunction as a Causal Driver of Cardiovascular Disease.", type: "Grand Rounds" },
-  { date: "2027-04-30", topic: "Quality Improvement: Stats/M&Ms/Indications - March/April", type: "Grand Rounds" },
-  { date: "2027-05-07", topic: "Peds / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2027-05-28", topic: "Journal Club/ STATs with Dr. Aggaliu", type: "Journal Club" },
-  { date: "2027-06-04", topic: "Quality Improvement: Stats/M&Ms/Indications - May", type: "Grand Rounds" },
-  { date: "2027-06-11", topic: "Dr. Kryger VP / Peds Multidisciplinary", type: "Peds Grand Rounds" },
-  { date: "2027-06-25", topic: "FACULTY MEETING", type: "Faculty Meeting" },
-];
+async function loadSendLogData() {
+  if (sendLogReady) return;
+  try {
+    const [evRes, lgRes] = await Promise.all([
+      fetch('/api/conference/events'),
+      fetch('/api/email/send-log'),
+    ]);
+    const ev = await evRes.json();
+    const lg = await lgRes.json();
+    ALL_GR_EVENTS = (ev.events || [])
+      .filter(e => e.type !== 'no_grand_rounds' && e.date)
+      .map(e => ({
+        date: e.date,
+        topic: [e.topic_7_8, e.topic_8_9].filter(Boolean).join(' / ') || 'TBD',
+        type: ({ peds: 'Peds Grand Rounds', faculty_meeting: 'Faculty Meeting', journal_club: 'Journal Club' }[e.type]) || 'Grand Rounds',
+      }));
+    const realSends = (lg.realSends || []).map(s => ({ date: s.date, title: s.title || '', emails: s.emails || 0, failed: s.failed || 0, sentAt: s.sentAt || '' }));
+    const dbFriday = (lg.dbSent || []).filter(d => d.side === 'friday').map(d => ({ date: d.date, title: '', emails: 0, failed: 0, sentAt: d.sentAt }));
+    SEND_LOG = { realSends: realSends.concat(dbFriday), testOnlyDates: lg.testOnlyDates || [] };
+    sendLogReady = true;
+  } catch (err) {
+    console.error('send log load failed:', err);
+    sendLogReady = false;
+  }
+}
 
 // Zoom details shown on the page
 const ZOOM_DETAILS = { id: "867 7387 8358", passcode: "466916" };
 
 async function renderEmailSendLog() {
   const content = document.getElementById('pageContent');
+  await loadSendLogData();
+  if (!sendLogReady) {
+    content.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--red)">⚠️ Could not load send log — is the server DB reachable?</div>';
+    return;
+  }
 
   // Build lookup maps
   const realSendMap = {};

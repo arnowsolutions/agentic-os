@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+    <base href="/dashboard/">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agentic OS</title>
@@ -40,6 +41,9 @@
       <a class="nav-item" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;color:#888;text-decoration:none;font-size:13px;cursor:pointer" onclick="navigate('social-media-hub')" title="Social Media Hub">
         <span>📱</span><span>Social Media Hub</span>
       </a>
+      <a class="nav-item" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;color:#888;text-decoration:none;font-size:13px;cursor:pointer" onclick="navigate('distribution')" title="Distribution Lists">
+        <span>👥</span><span>Distribution Lists</span>
+      </a>
     </div>
     <div class="sidebar-footer">
       <div class="agent-status-bar" id="agentStatusBar">
@@ -73,8 +77,8 @@
   <div id="toastContainer" class="toast-container"></div>
   <div id="modalContainer"></div>
 
-  <script src="utils.js"></script>
-  <script src="api.js"></script>
-  <script src="app.js"></script>
+  <script src="utils.js?v=20260825"></script>
+  <script src="api.js?v=20260825"></script>
+  <script src="app.js?v=20260825"></script>
 </body>
 </html>

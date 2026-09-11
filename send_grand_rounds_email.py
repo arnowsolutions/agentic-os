@@ -42,23 +42,20 @@ def _load_prod_recipients(event_type=""):
 DAILY_LIMIT = 10
 # ── Parse GR data ─────────────────────────────────────────
 def parse_gr_data():
-    with open("/workspace/agentic-os/dashboard/pages/grand-rounds.js") as f:
-        js = f.read()
-    start = js.index("const GR_DATA = ")
-    start = js.index("[", start)
-    depth = 0
-    end = start
-    for i, c in enumerate(js[start:]):
-        if c == "[": depth += 1
-        elif c == "]":
-            depth -= 1
-            if depth == 0:
-                end = start + i + 1
-                break
-    array_str = js[start:end]
-    array_str = re.sub(r",\s*]", "]", array_str)
-    array_str = re.sub(r"//.*", "", array_str)
-    return json.loads(array_str)
+    """Schedule now comes ONLY from the CANONICAL store: unified.grand_rounds."""
+    from gr_schedule import fetch_rows
+    return fetch_rows(include_tb=False)
+
+
+def _stamp(kind, date_iso):
+    """Stamp the canonical send tracker — only for REAL sends (never TEST_MODE)."""
+    if TEST_MODE:
+        return
+    try:
+        from gr_schedule import mark_sent
+        mark_sent(date_iso, kind)
+    except Exception as e:
+        print(f"  ⚠ tracker stamp failed ({kind} {date_iso}): {e}")
 
 def get_all_grand_rounds():
     gr_data = parse_gr_data()
@@ -230,6 +227,8 @@ def main():
                 print(f"📅 Resending invite for {target_date} ({event['type']})")
                 ok, err = send_ics_invite(event, target_date)
                 print(f"  {'✅' if ok else '❌'} (err: {err[:60] if err else 'none'})")
+                if ok:
+                    _stamp("fri_invite", target_date)
                 return
         print(f"No event found for {target_date}")
         return
@@ -242,6 +241,8 @@ def main():
                 print(f"📅 Wednesday reminder for {friday}")
                 ok, err = send_text_reminder(event, friday)
                 print(f"  {'✅' if ok else '❌'} {event['type']} (err: {err[:60] if err else 'none'})")
+                if ok:
+                    _stamp("fri_reminder", friday)
                 return
         print(f"No Grand Rounds found for {friday}")
         return
@@ -260,6 +261,7 @@ def main():
         ok, err = send_ics_invite(event, event["date"])
         if ok:
             progress.setdefault("ics_sent_dates", []).append(event["date"])
+            _stamp("fri_invite", event["date"])
             sent_count += 1
             print(f"  ✅ {event['date']}: {event['type']}")
         else:

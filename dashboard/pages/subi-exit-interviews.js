@@ -15,7 +15,7 @@ async function renderSubiExitInterviews() {
         <p class="page-breadcrumb">One-click Outlook compose — interviewee and time per row</p>
       </div>
     </div>
-    <div style="position:relative;width:100%;height:calc(100vh - 180px);min-height:600px;border:1px solid var(--border-color,#334155);border-radius:12px;overflow:hidden;background:#0f172a">
+    <div style="position:relative;width:100%;height:calc(100vh - 180px);min-height:600px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg-secondary)">
       <iframe src="/api/subi-exit-invites?test=false" style="width:100%;height:100%;border:none" title="Sub-I Exit Interviews"></iframe>
     </div>
   `;

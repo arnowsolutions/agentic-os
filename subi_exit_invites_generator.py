@@ -66,7 +66,7 @@ def get_interviews():
         cur = conn.cursor()
         cur.execute('''
             SELECT id, interviewee, recipient_email, interview_date::text, interview_time,
-                   duration_minutes, notes, created_at::text
+                   duration_minutes, notes, created_at::text, sent_status
             FROM subi_exit_interviews ORDER BY interview_date, interview_time
         ''')
         rows = []
@@ -76,6 +76,7 @@ def get_interviews():
                 "date": r[3] or "", "time": r[4] or "12:00 PM",
                 "duration_minutes": r[5] if r[5] else DEFAULT_DURATION_MINUTES,
                 "notes": r[6] or "", "created_at": r[7] or "",
+                "sent_status": r[8] if r[8] is not None else False,
             })
         cur.close()
         conn.close()
@@ -109,6 +110,102 @@ def format_12h(hhmm):
     ampm = "AM" if h < 12 else "PM"
     h12 = h % 12 or 12
     return f"{h12}:{m:02d} {ampm}"
+
+
+
+
+
+# ── Schoenberg scheduling request (DB-driven, NEVER hardcoded student names) ──
+def parse_rotation_end(notes):
+    """Extract the rotation END date (2nd m/d/yy in notes) -> datetime or None."""
+    import re as _re
+    m = _re.search(r"(\d{1,2})/(\d{1,2})/(\d{2,4})\s*[-\u2013]\s*(\d{1,2})/(\d{1,2})/(\d{2,4})", notes or "")
+    if not m:
+        return None
+    try:
+        y = int(m.group(6))
+        y = 2000 + y if y < 100 else y
+        return datetime(y, int(m.group(4)), int(m.group(5)))
+    except Exception:
+        return None
+
+
+def _ordinal(n):
+    if 10 <= n % 100 <= 20:
+        suf = "th"
+    else:
+        suf = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suf}"
+
+
+def _pick_next_cohort(rows, window_days=35):
+    """Students still needing interviews whose rotation end is soonest (>= today,
+    within window_days), so Dr. Schoenberg is asked cohort by cohort."""
+    from datetime import date as _date
+    now = _date.today()
+    cands = []
+    for r in rows:
+        if r.get("date"):  # already has a scheduled interview
+            continue
+        end = parse_rotation_end(r.get("notes", ""))
+        if end and end.date() >= now and (end.date() - now).days <= window_days:
+            cands.append((end.date(), r))
+    if not cands:
+        return None, None
+    min_end = min(e for e, _ in cands)
+    return [r for e, r in cands if e == min_end], min_end
+
+
+def build_schoenberg_request(rows):
+    """Build (anchor_html, storage_key) for the 'Request Dates' button.
+
+    Auto-scopes to the soonest-ending cohort of students who still need an exit
+    interview — replaces the old hardcoded Juliana/Ashley email (2026-09-09)."""
+    import urllib.parse as _up
+    group, end = _pick_next_cohort(rows)
+    if not group:
+        return ('<a id="reqDatesBtn" style="display:inline-block;background:#e4e4e7;color:#71717a;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;cursor:not-allowed">No upcoming cohorts to schedule</a>', "none")
+
+    names = [str(r.get("interviewee") or "").strip() for r in group if str(r.get("interviewee") or "").strip()]
+    subject = "Sub-I Exit Interviews: " + " & ".join(names)
+
+    end_label = f"{end.strftime('%B')} {_ordinal(end.day)}, {end.year}"
+    monday = end - timedelta(days=end.weekday())
+    week = []
+    d = monday
+    while d < end:
+        week.append(d)
+        d += timedelta(days=1)
+    if not week:
+        week = [end - timedelta(days=1)]
+    window_label = f"{monday.strftime('%B')} {monday.day}–{week[-1].day}"
+    if len(week) > 1:
+        days_label = (f"{monday.strftime('%B')} " + ", ".join(str(x.day) for x in week[:-1]) + f", or {week[-1].day}")
+    else:
+        days_label = f"{monday.strftime('%B')} {week[0].day}"
+
+    if len(names) == 1:
+        who = f"{names[0]} is currently rotating with us through {end_label}."
+    elif len(names) == 2:
+        who = f"{names[0]} and {names[1]} are currently rotating with us through {end_label}."
+    else:
+        who = ", ".join(names[:-1]) + f", and {names[-1]} are currently rotating with us through {end_label}."
+
+    body = (
+        "Good afternoon,\n\n"
+        + who +
+        f"\n\nI'd like to schedule their Sub-I Exit Interviews with you during the last week of their rotation ({window_label}), before their end date on {end_label}. "
+        f"Would a 10-minute time slot on {days_label} work for you? A midday slot around 12:30 PM worked well previously.\n\n"
+        "Please let me know your availability.\n\nThank you,\nShareef Frasier"
+    )
+    params = _up.urlencode({"to": CC_EMAIL, "subject": subject, "body": body}, quote_via=_up.quote)
+    url = "https://outlook.office.com/mail/deeplink/compose?" + params
+    anchor = (f'<a id="reqDatesBtn" href="{url}" target="_blank" '
+              'style="display:inline-block;background:#f59e0b;color:#0f172a;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">'
+              'Request Dates from Dr. Schoenberg</a>')
+    key = "schoenberg_dates_requested_" + end.strftime("%Y%m%d")
+    return anchor, key
+
 
 
 # ── Subject & body builders (mirroring build_monday_body / build_grand_rounds_body) ──
@@ -239,6 +336,15 @@ def generate_html_page(test_mode=True):
     test_html = (f'<span class="test"><strong>TEST MODE</strong> — all invites go to {TEST_EMAIL} only</span>'
                  if test_mode else '<strong>LIVE MODE</strong> — invites go to each row\'s recipient + Dr. Schoenberg')
 
+    today_iso = datetime.now().strftime("%Y-%m-%d")
+    req_anchor_html, req_key = build_schoenberg_request(rows)
+    req_button_block = (
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">\n'
+        f'  {req_anchor_html}\n'
+        '  <span id="reqStatus" style="font-size:12px;color:#71717a"></span>\n'
+        '  <button id="resetReqBtn" style="background:transparent;border:1px solid #d4d4d8;color:#71717a;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;display:none" title="Reset status">\u21ba Reset</button>\n'
+        '</div>'
+    )
     rows_html = ""
     for r in rows:
         date_display = format_date(r["date"]) if r["date"] else "TBD"
@@ -253,14 +359,16 @@ def generate_html_page(test_mode=True):
         has_cv = os.path.exists(CV_DIR / f"Yang_Matthew_CV.docx") if r["id"] in (3,) else \
                  os.path.exists(CV_DIR / "OLIVER_MENKEN_CV_07_26.pdf") if r["id"] in (4,) else False
         eml_label = "⬇ .eml (CV)" if has_cv else "⬇ .eml"
-        eml_link = f'<a href="/api/subi-exit/eml?id={r["id"]}" style="display:inline-block;color:#94a3b8;font-size:11px;margin-left:8px;text-decoration:none;border:1px solid #475569;padding:3px 10px;border-radius:4px" title="Download .eml file — double-click in Outlook to open with CV attached">{eml_label}</a>' if has_date else ''
-        action_cell = f'{outlook_btn}{eml_link}' if has_date else '<span style="color:#64748b;font-size:12px">TBD — date not set</span>'
+        eml_link = f'<a href="/api/subi-exit/eml?id={r["id"]}" style="display:inline-block;color:#71717a;font-size:11px;margin-left:8px;text-decoration:none;border:1px solid #d4d4d8;padding:3px 10px;border-radius:4px" title="Download .eml file — double-click in Outlook to open with CV attached">{eml_label}</a>' if has_date else ''
+        action_cell = f'{outlook_btn}{eml_link}' if has_date else '<span style="color:#71717a;font-size:12px">TBD — date not set</span>'
         edit_btn = (f'<a href="#" data-edit-id="{r["id"]}" class="edit-btn" '
                     f'data-interviewee="{esc(r["interviewee"])}" data-email="{esc(r["recipient_email"])}" '
                     f'data-date="{esc(r["date"])}" data-time="{esc(r["time"])}" '
                     f'data-duration="{r["duration_minutes"]}" data-notes="{esc(r["notes"])}" '
-                    f'style="display:inline-block;color:#fbbf24;font-size:12px;margin-left:8px;text-decoration:none;border:1px solid #f59e0b;padding:3px 10px;border-radius:4px;cursor:pointer">✎ Edit</a>')
+                    f'style="display:inline-block;color:#b45309;font-size:12px;margin-left:8px;text-decoration:none;border:1px solid #f59e0b;padding:3px 10px;border-radius:4px;cursor:pointer">✎ Edit</a>')
         action_cell += edit_btn
+        if has_date and r["date"] < today_iso:
+            action_cell = f'<span style="color:#047857;font-size:12px;font-weight:600">\u2713 Interviewed {format_date(r["date"])}</span>'
         time_display = r["time"] if r["time"] != "TBD" else "TBD"
         # Show rotation dates as subtitle under interviewee name (from notes)
         rot_dates = ""
@@ -268,13 +376,13 @@ def generate_html_page(test_mode=True):
         import re as _re
         rot_match = _re.search(r"(\d{1,2}/\d{1,2}/?\d{2,4})\s*[-–]\s*(\d{1,2}/\d{1,2}/?\d{2,4})", notes)
         if rot_match:
-            rot_dates = f'<br><span style="color:#64748b;font-size:11px">{rot_match.group(1)} – {rot_match.group(2)}</span>'
+            rot_dates = f'<br><span style="color:#71717a;font-size:11px">{rot_match.group(1)} – {rot_match.group(2)}</span>'
         to_display = ", ".join([r["recipient_email"], CC_EMAIL]) if r["recipient_email"] else CC_EMAIL
-        rows_html += f'''<tr id="row-{r['event_id']}" style="border-bottom:1px solid #1e293b">
-  <td style="padding:10px 14px;white-space:nowrap;font-size:13px"><strong>{date_display}</strong><br><span style="color:#64748b;font-size:11px">{date_dow}</span></td>
+        rows_html += f'''<tr id="row-{r['event_id']}" style="border-bottom:1px solid #e4e4e7">
+  <td style="padding:10px 14px;white-space:nowrap;font-size:13px"><strong>{date_display}</strong><br><span style="color:#71717a;font-size:11px">{date_dow}</span></td>
   <td style="padding:10px 14px;white-space:nowrap;font-size:13px"><strong>{time_display}</strong></td>
   <td style="padding:10px 14px;font-size:13px;max-width:280px;overflow:hidden;text-overflow:ellipsis"><strong>{r['interviewee']}</strong>{rot_dates}</td>
-  <td style="padding:10px 14px;font-size:12px;color:#94a3b8;max-width:260px;overflow:hidden;text-overflow:ellipsis">{to_display}</td>
+  <td style="padding:10px 14px;font-size:12px;color:#71717a;max-width:260px;overflow:hidden;text-overflow:ellipsis">{to_display}</td>
   <td style="padding:10px 14px;white-space:nowrap">
     {action_cell}
   </td>
@@ -289,35 +397,77 @@ def generate_html_page(test_mode=True):
 <title>Montefiore Urology - Sub-I Exit Interviews</title>
 <style>
   * {{ margin:0; padding:0; box-sizing:border-box }}
-  body {{ background:#0f172a; color:#e2e8f0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; padding:20px; max-width:1000px; margin:0 auto }}
+  body {{ background:#ffffff; color:#18181b; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; padding:20px; max-width:1000px; margin:0 auto }}
   h1 {{ font-size:22px; margin-bottom:4px }}
-  .subtitle {{ color:#94a3b8; font-size:14px; margin-bottom:20px }}
-  .info {{ background:#1e293b; border:1px solid #334155; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-size:13px; line-height:1.6 }}
-  .info strong {{ color:#fbbf24 }}
+  .subtitle {{ color:#71717a; font-size:14px; margin-bottom:20px }}
+  .info {{ background:#ffffff; border:1px solid #e4e4e7; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-size:13px; line-height:1.6 }}
+  .info strong {{ color:#b45309 }}
   .info .test {{ color:#ef4444 }}
-  .toggle-bar {{ display:flex; align-items:center; gap:16px; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px 18px; margin-bottom:20px; font-size:13px }}
-  .toggle-bar label {{ font-weight:600; color:#e2e8f0 }}
+  .toggle-bar {{ display:flex; align-items:center; gap:16px; background:#ffffff; border:1px solid #e4e4e7; border-radius:8px; padding:12px 18px; margin-bottom:20px; font-size:13px }}
+  .toggle-bar label {{ font-weight:600; color:#18181b }}
   .switch {{ position:relative; display:inline-block; width:44px; height:24px }}
   .switch input {{ opacity:0; width:0; height:0 }}
-  .slider {{ position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#334155; border-radius:24px; transition:0.2s }}
+  .slider {{ position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#e4e4e7; border-radius:24px; transition:0.2s }}
   .slider:before {{ content:''; position:absolute; height:18px; width:18px; left:3px; bottom:3px; background:#94a3b8; border-radius:50%; transition:0.2s }}
   input:checked + .slider {{ background:#f59e0b }}
   input:checked + .slider:before {{ transform:translateX(20px); background:#fff }}
-  .toggle-bar .hint {{ color:#64748b; font-size:12px }}
-  .sent-badge {{ display:inline-flex; align-items:center; gap:4px; background:#064e3b; color:#34d399; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600 }}
+  .toggle-bar .hint {{ color:#71717a; font-size:12px }}
+  .sent-badge {{ display:inline-flex; align-items:center; gap:4px; background:#d1fae5; color:#047857; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600 }}
   .sent-badge:before {{ content:'\\2713' }}
   .row-sent {{ opacity:0.5 }}
-  .row-sent .invite-btn {{ background:#334155 !important; cursor:default }}
+  .row-sent .invite-btn {{ background:#e4e4e7 !important; cursor:default }}
   .sent-badge /* sent tracking */ .invite-btn /*primary*/ .row-sent /*dim*/ .footer {{ }} .edit-badge {{ }}
   a:hover {{ opacity:0.85 }}
-  .count {{ color:#94a3b8; font-size:13px; margin:14px 0 }}
+  .count {{ color:#71717a; font-size:13px; margin:14px 0 }}
   table {{ width:100%; border-collapse:collapse; font-size:13px }}
-  th {{ text-align:left; padding:8px 14px; color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; border-bottom:2px solid #334155 }}
-  .footer {{ margin-top:24px; padding-top:16px; border-top:1px solid #334155; font-size:12px; color:#64748b; line-height:1.5 }}
+  th {{ text-align:left; padding:8px 14px; color:#71717a; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; border-bottom:2px solid #e4e4e7 }}
+  .footer {{ margin-top:24px; padding-top:16px; border-top:1px solid #334155; font-size:12px; color:#71717a; line-height:1.5 }}
 </style>
 </head>
 <body>
   <h1>Sub-I Exit Interviews</h1>
+
+    {req_button_block}
+  <script type="text/javascript">
+    (function() {{
+      const btn = document.getElementById('reqDatesBtn');
+      const statusSpan = document.getElementById('reqStatus');
+      const resetBtn = document.getElementById('resetReqBtn');
+      const storageKey = '{req_key}';
+      
+      function updateState(sent) {{
+        if (sent) {{
+          btn.style.background = '#064e3b';
+          btn.style.color = '#047857';
+          btn.textContent = '✓ Dates Requested from Dr. Schoenberg';
+          statusSpan.innerHTML = '<span style="color:#047857">Already sent</span>';
+          resetBtn.style.display = 'inline-block';
+        }} else {{
+          btn.style.background = '#fbbf24';
+          btn.style.color = '#0f172a';
+          btn.textContent = 'Request Dates from Dr. Schoenberg';
+          statusSpan.innerHTML = '';
+          resetBtn.style.display = 'none';
+        }}
+      }}
+      
+      if (localStorage.getItem(storageKey) === 'true') {{
+        updateState(true);
+      }}
+      
+      btn.addEventListener('click', function() {{
+        localStorage.setItem(storageKey, 'true');
+        setTimeout(() => {{ updateState(true); }}, 200);
+      }});
+      
+      resetBtn.addEventListener('click', function(e) {{
+        e.preventDefault();
+        localStorage.removeItem(storageKey);
+        updateState(false);
+      }});
+    }})();
+  </script>
+
   <p class="subtitle">Click any button to open a pre-filled Outlook compose form — then click Send</p>
 
   <div class="info">
@@ -351,35 +501,35 @@ def generate_html_page(test_mode=True):
 
   <!-- ✎ Inline Edit Modal -->
   <div id="editModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.6);align-items:center;justify-content:center">
-  <div style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:22px;max-width:500px;width:92%;max-height:90vh;overflow:auto">
-    <h3 style="margin:0 0 4px;color:#fbbf24">✎ Edit Interview</h3>
-    <p style="color:#64748b;font-size:12px;margin:0 0 16px" id="editSubtitle">Update the row — changes save to the database and reflect on this page.</p>
-    <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Interviewee</label>
-    <input id="eInterviewee" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
-    <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Recipient Email</label>
-    <input id="eEmail" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+  <div style="background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;padding:22px;max-width:500px;width:92%;max-height:90vh;overflow:auto">
+    <h3 style="margin:0 0 4px;color:#b45309">✎ Edit Interview</h3>
+    <p style="color:#71717a;font-size:12px;margin:0 0 16px" id="editSubtitle">Update the row — changes save to the database and reflect on this page.</p>
+    <label style="display:block;font-size:12px;color:#71717a;margin:8px 0 3px">Interviewee</label>
+    <input id="eInterviewee" style="width:100%;background:#ffffff;color:#18181b;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;font-size:13px">
+    <label style="display:block;font-size:12px;color:#71717a;margin:8px 0 3px">Recipient Email</label>
+    <input id="eEmail" style="width:100%;background:#ffffff;color:#18181b;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;font-size:13px">
     <div style="display:flex;gap:10px">
       <div style="flex:1">
-        <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Date</label>
-        <input id="eDate" type="date" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+        <label style="display:block;font-size:12px;color:#71717a;margin:8px 0 3px">Date</label>
+        <input id="eDate" type="date" style="width:100%;background:#ffffff;color:#18181b;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;font-size:13px">
       </div>
       <div style="flex:1">
-        <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Time</label>
-        <input id="eTime" placeholder="e.g. 12:00 PM" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+        <label style="display:block;font-size:12px;color:#71717a;margin:8px 0 3px">Time</label>
+        <input id="eTime" placeholder="e.g. 12:00 PM" style="width:100%;background:#ffffff;color:#18181b;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;font-size:13px">
       </div>
       <div style="width:90px">
-        <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Min</label>
-        <input id="eDuration" type="number" min="5" max="120" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px">
+        <label style="display:block;font-size:12px;color:#71717a;margin:8px 0 3px">Min</label>
+        <input id="eDuration" type="number" min="5" max="120" style="width:100%;background:#ffffff;color:#18181b;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;font-size:13px">
       </div>
     </div>
-    <label style="display:block;font-size:12px;color:#94a3b8;margin:8px 0 3px">Notes</label>
-    <textarea id="eNotes" rows="3" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px 10px;font-size:13px;resize:vertical"></textarea>
+    <label style="display:block;font-size:12px;color:#71717a;margin:8px 0 3px">Notes</label>
+    <textarea id="eNotes" rows="3" style="width:100%;background:#ffffff;color:#18181b;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;font-size:13px;resize:vertical"></textarea>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
-      <button id="editCancel" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer">Cancel</button>
+      <button id="editCancel" style="background:#ffffff;color:#71717a;border:1px solid #e4e4e7;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer">Cancel</button>
       <button id="editDelete" style="background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer">Delete</button>
       <button id="editSave" style="background:#f59e0b;color:#0f172a;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer">Save</button>
     </div>
-    <p id="editMsg" style="font-size:12px;margin-top:10px;color:#34d399"></p>
+    <p id="editMsg" style="font-size:12px;margin-top:10px;color:#047857"></p>
   </div>
   </div>
 
@@ -446,7 +596,7 @@ def generate_html_page(test_mode=True):
         }});
         const res = await resp.json();
         if (res.success) {{
-          msg.style.color = '#34d399';
+          msg.style.color = '#047857';
           msg.textContent = '✓ Saved. Reloading…';
           setTimeout(() => location.reload(), 600);
         }} else {{
@@ -466,7 +616,7 @@ def generate_html_page(test_mode=True):
         const resp = await fetch('/api/subi-exit-interviews/' + editingId, {{ method: 'DELETE' }});
         const res = await resp.json();
         if (res.success) {{
-          msg.style.color = '#34d399';
+          msg.style.color = '#047857';
           msg.textContent = '✓ Deleted. Reloading…';
           setTimeout(() => location.reload(), 500);
         }} else {{

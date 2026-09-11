@@ -11,25 +11,9 @@ GR_DATA_FILE = os.path.join(SCRIPT_DIR, "dashboard/pages/grand-rounds.js")
 EMAIL_GROUPS = os.path.join(SCRIPT_DIR, "data/email_groups.json")
 
 def parse_gr_data():
-    """Extract events from grand-rounds.js"""
-    import re
-    with open(GR_DATA_FILE) as f:
-        js = f.read()
-    start = js.index("const GR_DATA = [")
-    start = js.index("[", start)
-    depth = 0
-    end = start
-    for i, c in enumerate(js[start:]):
-        if c == "[": depth += 1
-        elif c == "]":
-            depth -= 1
-            if depth == 0:
-                end = start + i + 1
-                break
-    array_str = js[start:end]
-    array_str = re.sub(r",\s*]", "]", array_str)
-    array_str = re.sub(r"//.*", "", array_str)
-    return json.loads(array_str)
+    """Schedule now comes ONLY from the CANONICAL store: unified.grand_rounds."""
+    from gr_schedule import fetch_rows
+    return fetch_rows(include_tb=False)
 
 def load_progress(path):
     if os.path.exists(path):
@@ -68,12 +52,20 @@ def main():
             status = "unsent"
             fridays.append({"date": fri_date, "topic": f"{gr_7_8} / {gr_8_9}".strip(" / "), "status": status})
     
-    # Load progress
-    mon_progress = load_progress(MONDAY_PROGRESS)
-    gr_progress = load_progress(GR_PROGRESS)
-    
-    mon_sent = set(mon_progress.get("ics_sent_dates", []))
-    gr_sent = set(gr_progress.get("ics_sent_dates", []))
+    # Load sent status — CANONICAL tracker (unified *_sent_at) + legacy progress backfill
+    mon_sent = set()
+    gr_sent = set()
+    try:
+        from gr_schedule import fetch_dicts
+        for r in fetch_dicts():
+            if r.get("mon_date") and r.get("mon_invite_sent_at"):
+                mon_sent.add(r["mon_date"])
+            if r.get("fri_date") and r.get("fri_invite_sent_at"):
+                gr_sent.add(r["fri_date"])
+    except Exception:
+        pass
+    mon_sent |= set(load_progress(MONDAY_PROGRESS).get("ics_sent_dates", []))
+    gr_sent |= set(load_progress(GR_PROGRESS).get("ics_sent_dates", []))
     
     # Build report
     lines = []

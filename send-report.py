@@ -20,6 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 DEFAULT_RECIPIENT = "sfrasier@montefiore.org"
 
+# Data source: the UNIFIED reimbursement DB (authoritative). Legacy SQLite
+# reader is no longer used.
+from unified_reimbursement_data import get_resident_data as _unified_get_resident_data
+
 # Database path
 DB_PATH = Path("/workspace/repos/reimbursement/reimbursement.db")
 
@@ -48,95 +52,16 @@ def get_greeting():
     h = et.hour
     return "Good Morning" if h < 12 else "Good Afternoon" if h < 17 else "Good Evening"
 
-def get_resident_data(resident_name):
-    """Get all transactions and summary for a resident from the DB."""
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    
-    # Find person
-    name_lower = resident_name.lower().replace(' ', '').replace(',', '')
-    cur = conn.execute("SELECT id, name, cls FROM persons")
-    person = None
-    for row in cur.fetchall():
-        rn = str(row['name']).lower().replace(' ', '').replace(',', '')
-        if rn == name_lower or name_lower in rn or rn in name_lower:
-            person = dict(row)
-            break
-        # Double letter normalization
-        if rn.replace('ll', 'l') == name_lower.replace('ll', 'l'):
-            person = dict(row)
-            break
-    
-    if not person:
-        conn.close()
+def get_resident_data(resident_name, year=None):
+    """Get all transactions and summary for a resident from the UNIFIED DB."""
+    data = _unified_get_resident_data(resident_name, year)
+    if data is None:
         return None
-    
-    # Get all approved allocations for this person — prefer sync'd data
-    # Sync creates entries with al_xlsx_ prefix; old seed data uses al_r_ or al_k_ prefix
-    cur = conn.execute("""
-        SELECT amount, account, description, created_at
-        FROM allocations
-        WHERE beneficiary_id = ?
-          AND status = 'approved'
-          AND id LIKE 'al_xlsx_%'
-        ORDER BY created_at
-    """, (person['id'],))
-    
-    raw_allocations = [dict(r) for r in cur.fetchall()]
-    
-    # Fallback: if no sync'd data, read everything
-    if not raw_allocations:
-        cur = conn.execute("""
-            SELECT amount, account, description, created_at
-            FROM allocations
-            WHERE beneficiary_id = ?
-              AND status = 'approved'
-            ORDER BY created_at
-        """, (person['id'],))
-        raw_allocations = [dict(r) for r in cur.fetchall()]
-    
-    conn.close()
-    
-    # Map accounts and build transactions
-    txns = []
-    gme_total = 0
-    by_account = defaultdict(float)
-    
-    for a in raw_allocations:
-        acct = ACCT_MAP.get(a['account'], a['account'])
-        amt = float(a['amount'] or 0)
-        if amt <= 0:
-            continue
-        
-        date_str = str(a['created_at'])[:10] if a['created_at'] else ''
-        desc = str(a['description'] or '').strip()
-        
-        txns.append({
-            'date': date_str,
-            'description': desc,
-            'amount': amt,
-            'account': acct,
-        })
-        by_account[acct] += amt
-        if acct == 'GME Funds':
-            gme_total += amt
-    
-    # Sort by date
-    txns.sort(key=lambda t: t['date'])
-    
-    gme_remaining = max(0, 1250 - gme_total)
-    gme_pct = min(100, round((gme_total / 1250) * 100, 1))
-    
-    return {
-        'name': person['name'],
-        'cls': person.get('cls', ''),
-        'txns': txns,
-        'by_account': dict(by_account),
-        'grand_total': sum(t['amount'] for t in txns),
-        'gme_used': gme_total,
-        'gme_remaining': gme_remaining,
-        'gme_pct': gme_pct,
-    }
+    # Front-end expects 'academic_year' label via data['academic_year_label'];
+    # keep the legacy keys the HTML/PDF builders use.
+    data.setdefault("by_account", {})
+    data.setdefault("txns", [])
+    return data
 
 
 def generate_pdf(data):
@@ -203,7 +128,10 @@ def generate_pdf(data):
     now = datetime.now()
     ay_start = now.year if now.month >= 7 else now.year - 1
     ay_end = now.year + 1 if now.month >= 7 else now.year
-    elements.append(Paragraph(f"Academic Year {ay_start}&ndash;{ay_end}", s_sub))
+    # Header reflects the requested scope (specific AY or "All Years")
+    pdf_req = data.get('requested_year')
+    pdf_header = pdf_req if pdf_req else ("All Years" if data.get('years') else f"{ay_start}&ndash;{ay_end}")
+    elements.append(Paragraph(f"Academic Year {pdf_header}", s_sub))
     
     # GME Status card
     gme_data = [[
@@ -227,7 +155,15 @@ def generate_pdf(data):
     elements.append(gme_table)
     elements.append(Spacer(1, 12))
     
-    # Transaction table
+    # Transaction table — grouped by academic year (newest first) with a
+    # per-year header row, so multi-year summaries are clearly separated.
+    grouped_pdf = data.get('grouped_txns') or {}
+    years_pdf = data.get('years') or []
+    if not grouped_pdf and data.get('txns'):
+        grouped_pdf = {'': data['txns']}
+        years_pdf = ['']
+    per_year_totals = data.get('per_year_totals') or {}
+
     txn_header = [[
         Paragraph("<b>Date</b>", s_acct),
         Paragraph("<b>Description</b>", s_acct),
@@ -235,22 +171,35 @@ def generate_pdf(data):
         Paragraph("<b>Amount</b>", ParagraphStyle('AmtHdr', parent=s_acct, alignment=TA_RIGHT)),
     ]]
     txn_rows = []
-    for t in data['txns']:
+    for ay in years_pdf:
+        rows = grouped_pdf.get(ay, [])
+        if not rows:
+            continue
+        ay_label = ay or 'NO DATE'
+        ay_total = per_year_totals.get(ay, sum(r['amount'] for r in rows))
+        # Year header row (spanning all 4 columns)
         txn_rows.append([
-            Paragraph(t['date'][:10], s_body),
-            Paragraph(t['description'][:50], s_body),
-            Paragraph(t['account'], s_acct),
-            Paragraph(f"${t['amount']:,.2f}", s_right),
+            Paragraph(f"<b>{ay_label}</b>", ParagraphStyle('AYHdr', parent=s_acct, fontSize=10, textColor=HexColor('#1a3a5c'))),
+            Paragraph("", s_acct),
+            Paragraph("", s_acct),
+            Paragraph(f"<b>${ay_total:,.2f}</b>", ParagraphStyle('AYTot', parent=s_right, fontSize=10, textColor=HexColor('#1a3a5c'))),
         ])
+        for t in rows:
+            txn_rows.append([
+                Paragraph(t['date'][:10], s_body),
+                Paragraph(t['description'][:50], s_body),
+                Paragraph(t['account'], s_acct),
+                Paragraph(f"${t['amount']:,.2f}", s_right),
+            ])
     
     if txn_rows:
         txn_table = Table(txn_header + txn_rows, colWidths=[0.9*inch, 3.3*inch, 1.0*inch, 1.0*inch])
         txn_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), HexColor('#f4f6f9')),
             ('TEXTCOLOR', (0, 0), (-1, 0), HexColor('#555555')),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('TOPPADDING', (0, -1), (-1, -1), 4),
+            ('BACKGROUND', (0, 1), (-1, -1), HexColor('#ffffff')),
             ('GRID', (0, 0), (-1, -1), 0.25, HexColor('#e0e4e8')),
+            ('LINEBEFORE', (0, 0), (0, -1), 0, HexColor('#ffffff')),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 6),
             ('RIGHTPADDING', (0, 0), (-1, -1), 6),
@@ -268,12 +217,16 @@ def generate_pdf(data):
     return pdf_path
 
 
-def send_individual(resident_name, recipient):
-    """Send individual resident reimbursement email with PDF attachment."""
-    from google_workspace import GoogleWorkspace
+def send_individual(resident_name, recipient, year=None):
+    """Send individual resident reimbursement email with PDF attachment (SMTP).
+
+    `year` optionally filters to a single academic year (e.g. '2025-26');
+    None/'all' returns all years grouped by AY.
+    """
+    from modules.smtp_sender import send_email_smart
     
     greeting = get_greeting()
-    data = get_resident_data(resident_name)
+    data = get_resident_data(resident_name, year)
     
     if not data:
         return f"❌ Resident '{resident_name}' not found"
@@ -283,11 +236,36 @@ def send_individual(resident_name, recipient):
     now = datetime.now()
     ay_start = now.year if now.month >= 7 else now.year - 1
     ay_end = now.year + 1 if now.month >= 7 else now.year
+
+    # Header AY label: specific requested year, else "All Years" (grouped).
+    req_year = data.get('requested_year')
+    ay_header = req_year if req_year else "All Years"
+    # For the subject/body we also keep the full-year form when requested.
+    ay_label_full = f"{int(req_year[:4])}-{int(req_year[:4])+1}" if req_year and '-' in req_year else req_year
     
-    # Transaction table
+    # Transaction table — grouped by academic year (newest first) for clarity,
+    # with a per-year total line. If a specific year was requested, only one
+    # group shows.
+    grouped = data.get('grouped_txns') or {}
+    years = data.get('years') or []
+    if not grouped and data.get('txns'):
+        # fallback to flat
+        grouped = {'': data['txns']}
+        years = ['']
+    per_year_totals = data.get('per_year_totals') or {}
+
     table_rows = ""
-    for t in data['txns']:
-        table_rows += f"""
+    for ay in years:
+        rows = grouped.get(ay, [])
+        if not rows:
+            continue
+        ay_label = ay or 'NO DATE'
+        table_rows += (f"<tr><td colspan=\"4\" style=\"padding:8px 6px 4px 6px;"
+                       f"font-family:Georgia,'Times New Roman',serif;font-size:10pt;font-weight:bold;"
+                       f"color:#1a3a5c;border-bottom:1px solid #d0d4d8\">"
+                       f"{ay_label} &mdash; ${per_year_totals.get(ay, sum(r['amount'] for r in rows)):,.2f}</td></tr>")
+        for t in rows:
+            table_rows += f"""
     <tr>
       <td style="padding:4px 6px;border-bottom:1px solid #e8e8e8;font-family:Georgia,'Times New Roman',serif;font-size:9pt;color:#555;width:75px">{t['date']}</td>
       <td style="padding:4px 6px;border-bottom:1px solid #e8e8e8;font-family:Georgia,'Times New Roman',serif;font-size:9pt;color:#555">{t['description'][:50]}</td>
@@ -332,13 +310,13 @@ def send_individual(resident_name, recipient):
         </td>
       </tr>
       <tr>
-        <td style="padding:0 28px 6px 28px;font-family:Georgia,'Times New Roman',serif;font-size:10pt;color:#888">Academic Year {ay_start}&ndash;{ay_end}</td>
+        <td style="padding:0 28px 6px 28px;font-family:Georgia,'Times New Roman',serif;font-size:10pt;color:#888">Academic Year {ay_header}</td>
       </tr>
       <tr><td style="padding:0 28px"><hr style="border:none;border-top:1px solid #d0d4d8;margin:0"></td></tr>
       <tr>
         <td style="padding:14px 28px 0 28px">
           <p style="margin:0 0 4px 0;font-family:Times New Roman,Georgia,serif;font-size:12pt;color:#333;line-height:1.5">{greeting} {data['name'].split()[0]},</p>
-          <p style="margin:0 0 12px 0;font-family:Times New Roman,Georgia,serif;font-size:11pt;color:#333;line-height:1.5">Below is your full reimbursement summary for the {ay_start}&ndash;{ay_end} academic year.</p>
+          <p style="margin:0 0 12px 0;font-family:Times New Roman,Georgia,serif;font-size:11pt;color:#333;line-height:1.5">Below is your reimbursement summary{(' for the ' + ay_header + ' academic year') if req_year else ' across all academic years'}.</p>
         </td>
       </tr>
       <tr>
@@ -413,16 +391,21 @@ def send_individual(resident_name, recipient):
     # Generate PDF
     pdf_path = generate_pdf(data)
 
-    ws = GoogleWorkspace()
-    result = ws.send_email(
-        user_id="urologyresidency",
+    # Subject reflects the requested scope: specific AY or all years.
+    subj_year = req_year if req_year else ("All Years" if data.get('years') else data.get('academic_year_label', ''))
+    result = send_email_smart(
         to=recipient,
-        subject=f"Montefiore Urology — Reimbursement Summary ({data['name']}) — AY {ay_start}-{ay_end}",
+        subject=f"Montefiore Urology — Reimbursement Summary ({data['name']}) — AY {subj_year}",
         body=html,
         attachments=[pdf_path],
-        from_email="sfrasier@montefiore.org",
         is_html=True,
     )
+
+    # Clean up temp PDF
+    try:
+        os.unlink(pdf_path)
+    except Exception:
+        pass
 
     if result.get("successful"):
         return f"✅ Sent to {recipient}"

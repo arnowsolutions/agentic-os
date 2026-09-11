@@ -34,6 +34,16 @@ const MASSTEMAIL_CATEGORIES = [
     live: false,
     renderInline: true,
   },
+  // Interview Days — standalone sub-tab, completely separate from Grand Rounds
+  {
+    key: 'interview-days',
+    label: 'Interview Days',
+    icon: '🎤',
+    src: null,
+    desc: '2026-2027 Residency Interview Days — invites to faculty + residents',
+    live: false,
+    renderInline: true,
+  },
   {
     key: 'conference-email',
     label: 'Email Resend',
@@ -109,10 +119,12 @@ async function renderMassEmailFrame() {
   </div>`;
 
   if (cat.renderInline) {
-    // Inline-rendered categories (Chief Meetings, Conference Email)
+    // Inline-rendered categories (Chief Meetings, Conference Email, Interview Days)
     body.innerHTML = html + '<div style="width:100%"><div class="loading"><div class="loading-spinner"></div><span>Loading...</span></div></div>';
     if (cat.key === 'chief-meetings') {
       await renderChiefMeetingsInline(body);
+    } else if (cat.key === 'interview-days') {
+      await renderInterviewDaysInline(body);
     } else if (cat.key === 'conference-email') {
       await renderConferenceEmailInline(body);
     }
@@ -202,19 +214,136 @@ function openChiefOutlookHub(date) {
   ];
   const dt = new Date(date + 'T12:00:00');
   const formatted = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const body = [
-    `<strong>Montefiore Urology — Chief Residents' Meeting</strong>`, ``,
-    `<strong>Date:</strong> ${formatted}`, `<strong>Time:</strong> 12:00 PM – 1:00 PM (ET)`,
-    `<strong>Location:</strong> Penthouse — Montefiore Medical Center`, ``,
-    `<strong>Attendees:</strong>`, `Dr. Mark Schoenberg`, `Dr. Alex Sankin`, `Dr. Alex Small`,
-    `Dr. John Hill (Chief)`, `Dr. John Hordines (Chief)`, `Dr. So Yeon (Jen) Pak (Chief)`, ``,
-    `Please Accept or Decline to confirm your attendance.`,
-  ].join('<br>');
-  const params = new URLSearchParams({
-    subject: `Invitation: Chief Residents' Meeting`,
-    body, location: 'Penthouse',
-    startdt: `${date}T12:00:00`, enddt: `${date}T13:00:00`,
-    to: CHIEF_ATTENDEES_EMAILS.join(';'),
+
+  // Shared rich template — same structure as Grand Rounds & Monday invites
+  const body = window.buildRsvpBody({
+    header: 'Montefiore Urology — Chief Residents\' Meeting',
+    date: formatted,
+    time: '12:00 PM - 1:00 PM (Eastern)',
+    location: 'Penthouse — Montefiore Medical Center',
+    extra: [
+      '<strong>Attendees</strong>',
+      'Dr. Mark Schoenberg',
+      'Dr. Alex Sankin',
+      'Dr. Alex Small',
+      'Dr. John Hill (Chief)',
+      'Dr. John Hordines (Chief)',
+      'Dr. So Yeon (Jen) Pak (Chief)',
+      '',
+      'Please Accept or Decline to confirm your attendance.',
+    ],
   });
-  window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
+
+  window.openEventEditor({
+    subject: `Invitation: Chief Residents' Meeting`,
+    body,
+    to: CHIEF_ATTENDEES_EMAILS.join(';'),
+    startdt: `${date}T12:00:00`, enddt: `${date}T13:00:00`,
+    location: 'Penthouse', bodyType: 'HTML',
+  });
+}
+
+// ──────────────────────────────────────────────────────────────
+// Interview Days — 2026-2027 Urology Residency Interview Days
+// Completely separate from Grand Rounds. Two fixed interview days,
+// each emailed to the full faculty + residents list.
+// ──────────────────────────────────────────────────────────────
+const INTERVIEW_DAYS = [
+  { day: 'Interview Day 1', label: '2026-2027 Residency Interview Day 1',
+    date: '2026-11-13', start: '08:00:00', end: '16:00:00' },
+  { day: 'Interview Day 2', label: '2026-2027 Residency Interview Day 2',
+    date: '2026-12-10', start: '08:00:00', end: '16:00:00' },
+];
+const INTERVIEW_DAY_LOCATION = 'Penthouse PH-2 — Montefiore Medical Center, 1250 Waters Place, Tower One, Bronx, NY 10461';
+
+// Global so openInterviewDayOutlook can read it after load
+let interviewDayEmails = [];
+
+// Archived/graduated residents + non-faculty staff who should NOT receive
+// current interview-day invites (which go to faculty + active residents only).
+const INTERVIEW_DAY_EXCLUDE = [
+  'azallen@montefiore.org',  // Ariel Allen — graduated June 2026
+  'dkarki@montefiore.org',   // Dimindra Karki — graduated June 2026
+  'fkassam@montefiore.org',  // Farzaan Kassam — graduated June 2026
+  'sfrasier@montefiore.org', // Shareef Frasier — Admin/coordinator (not faculty or resident)
+].map(e => e.toLowerCase());
+
+async function renderInterviewDaysInline(container) {
+  // Recipients = Faculty (all attendings) + Residents (active) only.
+  // Merge the 'faculty' and 'resident_conference' groups, then drop any
+  // archived/graduated residents (e.g. Ariel Allen) so only current
+  // faculty + residents receive the invite.
+  try {
+    const groupsData = await api.get('/api/crm/email-groups');
+    const faculty = (groupsData && groupsData.faculty && groupsData.faculty.emails) || [];
+    const residents = (groupsData && groupsData.resident_conference && groupsData.resident_conference.emails) || [];
+    const supervisors = (groupsData && groupsData.supervisors && groupsData.supervisors.emails) || [];
+    const merged = {};
+    [...faculty, ...residents, ...supervisors].forEach(e => {
+      const key = String(e).trim().toLowerCase();
+      if (!key) return;
+      if (INTERVIEW_DAY_EXCLUDE.includes(key)) return; // skip archived/graduated residents + coordinator
+      merged[key] = String(e).trim();
+    });
+    interviewDayEmails = Object.keys(merged).sort().map(k => merged[k]);
+  } catch (e) {
+    console.warn('Could not load interview-day email list:', e);
+  }
+
+  const dayRows = INTERVIEW_DAYS.map((d) => {
+    const dt = new Date(d.date + 'T12:00:00');
+    const day = dt.toLocaleDateString('en-US', { weekday: 'long' });
+    const fm = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    return `<tr>
+      <td style="padding:12px 16px;white-space:nowrap"><strong>${day}</strong><br><span style="font-size:12px;color:var(--muted)">${fm}</span></td>
+      <td style="padding:12px 16px"><strong>${escapeHtml(d.label)}</strong></td>
+      <td style="padding:12px 16px">8:00 AM – 4:00 PM</td>
+      <td style="padding:12px 16px;text-align:center"><button class="btn btn-sm" onclick="openInterviewDayOutlook('${d.date}')">📧 Open in Outlook</button></td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <div class="card" style="flex:1;min-width:150px;padding:12px 16px"><div style="font-size:12px;color:var(--muted)">Interview Days</div><div style="font-size:20px;font-weight:700">${INTERVIEW_DAYS.length}</div></div>
+      <div class="card" style="flex:1;min-width:150px;padding:12px 16px"><div style="font-size:12px;color:var(--muted)">Recipients (Faculty + Residents + Supervisors)</div><div style="font-size:20px;font-weight:700">${interviewDayEmails.length}</div></div>
+      <div class="card" style="flex:1;min-width:150px;padding:12px 16px"><div style="font-size:12px;color:var(--muted)">Time</div><div style="font-size:16px;font-weight:600">8 AM – 4 PM</div></div>
+      <div class="card" style="flex:1;min-width:150px;padding:12px 16px"><div style="font-size:12px;color:var(--muted)">Location</div><div style="font-size:14px;font-weight:600">Penthouse PH-2</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;background:#0f172a">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;color:var(--ink,#e2e8f0)">
+        <thead><tr style="background:#1e293b">
+          <th style="text-align:left;padding:10px 16px">Date</th><th style="text-align:left;padding:10px 16px">Day</th>
+          <th style="text-align:left;padding:10px 16px">Time</th><th style="text-align:center;padding:10px 16px">Outlook</th>
+        </tr></thead>
+        <tbody>${dayRows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--muted)">
+      Each button opens Outlook with the invite pre-filled for the full faculty + resident list. No body text — just the calendar invite.
+    </div>
+  `;
+}
+
+function openInterviewDayOutlook(date) {
+  const day = INTERVIEW_DAYS.find(d => d.date === date) || INTERVIEW_DAYS[0];
+  const addresses = interviewDayEmails.length ? interviewDayEmails.join(';') : 'sfrasier@montefiore.org';
+  const dt = new Date(date + 'T12:00:00');
+  const formatted = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  // Shared rich template structure (editable, minimal body per requirement)
+  const body = window.buildRsvpBody({
+    header: 'Montefiore Urology — Residency Interview Day',
+    date: formatted,
+    time: '8:00 AM - 4:00 PM (Eastern)',
+    location: INTERVIEW_DAY_LOCATION,
+    type: day.label,
+  });
+
+  window.openEventEditor({
+    subject: `Invitation: ${day.label}`,
+    body,
+    to: addresses,
+    startdt: `${date}T${day.start}`, enddt: `${date}T${day.end}`,
+    location: INTERVIEW_DAY_LOCATION, bodyType: 'HTML',
+  });
 }

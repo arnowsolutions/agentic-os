@@ -140,40 +140,59 @@ function openChiefOutlook(date) {
   const summary = `Chief Residents' Meeting${labelStr}`;
   const subj = `Invitation: ${summary}`;
 
-  const body = [
-    `<strong>Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}</strong>`,
-    ``,
-    `<strong>Date:</strong> ${formatted}`,
-    `<strong>Time:</strong> 12:00 PM – 1:00 PM (ET)`,
-    `<strong>Location:</strong> Penthouse — Montefiore Medical Center`,
-    ``,
-    `<strong>Attendees:</strong>`,
-    `Dr. Mark Schoenberg`,
-    `Dr. Alex Sankin`,
-    `Dr. Alex Small`,
-    `Dr. John Hill (Chief)`,
-    `Dr. John Hordines (Chief)`,
-    `Dr. So Yeon (Jen) Pak (Chief)`,
-    ``,
-    `Please Accept or Decline to confirm your attendance.`,
-  ].join('<br>');
+  // Shared rich template — same format as Grand Rounds / Monday / Interview Day
+  const body = window.buildRsvpBody({
+    header: `Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}`,
+    date: formatted,
+    time: '12:00 PM - 1:00 PM (Eastern)',
+    location: 'Penthouse — Montefiore Medical Center',
+    extra: [
+      '<strong>Attendees</strong>',
+      'Dr. Mark Schoenberg',
+      'Dr. Alex Sankin',
+      'Dr. Alex Small',
+      'Dr. John Hill (Chief)',
+      'Dr. John Hordines (Chief)',
+      'Dr. So Yeon (Jen) Pak (Chief)',
+      '',
+      'Please Accept or Decline to confirm your attendance.',
+    ],
+  });
 
-  const attendees = CHIEF_ATTENDEES_EMAILS.join(';');
-  const params = new URLSearchParams({
+  window.openEventEditor({
     subject: subj,
-    body: body,
-    location: 'Penthouse',
+    body,
+    to: CHIEF_ATTENDEES_EMAILS.join(';'),
     startdt: `${d}T12:00:00`,
     enddt: `${d}T13:00:00`,
-    to: attendees,
+    location: 'Penthouse', bodyType: 'HTML',
   });
-  window.open(`https://outlook.office.com/calendar/deeplink/compose?${params}`, '_blank');
 }
 
 function openAllChiefOutlook() {
   const dates = CHIEF_DATA.map(r => r[0]);
-  dates.forEach((d, i) => {
-    setTimeout(() => openChiefOutlook(d), i * 800);
+  dates.forEach((d) => {
+    const row = CHIEF_DATA.find(r => r[0] === d);
+    if (!row) return;
+    const [date, label] = row;
+    const dt = new Date(date + 'T12:00:00');
+    const formatted = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const labelStr = label ? ` — ${label}` : '';
+    const body = window.buildRsvpBody({
+      header: `Montefiore Urology — Chief Residents' Meeting${label ? ` — ${label}` : ''}`,
+      date: formatted,
+      time: '12:00 PM - 1:00 PM (Eastern)',
+      location: 'Penthouse — Montefiore Medical Center',
+      extra: ['<strong>Attendees</strong>', 'Dr. Schoenberg', 'Dr. Sankin', 'Dr. Small', 'Dr. John Hill (Chief)', 'Dr. John Hordines (Chief)', 'Dr. So Yeon (Jen) Pak (Chief)', '', 'Please Accept or Decline to confirm your attendance.'],
+    });
+    window.openEventDirect({
+      subject: `Invitation: Chief Residents' Meeting${labelStr}`,
+      body,
+      to: CHIEF_ATTENDEES_EMAILS.join(';'),
+      startdt: `${date}T12:00:00`,
+      enddt: `${date}T13:00:00`,
+      location: 'Penthouse', bodyType: 'HTML',
+    });
   });
 }
 

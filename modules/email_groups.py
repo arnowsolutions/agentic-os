@@ -26,6 +26,24 @@ DEFAULT_GROUPS = {
         "test_mode": True,
         "test_email": "sfrasier@montefiore.org",
     },
+    "faculty": {
+        "label": "Faculty (All Attendings)",
+        "emails": [],
+        "test_mode": True,
+        "test_email": "sfrasier@montefiore.org",
+    },
+    "faculty_meeting": {
+        "label": "Faculty Meeting Only",
+        "emails": [],
+        "test_mode": True,
+        "test_email": "sfrasier@montefiore.org",
+    },
+    "supervisors": {
+        "label": "Supervisors (Staff/Management)",
+        "emails": [],
+        "test_mode": True,
+        "test_email": "sfrasier@montefiore.org",
+    },
 }
 
 
