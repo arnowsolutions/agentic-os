@@ -9,7 +9,7 @@ async function renderSocialMediaHub() {
   content.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1><span style="filter:none">📱</span> Social Media Hub</h1>
+        <h1>Social Media Hub</h1>
         <p class="page-subtitle">42+ integrated skills for social media management, content creation, and platform automation</p>
       </div>
 
@@ -57,29 +57,29 @@ async function renderSocialMediaHub() {
 }
 
 const SMH_CATEGORIES = [
-  { name: 'analytics', icon: '📊', count: 3, desc: 'A/B testing, metrics tracking, performance reporting' },
-  { name: 'creation', icon: '✍️', count: 4, desc: 'Hook writing, post/thread creation, CTAs' },
-  { name: 'engagement', icon: '💬', count: 5, desc: 'Comments, DMs, mentions, influencer outreach' },
-  { name: 'strategy', icon: '🎯', count: 4, desc: 'Brand voice, content pillars, CRM-social bridge, positioning' },
-  { name: 'publishing', icon: '🚀', count: 4, desc: 'Cross-post, draft review, schedule queue, thread structure' },
-  { name: 'repurpose', icon: '♻️', count: 3, desc: 'Blog→thread, newsletter→posts, podcast→clips' },
-  { name: 'research', icon: '🔍', count: 3, desc: 'Competitor audit, prospect audit, profile discovery' },
-  { name: 'trends', icon: '📈', count: 3, desc: 'Trend monitoring, briefings, news response' },
-  { name: 'visual', icon: '🎨', count: 4, desc: 'Visual planning, image prompts, meme creation, asset format' },
-  { name: 'crisis', icon: '🛡️', count: 3, desc: 'Crisis response, apology drafting, impersonator monitor' },
-  { name: 'captions', icon: '🏷️', count: 1, desc: 'Caption drafting across platforms' },
-  { name: 'profile', icon: '👤', count: 2, desc: 'Profile audit, presence refresh' },
-  { name: 'planning', icon: '📅', count: 2, desc: 'Content calendar, cadence & timing' },
-  { name: 'facebook', icon: '👍', count: 1, desc: 'Facebook Page posting via Meta Graph API' },
-  { name: 'clinstagram', icon: '📸', count: 1, desc: 'Instagram CLI — post, DMs, stories, analytics, comments' },
+  { name: 'analytics', icon: '▸', count: 3, desc: 'A/B testing, metrics tracking, performance reporting' },
+  { name: 'creation', icon: '▸', count: 4, desc: 'Hook writing, post/thread creation, CTAs' },
+  { name: 'engagement', icon: '▸', count: 5, desc: 'Comments, DMs, mentions, influencer outreach' },
+  { name: 'strategy', icon: '▸', count: 4, desc: 'Brand voice, content pillars, CRM-social bridge, positioning' },
+  { name: 'publishing', icon: '▸', count: 4, desc: 'Cross-post, draft review, schedule queue, thread structure' },
+  { name: 'repurpose', icon: '▸', count: 3, desc: 'Blog→thread, newsletter→posts, podcast→clips' },
+  { name: 'research', icon: '▸', count: 3, desc: 'Competitor audit, prospect audit, profile discovery' },
+  { name: 'trends', icon: '▸', count: 3, desc: 'Trend monitoring, briefings, news response' },
+  { name: 'visual', icon: '▸', count: 4, desc: 'Visual planning, image prompts, meme creation, asset format' },
+  { name: 'crisis', icon: '▸', count: 3, desc: 'Crisis response, apology drafting, impersonator monitor' },
+  { name: 'captions', icon: '▸', count: 1, desc: 'Caption drafting across platforms' },
+  { name: 'profile', icon: '▸', count: 2, desc: 'Profile audit, presence refresh' },
+  { name: 'planning', icon: '▸', count: 2, desc: 'Content calendar, cadence & timing' },
+  { name: 'facebook', icon: '▸', count: 1, desc: 'Facebook Page posting via Meta Graph API' },
+  { name: 'clinstagram', icon: '▸', count: 1, desc: 'Instagram CLI — post, DMs, stories, analytics, comments' },
 ];
 
 const SMH_INTEGRATIONS = [
-  { name: 'Instagram (clinstagram)', url: 'https://github.com/paperfoot/clinstagram', desc: 'Instagram CLI — post, DMs, stories, analytics, comments, hashtags. Meta API + private API.', binary: 'clinstagram', status: '✅ v0.3.2 installed' },
-  { name: 'Growth OS', url: 'https://github.com/nocodework/growth-os', desc: 'Business URL → ICP audit → GA4/GSC integration → marketing delegation', dir: '/workspace/integrations/growth-os', status: '📦 Installed' },
-  { name: 'X/Twitter (xurl)', url: 'https://github.com/xdevplatform/xurl', desc: 'Official X API CLI — post, search, DM, media upload', skill: 'xurl', status: '✅ Configured' },
-  { name: 'Facebook Page', url: 'https://github.com/mustfaaa/hermes-facebook-skill', desc: 'Meta Graph API — post, comment, like, fetch', skill: 'facebook', status: '⚠️ Needs FB_PAGE_TOKEN' },
-  { name: 'Crewm8 Social Graph', url: 'https://github.com/gokulb20/Crewm8-Social-Media-Manager-Skill-Graph', desc: '37 agent-agnostic social media skills (upstream)', dir: '/workspace/integrations/crewm8-social', status: '📦 Installed' },
+  { name: 'Instagram (clinstagram)', url: 'https://github.com/paperfoot/clinstagram', desc: 'Instagram CLI — post, DMs, stories, analytics, comments, hashtags. Meta API + private API.', binary: 'clinstagram', status: '✓ v0.3.2 installed' },
+  { name: 'Growth OS', url: 'https://github.com/nocodework/growth-os', desc: 'Business URL → ICP audit → GA4/GSC integration → marketing delegation', dir: '/workspace/integrations/growth-os', status: 'Installed' },
+  { name: 'X/Twitter (xurl)', url: 'https://github.com/xdevplatform/xurl', desc: 'Official X API CLI — post, search, DM, media upload', skill: 'xurl', status: '✓ Configured' },
+  { name: 'Facebook Page', url: 'https://github.com/mustfaaa/hermes-facebook-skill', desc: 'Meta Graph API — post, comment, like, fetch', skill: 'facebook', status: '! Needs FB_PAGE_TOKEN' },
+  { name: 'Crewm8 Social Graph', url: 'https://github.com/gokulb20/Crewm8-Social-Media-Manager-Skill-Graph', desc: '37 agent-agnostic social media skills (upstream)', dir: '/workspace/integrations/crewm8-social', status: 'Installed' },
 ];
 
 const SMH_RELATED = [
@@ -124,7 +124,7 @@ function renderRelated() {
   const el = document.getElementById('smh-related');
   el.innerHTML = SMH_RELATED.map(r => `
     <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1a1a2e">
-      <span>🔗</span>
+      <span>↗</span>
       <div style="flex:1">
         <div style="color:#a29bfe;font-weight:500;font-size:13px">${r.name}</div>
         <div style="font-size:12px;color:#666;margin-top:2px">${r.desc}</div>

@@ -38,8 +38,8 @@ const PGY_OPTIONS = ['PGY-1', 'PGY-2', 'PGY-3', 'PGY-4', 'PGY-5', 'PGY-6', 'Chie
 
 // ─── Main Render ───────────────────────────────────────────────────────────
 
-async function renderPeople() {
-  const container = document.getElementById('pageContent');
+async function renderPeople(target) {
+  const container = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   container.innerHTML = `
     <div class="people-page">
       <div class="page-header">

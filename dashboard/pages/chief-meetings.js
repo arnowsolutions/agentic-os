@@ -33,8 +33,8 @@ const CHIEF_ATTENDEES_DISPLAY = [
   "So Yeon (Jen) Pak (Chief)",
 ];
 
-async function renderChiefMeetings() {
-  const content = document.getElementById('pageContent');
+async function renderChiefMeetings(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">

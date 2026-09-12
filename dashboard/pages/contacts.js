@@ -1,20 +1,20 @@
-async function renderContacts() {
-  const content = document.getElementById('pageContent');
+async function renderContacts(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📇 CRM — Contacts</h1>
+        <h1 class="page-title">CRM — Contacts</h1>
         <p class="page-subtitle">Your resident, faculty & professional contacts — safe behind localhost</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderContactForm()">➕ Add Contact</button>
-        <button class="btn" onclick="exportContactsCSV()">📥 Export CSV</button>
-        <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="showBulkArchive()">📦 Bulk Archive</button>
-        <button class="btn" onclick="renderContacts()">🔄 Refresh</button>
+        <button class="btn" onclick="renderContactForm()">+ Add Contact</button>
+        <button class="btn" onclick="exportContactsCSV()">Export CSV</button>
+        <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="showBulkArchive()">Bulk Archive</button>
+        <button class="btn" onclick="renderContacts()">↻ Refresh</button>
       </div>
     </div>
     <div style="margin-bottom:16px">
-      <input type="text" id="crmSearch" placeholder="🔍 Search by name, email, phone, EZ-ID..." 
+      <input type="text" id="crmSearch" placeholder="⌕ Search by name, email, phone, EZ-ID..." 
              style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;
                     background:var(--surface);color:var(--text);font-size:14px"
              oninput="filterContacts()">
@@ -35,7 +35,7 @@ async function loadContacts() {
     renderTable(allContacts);
   } catch (err) {
     document.getElementById('crmTable').innerHTML = 
-      `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error loading contacts</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+      `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Error loading contacts</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -54,7 +54,7 @@ function renderFilters() {
     html += `<button class="tag" style="cursor:pointer;padding:4px 12px" onclick="filterByCategory('${escapeHtml(cat)}')">${escapeHtml(cat)} (${count})</button>`;
   });
   if (archivedCount > 0) {
-    html += `<button class="tag" style="cursor:pointer;padding:4px 12px;background:var(--red-dim);color:var(--red);border-color:var(--red)" onclick="filterByCategory('__archived__')">📦 Archived (${archivedCount})</button>`;
+    html += `<button class="tag" style="cursor:pointer;padding:4px 12px;background:var(--red-dim);color:var(--red);border-color:var(--red)" onclick="filterByCategory('__archived__')">Archived (${archivedCount})</button>`;
   }
   container.innerHTML = html;
   container.dataset.activeFilter = '';
@@ -106,24 +106,24 @@ function renderTable(contacts) {
       <div class="card" style="margin-bottom:8px;cursor:pointer;${isArchived ? 'opacity:0.6;border-left:3px solid var(--red)' : ''}" onclick="showContactDetail('${c.id}')">
         <div style="display:flex;justify-content:space-between;align-items:start">
           <div>
-            <div style="font-weight:600;font-size:15px">${name}${isArchived ? ' <span style="font-size:11px;color:var(--red)">📦 Archived</span>' : ''}</div>
+            <div style="font-weight:600;font-size:15px">${name}${isArchived ? ' <span style="font-size:11px;color:var(--red)">Archived</span>' : ''}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
-              ${c.email ? `📧 ${escapeHtml(c.email)}` : ''}
+              ${c.email ? `${escapeHtml(c.email)}` : ''}
               ${c.email && c.mobile ? ' · ' : ''}
-              ${c.mobile ? `📱 ${escapeHtml(c.mobile)}` : ''}
+              ${c.mobile ? `${escapeHtml(c.mobile)}` : ''}
             </div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
-              ${c.pgy ? `📋 ${escapeHtml(c.pgy)}` : ''}
+              ${c.pgy ? `${escapeHtml(c.pgy)}` : ''}
               ${c.pgy && (c.graduationYear||c.birthday) ? ' · ' : ''}
-              ${c.graduationYear ? `🎓 ${escapeHtml(c.graduationYear)}` : ''}
-              ${c.birthday ? ` 🎂 ${escapeHtml(c.birthday)}` : ''}
+              ${c.graduationYear ? `${escapeHtml(c.graduationYear)}` : ''}
+              ${c.birthday ? ` ${escapeHtml(c.birthday)}` : ''}
             </div>
           </div>
           <span class="tag" style="background:${badgeColor}20;color:${badgeColor};border:1px solid ${badgeColor}40;flex-shrink:0">${cat}</span>
           <button class="tag" style="cursor:pointer;flex-shrink:0;font-size:11px;background:transparent;border:1px solid var(--border)"
             onclick="event.stopPropagation();archiveContact('${c.id}', ${!isArchived})"
             title="${isArchived ? 'Unarchive' : 'Archive'}">
-            ${isArchived ? '↩️ Unarchive' : '📦 Archive'}
+            ${isArchived ? '↩ Unarchive' : 'Archive'}
           </button>
         </div>
       </div>
@@ -164,9 +164,9 @@ function showContactDetail(id) {
   });
   body += '</div>';
   const footer = `
-    <button class="btn" onclick="composeEmail('${escapeHtml(c.email || '')}')">📧 Send Email</button>
-    <button class="btn" onclick="editContact('${c.id}')">✏️ Edit</button>
-    <button class="btn" style="border-color:var(--red)" onclick="deleteContact('${c.id}')">🗑 Delete</button>
+    <button class="btn" onclick="composeEmail('${escapeHtml(c.email || '')}')">Send Email</button>
+    <button class="btn" onclick="editContact('${c.id}')">✎ Edit</button>
+    <button class="btn" style="border-color:var(--red)" onclick="deleteContact('${c.id}')">✕ Delete</button>
     <button class="btn" onclick="closeModal()">Close</button>
   `;
   showModal(name, body, footer);
@@ -174,7 +174,7 @@ function showContactDetail(id) {
 
 function renderContactForm(editId) {
   const c = editId ? allContacts.find(x => x.id === editId) : null;
-  const title = c ? '✏️ Edit Contact' : '➕ Add Contact';
+  const title = c ? '✎ Edit Contact' : '+ Add Contact';
   const val = (f) => c ? escapeHtml(c[f] || '') : '';
   const body = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -208,7 +208,7 @@ function renderContactForm(editId) {
     </div>
   `;
   const footer = `
-    <button class="btn" onclick="saveContact('${editId || ''}')">💾 Save</button>
+    <button class="btn" onclick="saveContact('${editId || ''}')">Save</button>
     <button class="btn" onclick="closeModal()">Cancel</button>
   `;
   showModal(title, body, footer);
@@ -241,7 +241,7 @@ async function saveContact(editId) {
     );
     if (existing) {
       const name = [existing.firstName, existing.lastName].filter(Boolean).join(' ') || existing.email;
-      if (!confirm(`⚠️ A contact with email "${data.email}" already exists:\n\n${name}\n\nDo you want to create a duplicate anyway?`)) {
+      if (!confirm(`! A contact with email "${data.email}" already exists:\n\n${name}\n\nDo you want to create a duplicate anyway?`)) {
         return;
       }
     }
@@ -309,7 +309,7 @@ async function exportContactsCSV() {
     a.download = `crm_contacts_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast(`✅ Exported ${data.count} contacts`, 'success');
+    showToast(`✓ Exported ${data.count} contacts`, 'success');
   } catch (err) {
     showToast('Export failed: ' + err.message, 'error');
   }
@@ -336,16 +336,16 @@ function showBulkArchive() {
         </select>
       </div>
       <div style="padding:12px;background:var(--red-dim);border:1px solid var(--red);border-radius:8px">
-        <p style="margin:0;font-size:13px;color:var(--red);font-weight:600">⚠️ This will ARCHIVE all selected residents.</p>
+        <p style="margin:0;font-size:13px;color:var(--red);font-weight:600">! This will ARCHIVE all selected residents.</p>
         <p style="margin:4px 0 0 0;font-size:12px;color:var(--text-muted)">Archived contacts are hidden from the main list but can be unarchived later.</p>
       </div>
     </div>
   `;
   const footer = `
-    <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="executeBulkArchive()">📦 Archive Selected</button>
+    <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="executeBulkArchive()">Archive Selected</button>
     <button class="btn" onclick="closeModal()">Cancel</button>
   `;
-  showModal('📦 Bulk Archive Graduating Residents', body, footer);
+  showModal('Bulk Archive Graduating Residents', body, footer);
 }
 
 async function executeBulkArchive() {
@@ -357,7 +357,7 @@ async function executeBulkArchive() {
       graduation_year: year,
       category: 'Resident'
     });
-    showToast(`✅ Archived ${data.archived_count} residents`, 'success');
+    showToast(`✓ Archived ${data.archived_count} residents`, 'success');
     await loadContacts();
   } catch (err) {
     showToast('Bulk archive failed: ' + err.message, 'error');

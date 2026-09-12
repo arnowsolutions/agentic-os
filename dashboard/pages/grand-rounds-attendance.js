@@ -6,8 +6,8 @@
 let attendanceData = null;
 let useNoPeds = false;
 
-async function renderGrandRoundsAttendance() {
-  const content = document.getElementById('pageContent');
+async function renderGrandRoundsAttendance(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = '<div class="loading"><div class="loading-spinner"></div><span>Loading attendance data...</span></div>';
 
   try {
@@ -47,7 +47,7 @@ function renderTable() {
 
   const pedsCount = d.activeWeeks - d.activeNoPeds;
 
-  const content = document.getElementById('pageContent');
+  const content = document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">

@@ -12,18 +12,18 @@ async function renderOmniroute() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">💬 OmniRoute Chat</div>
+        <div class="page-title">OmniRoute Chat</div>
         <div class="page-subtitle">237 providers · auto-fallback · image upload · free routing</div>
       </div>
       <div class="page-header-right">
         <button class="btn btn-ghost btn-sm" onclick="clearOmnirouteChat()" title="New conversation">
-          🆕 New Chat
+          New Chat
         </button>
         <button class="btn btn-ghost btn-sm" onclick="checkOmnirouteHealth()" title="Check connection">
-          🔄 Status
+          ↻ Status
         </button>
         <a href="${OMNIROUTE_BASE}" target="_blank" class="btn btn-secondary btn-sm" rel="noopener">
-          🎛️ Dashboard ↗
+          Dashboard ↗
         </a>
       </div>
     </div>
@@ -36,14 +36,14 @@ async function renderOmniroute() {
       <span style="color:var(--text-muted)">Model:</span>
       <select id="omnirouteModelSelect" class="form-select" style="width:auto;padding:4px 8px;font-size:12px" onchange="updateOmnirouteModelBadge()">
         <optgroup label="Auto Routing">
-          <option value="auto/cheap">💰 auto/cheap</option>
-          <option value="auto/best-free">🆓 auto/best-free</option>
-          <option value="auto/coding:free">💻 auto/coding:free</option>
-          <option value="auto/best-coding">🏆 auto/best-coding</option>
-          <option value="auto/best-fast">⚡ auto/best-fast</option>
-          <option value="auto/best-reasoning">🧠 auto/best-reasoning</option>
-          <option value="auto/coding" selected>🔧 auto/coding</option>
-          <option value="auto/chat">💬 auto/chat</option>
+          <option value="auto/cheap">auto/cheap</option>
+          <option value="auto/best-free">auto/best-free</option>
+          <option value="auto/coding:free">auto/coding:free</option>
+          <option value="auto/best-coding">auto/best-coding</option>
+          <option value="auto/best-fast">auto/best-fast</option>
+          <option value="auto/best-reasoning">auto/best-reasoning</option>
+          <option value="auto/coding" selected>auto/coding</option>
+          <option value="auto/chat">auto/chat</option>
         </optgroup>
         <optgroup label="Direct Models">
           <option value="groq/llama-3.3-70b-versatile">Groq Llama 3.3 70B</option>
@@ -62,7 +62,7 @@ async function renderOmniroute() {
       <!-- Messages -->
       <div id="omnirouteMessages" style="flex:1;overflow-y:auto;padding:12px 0;display:flex;flex-direction:column;gap:12px;min-height:0">
         <div style="text-align:center;color:var(--text-muted);padding:40px 20px">
-          <div style="font-size:48px;margin-bottom:12px">🚀</div>
+          <div style="font-size:48px;margin-bottom:12px">◆</div>
           <div style="font-size:18px;font-weight:600;margin-bottom:6px">OmniRoute Chat</div>
           <div style="font-size:13px">Ask anything, paste images, or drag &amp; drop files.<br>Routes through 237 providers automatically.</div>
         </div>
@@ -76,7 +76,7 @@ async function renderOmniroute() {
         <div style="display:flex;gap:8px;align-items:flex-end">
           <!-- Image Upload Button -->
           <label class="btn btn-ghost btn-sm" style="cursor:pointer;padding:10px 12px;flex-shrink:0" title="Upload image">
-            🖼️
+            ▣
             <input type="file" accept="image/*" style="display:none" id="omnirouteFileInput" onchange="handleOmnirouteFile(event)" multiple>
           </label>
           <!-- Text Input -->
@@ -94,8 +94,8 @@ async function renderOmniroute() {
           </button>
         </div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:6px;display:flex;gap:16px">
-          <span>🖼️ Click 🖼️ to upload images</span>
-          <span>📋 Paste image from clipboard: Ctrl+V in text box</span>
+          <span>▣ Click ▣ to upload images</span>
+          <span>Paste image from clipboard: Ctrl+V in text box</span>
           <span id="omniroutePendingImages" style="display:none;color:var(--yellow)"></span>
         </div>
       </div>
@@ -122,7 +122,7 @@ async function renderOmniroute() {
         flex-shrink: 0;
       }
       .omniroute-msg.assistant .omniroute-msg-avatar {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--accent-dim);
       }
       .omniroute-msg.user .omniroute-msg-avatar {
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
@@ -425,7 +425,7 @@ async function sendOmnirouteMessage() {
 
   // Disable send button
   const sendBtn = document.getElementById('omnirouteSendBtn');
-  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳'; }
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = ''; }
 
   try {
     const resp = await fetch(OMNIROUTE_BASE + '/v1/chat/completions', {
@@ -502,9 +502,9 @@ async function sendOmnirouteMessage() {
 
   } catch (err) {
     if (err.name === 'AbortError') {
-      omnirouteMessages[streamIndex].content = omnirouteMessages[streamIndex].content || '⏰ Request timed out';
+      omnirouteMessages[streamIndex].content = omnirouteMessages[streamIndex].content || 'Request timed out';
     } else {
-      omnirouteMessages[streamIndex].content = '❌ **Error:** ' + err.message;
+      omnirouteMessages[streamIndex].content = '✕ **Error:** ' + err.message;
     }
     omnirouteMessages[streamIndex].isError = true;
     delete omnirouteMessages[streamIndex]._streaming;
@@ -576,7 +576,7 @@ function renderOmnirouteMessages() {
   if (omnirouteMessages.length === 0) {
     container.innerHTML = `
       <div style="text-align:center;color:var(--text-muted);padding:40px 20px">
-        <div style="font-size:48px;margin-bottom:12px">🚀</div>
+        <div style="font-size:48px;margin-bottom:12px">◆</div>
         <div style="font-size:18px;font-weight:600;margin-bottom:6px">OmniRoute Chat</div>
         <div style="font-size:13px">Ask anything, paste images, or drag &amp; drop files.<br>Routes through 237 providers automatically.</div>
       </div>`;
@@ -585,7 +585,7 @@ function renderOmnirouteMessages() {
 
   container.innerHTML = omnirouteMessages.map((msg, i) => {
     const isUser = msg.role === 'user';
-    const avatar = isUser ? '👤' : '🤖';
+    const avatar = isUser ? '▸' : '';
     const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
     let bubbleContent = '';
@@ -666,7 +666,7 @@ function showOmnirouteTyping() {
   typingDiv.id = 'omnirouteTyping';
   typingDiv.className = 'omniroute-msg assistant';
   typingDiv.innerHTML = `
-    <div class="omniroute-msg-avatar" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%)">🤖</div>
+    <div class="omniroute-msg-avatar" style="background:var(--accent-dim)">◆</div>
     <div class="omniroute-msg-bubble" style="background:var(--bg-card);border:1px solid var(--border)">
       <div class="omniroute-typing">
         <span></span><span></span><span></span>
@@ -720,7 +720,7 @@ async function checkOmnirouteHealth() {
     const models = data.data || [];
 
     if (dot) dot.className = 'status-dot status-dot-online';
-    if (text) text.innerHTML = '🟢 <strong>Online</strong> — ' + models.length + ' models available';
+    if (text) text.innerHTML = '● <strong>Online</strong> — ' + models.length + ' models available';
 
     // Also update the old cards if they exist
     const count = document.getElementById('omnirouteModelCount');
@@ -728,7 +728,7 @@ async function checkOmnirouteHealth() {
 
   } catch (err) {
     if (dot) dot.className = 'status-dot status-dot-offline';
-    if (text) text.textContent = '🔴 Offline — ' + err.message;
+    if (text) text.textContent = '● Offline — ' + err.message;
     const count = document.getElementById('omnirouteModelCount');
     if (count) count.textContent = '\u2014';
   }

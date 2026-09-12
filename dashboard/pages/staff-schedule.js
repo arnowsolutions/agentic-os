@@ -1,26 +1,26 @@
-async function renderStaffSchedule() {
-  const content = document.getElementById('pageContent');
+async function renderStaffSchedule(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   const hospitals = ['Moses', 'Wakefield', 'Weiler'];
   const roles = ['NP', 'PA', 'Coordinator', 'Nurse'];
 
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">👥 Staff Schedule</div>
+        <div class="page-title">Staff Schedule</div>
         <div class="page-subtitle">NP, PA, coordinator & nurse schedules across all hospitals</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderStaffSchedule()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderStaffSchedule()">↻ Refresh</button>
       </div>
     </div>
     <div class="ss-tabs" id="ssTabs">
-      ${hospitals.map(h => `<button class="ss-tab ${h==='Moses'?'active':''}" onclick="switchSSTab('${h}')">🏥 ${h}</button>`).join('')}
+      ${hospitals.map(h => `<button class="ss-tab ${h==='Moses'?'active':''}" onclick="switchSSTab('${h}')">${h}</button>`).join('')}
     </div>
     <div id="ssContent" class="ss-content"><div class="loading"><div class="loading-spinner"></div></div></div>
     <style>
       .ss-tabs { display:flex; gap:4px; margin-top:12px; border-bottom:2px solid var(--border); }
       .ss-tab { padding:8px 16px; border:none; background:none; cursor:pointer; font-size:13px; font-weight:600; color:var(--text-muted); border-bottom:3px solid transparent; margin-bottom:-2px; }
-      .ss-tab.active { color:var(--text); border-bottom-color:#6c5ce7; }
+      .ss-tab.active { color:var(--text); border-bottom-color:var(--accent); }
       .ss-content { margin-top:12px; }
       .ss-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
       .ss-card { background:var(--bg-card); border-radius:var(--radius-md); border:1px solid var(--border); padding:14px; }
@@ -35,42 +35,26 @@ async function renderStaffSchedule() {
 }
 
 async function loadStaffSchedule(hospital) {
+  const container = document.getElementById('ssContent');
   try {
-    const res = await fetch(`/api/staff-schedule?hospital=${hospital}`).then(r => r.json()).catch(() => ({}));
+    const res = await fetch(`/api/staff-schedule?hospital=${encodeURIComponent(hospital)}`).then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
     const staff = res.staff || [];
-
-    // Demo data if empty
-    const demo = {
-      Moses: [
-        {name:'Jane Smith', role:'NP', detail:'Mon-Fri, Urology Clinic'},
-        {name:'John Davis', role:'PA', detail:'Mon-Thu, OR & Clinic'},
-        {name:'Maria Garcia', role:'Coordinator', detail:'Mon-Fri, Admin Office'},
-        {name:'Linda Brown', role:'Nurse', detail:'Tue-Sat, Inpatient'},
-        {name:'Robert Wilson', role:'NP', detail:'Wed-Sun, Float'},
-      ],
-      Wakefield: [
-        {name:'Sarah Lee', role:'NP', detail:'Mon-Fri, Clinic'},
-        {name:'David Kim', role:'PA', detail:'Mon, Wed, Fri'},
-        {name:'Amanda Taylor', role:'Coordinator', detail:'Mon-Thu'},
-      ],
-      Weiler: [
-        {name:'Michael Chen', role:'NP', detail:'Mon-Fri, Pediatric Urology'},
-        {name:'Emily White', role:'Nurse', detail:'Weekdays, Inpatient'},
-        {name:'James Miller', role:'PA', detail:'Tue, Thu, Sat'},
-      ],
-    };
-
-    const data = staff.length > 0 ? staff : (demo[hospital] || []);
-    const container = document.getElementById('ssContent');
-    container.innerHTML = `<div class="ss-grid">${data.map(s => `
+    if (!staff.length) {
+      container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted)">No staff listed for ${escapeHtml(hospital)} yet.</div>`;
+      return;
+    }
+    container.innerHTML = `<div class="ss-grid">${staff.map(s => `
       <div class="ss-card">
         <div class="name">${escapeHtml(s.name)}</div>
         <div class="role">${s.role || 'Staff'}</div>
         <div class="detail"><span>${escapeHtml(s.detail || s.schedule || '')}</span></div>
       </div>
     `).join('')}</div>`;
-  } catch(e) {
-    document.getElementById('ssContent').innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted)">⚠️ ${escapeHtml(e.message)}</div>`;
+  } catch (e) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted)">! Could not load staff schedule — ${escapeHtml(e.message)}</div>`;
   }
 }
 

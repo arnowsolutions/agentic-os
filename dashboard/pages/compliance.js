@@ -1,5 +1,5 @@
-async function renderCompliance() {
-  const content = document.getElementById('pageContent');
+async function renderCompliance(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">

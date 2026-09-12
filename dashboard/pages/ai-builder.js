@@ -5,12 +5,12 @@ async function renderAiBuilder() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">🤖 AI Builder</h1>
+        <h1 class="page-title">AI Builder</h1>
         <p class="page-subtitle">Google Antigravity — Build add-ons & websites with Gemini</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="clearAiBuilder()">🗑 Clear</button>
-        <button class="btn" onclick="exportAICode()">📦 Export</button>
+        <button class="btn" onclick="clearAiBuilder()">✕ Clear</button>
+        <button class="btn" onclick="exportAICode()">Export</button>
       </div>
     </div>
     <div class="builder-layout">
@@ -27,10 +27,10 @@ async function renderAiBuilder() {
         <div class="builder-config-section">
           <div class="builder-config-label">Mode</div>
           <select id="builderMode" class="builder-select" onchange="onBuilderModeChange()">
-            <option value="chat">💬 Chat</option>
-            <option value="code">💻 Build Code</option>
-            <option value="website">🌐 Build Website</option>
-            <option value="addon">🔌 Build Add-on</option>
+            <option value="chat">Chat</option>
+            <option value="code">Build Code</option>
+            <option value="website">Build Website</option>
+            <option value="addon">Build Add-on</option>
           </select>
         </div>
         <div class="builder-config-section">
@@ -39,40 +39,40 @@ async function renderAiBuilder() {
         </div>
         <div class="builder-config-section" style="margin-top:auto">
           <div class="builder-quick-actions-label">Quick Actions</div>
-          <button class="btn btn-sm" onclick="builderQuickAction('Create a responsive dashboard with charts and data tables')" style="display:block;width:100%;margin-bottom:6px;text-align:left">📊 Dashboard</button>
-          <button class="btn btn-sm" onclick="builderQuickAction('Build a contact form with email validation and submission')" style="display:block;width:100%;margin-bottom:6px;text-align:left">📝 Contact Form</button>
-          <button class="btn btn-sm" onclick="builderQuickAction('Create a CRUD app with local storage for task management')" style="display:block;width:100%;margin-bottom:6px;text-align:left">✅ Task Manager</button>
-          <button class="btn btn-sm" onclick="builderQuickAction('Build a real-time chat widget for a website using WebSocket')" style="display:block;width:100%;margin-bottom:6px;text-align:left">💬 Chat Widget</button>
-          <button class="btn btn-sm" onclick="builderQuickAction('Create an API endpoint that integrates with Google Calendar')" style="display:block;width:100%;text-align:left">📅 Google Calendar</button>
+          <button class="btn btn-sm" onclick="builderQuickAction('Create a responsive dashboard with charts and data tables')" style="display:block;width:100%;margin-bottom:6px;text-align:left">Dashboard</button>
+          <button class="btn btn-sm" onclick="builderQuickAction('Build a contact form with email validation and submission')" style="display:block;width:100%;margin-bottom:6px;text-align:left">Contact Form</button>
+          <button class="btn btn-sm" onclick="builderQuickAction('Create a CRUD app with local storage for task management')" style="display:block;width:100%;margin-bottom:6px;text-align:left">✓ Task Manager</button>
+          <button class="btn btn-sm" onclick="builderQuickAction('Build a real-time chat widget for a website using WebSocket')" style="display:block;width:100%;margin-bottom:6px;text-align:left">Chat Widget</button>
+          <button class="btn btn-sm" onclick="builderQuickAction('Create an API endpoint that integrates with Google Calendar')" style="display:block;width:100%;text-align:left">Google Calendar</button>
         </div>
       </div>
       <div class="builder-main">
         <div class="builder-chat" id="builderMessages">
           <div class="builder-welcome">
-            <div class="builder-welcome-icon">🤖</div>
+            <div class="builder-welcome-icon">◆</div>
             <div class="builder-welcome-title">AI Builder</div>
             <div class="builder-welcome-desc">
               Powered by <strong>Google Gemini</strong> — describe what you want to build<br>
               and I'll generate the code right here.
             </div>
             <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center">
-              <button class="btn btn-primary btn-sm" onclick="builderQuickAction('Build a modern landing page for a tech startup')">🚀 Landing Page</button>
-              <button class="btn btn-sm" onclick="builderQuickAction('Create a Hermes Agent skill template for scheduling tasks')">⚡ Hermes Skill</button>
-              <button class="btn btn-sm" onclick="builderQuickAction('Build a REST API in Python with FastAPI')">🔧 API Scaffold</button>
+              <button class="btn btn-primary btn-sm" onclick="builderQuickAction('Build a modern landing page for a tech startup')">Landing Page</button>
+              <button class="btn btn-sm" onclick="builderQuickAction('Create a Hermes Agent skill template for scheduling tasks')">Hermes Skill</button>
+              <button class="btn btn-sm" onclick="builderQuickAction('Build a REST API in Python with FastAPI')">API Scaffold</button>
             </div>
           </div>
         </div>
         <div class="builder-input-area">
-          <div class="builder-mode-badge" id="builderModeBadge">💬 Chat</div>
+          <div class="builder-mode-badge" id="builderModeBadge">Chat</div>
           <textarea id="builderInput" class="builder-input" rows="1" placeholder="Describe what you want to build..." onkeydown="handleBuilderKey(event)"></textarea>
-          <button class="btn btn-primary btn-icon" onclick="sendBuilderMessage()" id="builderSendBtn" title="Send">➤</button>
+          <button class="btn btn-primary btn-icon" onclick="sendBuilderMessage()" id="builderSendBtn" title="Send">→</button>
         </div>
       </div>
       <div class="builder-preview" id="builderPreview" style="display:none">
         <div class="builder-preview-header">
-          <span class="builder-preview-title">📄 Generated Output</span>
+          <span class="builder-preview-title">Generated Output</span>
           <div class="btn-group">
-            <button class="btn btn-sm" onclick="copyBuilderCode()">📋 Copy</button>
+            <button class="btn btn-sm" onclick="copyBuilderCode()">Copy</button>
             <button class="btn btn-sm" onclick="runBuilderCode()">▶ Run</button>
             <button class="btn btn-sm" onclick="toggleBuilderPreview()">✕ Close</button>
           </div>
@@ -94,7 +94,7 @@ async function renderAiBuilder() {
     const savedMode = localStorage.getItem('builder-mode');
     if (savedMode) {
       document.getElementById('builderMode').value = savedMode;
-      document.getElementById('builderModeBadge').textContent = document.querySelector(`#builderMode option[value="${savedMode}"]`)?.textContent || '💬 Chat';
+      document.getElementById('builderModeBadge').textContent = document.querySelector(`#builderMode option[value="${savedMode}"]`)?.textContent || 'Chat';
     }
     const savedPrompt = localStorage.getItem('builder-prompt');
     if (savedPrompt) document.getElementById('builderSystemPrompt').value = savedPrompt;
@@ -106,8 +106,8 @@ async function renderAiBuilder() {
 function onBuilderModeChange() {
   const mode = document.getElementById('builderMode').value;
   const badge = document.getElementById('builderModeBadge');
-  const labels = { chat: '💬 Chat', code: '💻 Build Code', website: '🌐 Build Website', addon: '🔌 Build Add-on' };
-  badge.textContent = labels[mode] || '💬 Chat';
+  const labels = { chat: 'Chat', code: 'Build Code', website: 'Build Website', addon: 'Build Add-on' };
+  badge.textContent = labels[mode] || 'Chat';
   saveBuilderConfig();
 }
 
@@ -163,7 +163,7 @@ async function sendBuilderMessage() {
     });
 
     removeBuilderTyping(typingId);
-    const response = r.response || '⚠ No response from Gemini';
+    const response = r.response || '! No response from Gemini';
     addBuilderMessage('assistant', response, mode);
 
     // If there's code in the response, show it in the preview
@@ -178,7 +178,7 @@ async function sendBuilderMessage() {
     window._aiBuilderHistory.push({ role: 'assistant', content: response, mode });
   } catch (err) {
     removeBuilderTyping(typingId);
-    addBuilderMessage('assistant', `⚠ Error: ${err.message}`, mode);
+    addBuilderMessage('assistant', `! Error: ${err.message}`, mode);
   }
 }
 
@@ -197,7 +197,7 @@ function addBuilderMessage(role, content, mode) {
     })
     .replace(/\n/g, '<br>');
 
-  const icon = role === 'user' ? '👤' : '🤖';
+  const icon = role === 'user' ? '' : '';
   const label = role === 'user' ? 'You' : `Gemini ${mode !== 'chat' ? '(' + mode + ')' : ''}`;
 
   msg.innerHTML = `
@@ -221,7 +221,7 @@ function showBuilderTyping() {
   div.className = 'builder-message assistant';
   div.id = id;
   div.innerHTML = `
-    <div class="builder-message-avatar">🤖</div>
+    <div class="builder-message-avatar">◆</div>
     <div class="builder-message-body">
       <div class="builder-message-header">
         <span class="builder-message-agent">Gemini</span>

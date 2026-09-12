@@ -14,7 +14,8 @@ async function renderGmeTracker() {
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center" id="gmeFilterBar">
       <span style="font-size:12px;color:var(--text-muted);margin-right:4px">Academic Year:</span>
       <select id="gmeAySelector" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:12px" onchange="loadGmeData()">
-        <option value="2025-26" selected>2025-26 (Current)</option>
+        <option value="2026-27" selected>2026-27 (Current)</option>
+        <option value="2025-26">2025-26</option>
         <option value="2024-25">2024-25</option>
         <option value="2023-24">2023-24</option>
         <option value="all">All-Time</option>
@@ -39,7 +40,7 @@ let expandedResident = null;
 
 async function loadGmeData() {
   try {
-    const ay = document.getElementById('gmeAySelector')?.value || '2025-26';
+    const ay = document.getElementById('gmeAySelector')?.value || '2026-27';
     const [summary, residents] = await Promise.all([
       api.getGmeSummary(ay),
       api.getGmeResidents(ay)
@@ -116,7 +117,7 @@ function renderResidentTable(residents) {
         const barColor = exhausted ? '#d63031' : remaining < 500 ? '#e17055' : '#00b894';
         const reimbursements = r.reimbursements || [];
         const lastDate = reimbursements.length ? reimbursements[reimbursements.length - 1].date : '—';
-        const ay = document.getElementById('gmeAySelector')?.value || '2025-26';
+        const ay = document.getElementById('gmeAySelector')?.value || '2026-27';
         const isExpanded = expandedResident === id;
         const allReimb = ay === 'all' ? reimbursements : (r._allAyData?.reimbursements || reimbursements);
 
@@ -168,7 +169,7 @@ function renderResidentDetail(id, resident, reimbursements, currentAy) {
   const orderedAys = [...validAys, ...unknown];
   
   // Determine which AY tab is active
-  const activeAy = window[`_gmeAyTab_${id}`] || currentAy || '2025-26';
+  const activeAy = window[`_gmeAyTab_${id}`] || currentAy || '2026-27';
   const activeTxns = ayGroups[activeAy] || [];
   
   const totalAllAy = reimbursements.reduce((s, r) => s + (r.amount || 0), 0);
@@ -250,7 +251,7 @@ function toggleResidentDetail(id) {
     expandedResident = null;
   } else {
     expandedResident = id;
-    window[`_gmeAyTab_${id}`] = document.getElementById('gmeAySelector')?.value || '2025-26';
+    window[`_gmeAyTab_${id}`] = document.getElementById('gmeAySelector')?.value || '2026-27';
   }
   renderResidentTable(gmeResidents);
 }

@@ -53,29 +53,29 @@ async function renderVoiceCommands() {
     </style>
     
     <div class="vc-header">
-      <h1>🎤 Voice Commands</h1>
+      <h1>Voice Commands</h1>
       <p>Say these commands on Telegram to generate reports with charts and email delivery</p>
     </div>
     
     <!-- Live health status badges -->
     <div id="vcHealthBadges" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px">
-      <div class="vc-badge vc-badge-gray">⏳ Loading health status...</div>
+      <div class="vc-badge vc-badge-gray">Loading health status...</div>
     </div>
     <div id="vcHealthDetails" style="display:flex;flex-wrap:wrap;gap:12px;margin:-12px 0 20px 4px;font-size:11px;color:var(--text-muted)"></div>
     
     <div class="vc-grid">
       <!-- GME Reports -->
       <div class="vc-card">
-        <div class="vc-card-header">💰 GME Reports</div>
+        <div class="vc-card-header">GME Reports</div>
         <div class="vc-card-body">
           <div class="vc-command">
             <div class="vc-cmd-voice">"Generate GME report"</div>
             <div class="vc-cmd-what">Bar chart + category pie chart + PDF + email</div>
             <div style="display:flex;gap:4px;margin-top:4px">
-              <span class="vc-tag vc-tag-telegram">📱 Telegram</span>
-              <span class="vc-tag vc-tag-email">📧 Email</span>
-              <span class="vc-tag vc-tag-pdf">📄 PDF</span>
-              <span class="vc-tag vc-tag-chart">📊 Chart</span>
+              <span class="vc-tag vc-tag-telegram">Telegram</span>
+              <span class="vc-tag vc-tag-email">Email</span>
+              <span class="vc-tag vc-tag-pdf">PDF</span>
+              <span class="vc-tag vc-tag-chart">Chart</span>
             </div>
           </div>
           <div class="vc-command">
@@ -91,15 +91,15 @@ async function renderVoiceCommands() {
       
       <!-- Coverage Reports -->
       <div class="vc-card">
-        <div class="vc-card-header">📅 Coverage Reports</div>
+        <div class="vc-card-header">Coverage Reports</div>
         <div class="vc-card-body">
           <div class="vc-command">
             <div class="vc-cmd-voice">"Generate coverage report"</div>
             <div class="vc-cmd-what">Today's shifts + absences + future coverage status</div>
             <div style="display:flex;gap:4px;margin-top:4px">
-              <span class="vc-tag vc-tag-telegram">📱 Telegram</span>
-              <span class="vc-tag vc-tag-email">📧 Email</span>
-              <span class="vc-tag vc-tag-pdf">📄 PDF</span>
+              <span class="vc-tag vc-tag-telegram">Telegram</span>
+              <span class="vc-tag vc-tag-email">Email</span>
+              <span class="vc-tag vc-tag-pdf">PDF</span>
             </div>
           </div>
           <div class="vc-command">
@@ -115,16 +115,16 @@ async function renderVoiceCommands() {
       
       <!-- Absence Reports -->
       <div class="vc-card">
-        <div class="vc-card-header">🤒 Absence Reports</div>
+        <div class="vc-card-header">Absence Reports</div>
         <div class="vc-card-body">
           <div class="vc-command">
             <div class="vc-cmd-voice">"Generate absence report"</div>
             <div class="vc-cmd-what">Absence trend chart + department breakdown + PDF</div>
             <div style="display:flex;gap:4px;margin-top:4px">
-              <span class="vc-tag vc-tag-telegram">📱 Telegram</span>
-              <span class="vc-tag vc-tag-email">📧 Email</span>
-              <span class="vc-tag vc-tag-pdf">📄 PDF</span>
-              <span class="vc-tag vc-tag-chart">📊 Chart</span>
+              <span class="vc-tag vc-tag-telegram">Telegram</span>
+              <span class="vc-tag vc-tag-email">Email</span>
+              <span class="vc-tag vc-tag-pdf">PDF</span>
+              <span class="vc-tag vc-tag-chart">Chart</span>
             </div>
           </div>
           <div class="vc-command">
@@ -140,16 +140,16 @@ async function renderVoiceCommands() {
       
       <!-- Consolidated -->
       <div class="vc-card">
-        <div class="vc-card-header">📊 Full Reports</div>
+        <div class="vc-card-header">Full Reports</div>
         <div class="vc-card-body">
           <div class="vc-command">
             <div class="vc-cmd-voice">"Generate full report"</div>
             <div class="vc-cmd-what">ALL data — GME, coverage, absences — charts + PDF + email</div>
             <div style="display:flex;gap:4px;margin-top:4px">
-              <span class="vc-tag vc-tag-telegram">📱 Telegram</span>
-              <span class="vc-tag vc-tag-email">📧 Email</span>
-              <span class="vc-tag vc-tag-pdf">📄 PDF</span>
-              <span class="vc-tag vc-tag-chart">📊 3 Charts</span>
+              <span class="vc-tag vc-tag-telegram">Telegram</span>
+              <span class="vc-tag vc-tag-email">Email</span>
+              <span class="vc-tag vc-tag-pdf">PDF</span>
+              <span class="vc-tag vc-tag-chart">3 Charts</span>
             </div>
           </div>
           <div class="vc-command">
@@ -166,41 +166,41 @@ async function renderVoiceCommands() {
     
     <!-- Scheduled Reports -->
     <div class="vc-card" style="margin-bottom:20px">
-      <div class="vc-card-header">⏰ Scheduled Reports (Auto-Delivered via Cron)</div>
+      <div class="vc-card-header">Scheduled Reports (Auto-Delivered via Cron)</div>
       <div class="vc-card-body">
         <div class="vc-schedule-grid">
           <div class="vc-schedule-item">
-            <div class="sched-icon">💰</div>
+            <div class="sched-icon">▸</div>
             <div class="sched-name">Monday GME Report</div>
             <div class="sched-time">7:00 AM · Every Monday</div>
             <div class="sched-cron">0 7 * * 1</div>
           </div>
           <div class="vc-schedule-item">
-            <div class="sched-icon">📅</div>
+            <div class="sched-icon">▸</div>
             <div class="sched-name">Friday Coverage Report</div>
             <div class="sched-time">8:00 AM · Every Friday</div>
             <div class="sched-cron">0 8 * * 5</div>
           </div>
           <div class="vc-schedule-item">
-            <div class="sched-icon">🤖</div>
+            <div class="sched-icon">▸</div>
             <div class="sched-name">Telegram Slash Commands</div>
             <div class="sched-time">/gme · /coverage · /absences</div>
             <div class="sched-cron">On-demand via telegram_report_handler.py</div>
           </div>
         </div>
         <div class="vc-examples">
-          <p style="margin-bottom:6px"><b>💡 Example responses:</b></p>
+          <p style="margin-bottom:6px"><b>Example responses:</b></p>
           <p>"Generate full report" → <code>Bar charts + absence trend + PDF saved to reports/</code></p>
           <p>"Email me the GME report" → <code>Chart + PDF attached via Gmail</code></p>
           <p>"Send the report to jessie@montefiore.org" → <code>Emailed directly</code></p>
-          <p style="margin-top:8px"><b>📋 Also available on the Manager Command Center page</b></p>
+          <p style="margin-top:8px"><b>Also available on the Manager Command Center page</b></p>
         </div>
       </div>
     </div>
     
     <!-- Manager Commands Reference -->
     <div class="vc-card">
-      <div class="vc-card-header">🎮 Manager Commands (Dashboard Only)</div>
+      <div class="vc-card-header">Manager Commands (Dashboard Only)</div>
       <div class="vc-card-body" style="font-size:12px;line-height:1.7">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
           <div><code style="background:var(--bg-card-alt);padding:2px 6px;border-radius:4px">/coverage</code> — Today's call + gaps</div>
@@ -234,10 +234,10 @@ async function loadVoiceHealth() {
     const sysHealthy = status.status === 'healthy';
     badges.innerHTML = `
       <div class="vc-badge ${sysHealthy ? 'vc-badge-green' : 'vc-badge-red'}">
-        ${sysHealthy ? '✅' : '❌'} System: ${status.status}
+        ${sysHealthy ? '✓' : '✕'} System: ${status.status}
       </div>
-      <div class="vc-badge vc-badge-green">📊 ${status.skills_count || 0} skills</div>
-      <div class="vc-badge vc-badge-blue">📧 Email Delivery: Ready</div>
+      <div class="vc-badge vc-badge-green">${status.skills_count || 0} skills</div>
+      <div class="vc-badge vc-badge-blue">Email Delivery: Ready</div>
     `;
 
     // Agent details
@@ -255,7 +255,7 @@ async function loadVoiceHealth() {
     `;
   } catch (e) {
     badges.innerHTML = `
-      <div class="vc-badge vc-badge-red">❌ Health endpoint unreachable</div>
+      <div class="vc-badge vc-badge-red">✕ Health endpoint unreachable</div>
     `;
     details.innerHTML = `<span class="vc-health-row" style="color:#ff3b30">Failed to poll /api/status: ${e.message}</span>`;
   }

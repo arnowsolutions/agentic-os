@@ -1,5 +1,5 @@
-async function renderCallSchedulePdf() {
-  const content = document.getElementById('pageContent');
+async function renderCallSchedulePdf(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   
   const presetEmails = [
     'sfrasier@montefiore.org',
@@ -10,17 +10,17 @@ async function renderCallSchedulePdf() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">📄 Call Schedule PDF Generator</div>
+        <div class="page-title">Call Schedule PDF Generator</div>
         <div class="page-subtitle">Generate, preview, and email the call schedule PDF</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderCallSchedulePdf()">🔄 Reset</button>
+        <button class="btn btn-ghost" onclick="renderCallSchedulePdf()">↻ Reset</button>
       </div>
     </div>
     <div class="csp-grid">
       <div class="csp-card">
         <div class="csp-card-header">
-          <span class="csp-card-icon">📋</span>
+          <span class="csp-card-icon">▸</span>
           <span class="csp-card-title">Generate PDF</span>
         </div>
         <div class="csp-card-body">
@@ -39,14 +39,14 @@ async function renderCallSchedulePdf() {
             <label class="csp-check"><input type="checkbox" id="cspPGYLabels" checked> PGY level labels</label>
           </div>
           <button class="btn btn-primary" onclick="generateCspPdf()" style="width:100%">
-            ⚡ Generate PDF
+            Generate PDF
           </button>
         </div>
       </div>
 
       <div class="csp-card">
         <div class="csp-card-header">
-          <span class="csp-card-icon">📧</span>
+          <span class="csp-card-icon">▸</span>
           <span class="csp-card-title">Email PDF</span>
         </div>
         <div class="csp-card-body">
@@ -65,7 +65,7 @@ async function renderCallSchedulePdf() {
             <input type="text" id="cspSubject" class="csp-select" value="Urology Call Schedule — Q3-Q4 2026">
           </div>
           <button class="btn btn-primary" onclick="emailCspPdf()" style="width:100%" id="cspEmailBtn">
-            📤 Generate & Email
+            Generate & Email
           </button>
         </div>
       </div>
@@ -74,7 +74,7 @@ async function renderCallSchedulePdf() {
     <div id="cspResult" style="display:none;margin-top:16px;background:var(--bg-card);border-radius:var(--radius-md);border:1px solid var(--border);padding:16px">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div>
-          <div id="cspResultIcon" style="font-size:20px;margin-bottom:4px">✅</div>
+          <div id="cspResultIcon" style="font-size:20px;margin-bottom:4px">✓</div>
           <div id="cspResultTitle" style="font-size:14px;font-weight:600">PDF Generated</div>
           <div id="cspResultBody" style="font-size:12px;color:var(--text-muted);margin-top:4px;white-space:pre-wrap"></div>
         </div>
@@ -91,7 +91,7 @@ async function renderCallSchedulePdf() {
       .csp-card-body { padding:16px; }
       .csp-select { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; }
       .csp-check { display:flex; align-items:center; gap:6px; font-size:12px; padding:4px 0; cursor:pointer; }
-      .csp-check input { accent-color:#6c5ce7; }
+      .csp-check input { accent-color:var(--accent); }
     </style>
   `;
 }
@@ -117,7 +117,7 @@ async function runCspAction(mode) {
   const resultOutput = document.getElementById('cspResultOutput');
   
   resultDiv.style.display = 'block';
-  resultIcon.textContent = '⏳';
+  resultIcon.textContent = '…';
   resultTitle.textContent = mode === 'generate' ? 'Generating PDF...' : 'Generating & emailing...';
   resultBody.textContent = 'Running call schedule script...';
   resultOutput.textContent = '';
@@ -143,19 +143,19 @@ async function runCspAction(mode) {
     const data = await res.json();
     
     if (data.success) {
-      resultIcon.textContent = '✅';
+      resultIcon.textContent = '✓';
       resultTitle.textContent = mode === 'generate' ? 'PDF Generated' : 'PDF Generated & Emailed';
       resultBody.textContent = data.message || 'Completed successfully';
       resultOutput.textContent = data.output || '';
       showToast('Call schedule ' + (mode === 'generate' ? 'PDF generated' : 'sent'), 'success');
     } else {
-      resultIcon.textContent = '❌';
+      resultIcon.textContent = '✕';
       resultTitle.textContent = 'Failed';
       resultBody.textContent = data.error || 'Unknown error';
       resultOutput.textContent = data.output || '';
     }
   } catch (err) {
-    resultIcon.textContent = '❌';
+    resultIcon.textContent = '✕';
     resultTitle.textContent = 'Error';
     resultBody.textContent = err.message;
     resultOutput.textContent = '';

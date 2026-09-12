@@ -1,0 +1,4 @@
+f33aed317215cbe77591209ec7a9eb9c  server.py
+cf96ccdbf482c84b94d4525d7bd033b1  modules/crm.py
+66b698a5b79ce41eb8b9ef138be9ac0d  dashboard/pages/gme-tracker.js
+534ed3e8b1ccbe26ae8ad1747614de9e  dashboard/pages/staff-schedule.js

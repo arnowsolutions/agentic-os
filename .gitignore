@@ -55,3 +55,6 @@ test_swap_*.json
 google_workspace.py
 *.pkl
 *.bak*
+
+# opcode CLI toolchain (node_modules-heavy; lives in shared volume)
+.tools/

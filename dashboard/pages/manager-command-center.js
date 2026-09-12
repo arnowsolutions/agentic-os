@@ -73,60 +73,60 @@ async function renderManagerCommandCenter() {
 
       <div class="mc-header">
         <div class="mc-header-left">
-          <h1>⚙️ Manager Command Center</h1>
+          <h1>Manager Command Center</h1>
           <p>Predetermined commands for scheduling, coverage, and team management</p>
         </div>
         <div class="btn-group">
-          <button class="btn btn-sm btn-ghost" onclick="renderManagerCommandCenter()">🔄 Refresh</button>
+          <button class="btn btn-sm btn-ghost" onclick="renderManagerCommandCenter()">↻ Refresh</button>
         </div>
       </div>
 
       <!-- Command Buttons -->
       <div class="mc-command-grid">
         <div class="mc-command-card" onclick="_mc_run('coverage')">
-          <div class="mc-cmd-icon">📅</div>
+          <div class="mc-cmd-icon">▸</div>
           <div class="mc-cmd-label">/coverage</div>
           <div class="mc-cmd-desc">Today's call + backup + gaps</div>
           <span class="mc-cmd-badge" style="background:rgba(0,122,255,0.12);color:#007aff">Real-time</span>
         </div>
         <div class="mc-command-card" onclick="_mc_run('team')">
-          <div class="mc-cmd-icon">👥</div>
+          <div class="mc-cmd-icon">▸</div>
           <div class="mc-cmd-label">/team</div>
           <div class="mc-cmd-desc">All residents and their status</div>
           <span class="mc-cmd-badge" style="background:rgba(52,199,89,0.12);color:#34c759">15 residents</span>
         </div>
         <div class="mc-command-card" onclick="_mc_run('approvals')">
-          <div class="mc-cmd-icon">✅</div>
+          <div class="mc-cmd-icon">✓</div>
           <div class="mc-cmd-label">/approvals</div>
           <div class="mc-cmd-desc">Pending swaps, PTO, call-outs</div>
           <span class="mc-cmd-badge" style="background:rgba(255,204,0,0.12);color:#ffcc00" id="mcPendingCount">0 pending</span>
         </div>
         <div class="mc-command-card" onclick="_mc_run('gaps')">
-          <div class="mc-cmd-icon">⚠️</div>
+          <div class="mc-cmd-icon">!</div>
           <div class="mc-cmd-label">/gaps</div>
           <div class="mc-cmd-desc">Uncovered shifts needing action</div>
           <span class="mc-cmd-badge" style="background:rgba(255,69,58,0.12);color:#ff453a">Needs review</span>
         </div>
         <div class="mc-command-card" onclick="_mc_run('today')">
-          <div class="mc-cmd-icon">📋</div>
+          <div class="mc-cmd-icon">▸</div>
           <div class="mc-cmd-label">/today</div>
           <div class="mc-cmd-desc">Full daily briefing</div>
           <span class="mc-cmd-badge" style="background:rgba(175,82,222,0.12);color:#af52de">Summary</span>
         </div>
         <div class="mc-command-card" onclick="_mc_run('gme')">
-          <div class="mc-cmd-icon">💰</div>
+          <div class="mc-cmd-icon">▸</div>
           <div class="mc-cmd-label">/gme</div>
           <div class="mc-cmd-desc">GME balances at a glance</div>
           <span class="mc-cmd-badge" style="background:rgba(52,199,89,0.12);color:#34c759">Kelly access</span>
         </div>
         <div class="mc-command-card" onclick="_mc_runSwap(true)">
-          <div class="mc-cmd-icon">🔧</div>
+          <div class="mc-cmd-icon">▸</div>
           <div class="mc-cmd-label">Test Swap Processor</div>
           <div class="mc-cmd-desc">Dry-run swap email processor</div>
           <span class="mc-cmd-badge" style="background:rgba(0,122,255,0.12);color:#007aff">Dry-run</span>
         </div>
         <div class="mc-command-card" onclick="_mc_runSwap(false)">
-          <div class="mc-cmd-icon">⚡</div>
+          <div class="mc-cmd-icon">▸</div>
           <div class="mc-cmd-label">Run Swap Processor</div>
           <div class="mc-cmd-desc">Live swap processing + emails</div>
           <span class="mc-cmd-badge" style="background:rgba(255,69,58,0.12);color:#ff453a">Live</span>
@@ -137,7 +137,7 @@ async function renderManagerCommandCenter() {
       <div id="mcResults">
         <div class="mc-result-card" style="border:1px dashed var(--border)">
           <div class="mc-result-body" style="text-align:center;padding:32px;color:var(--text-muted)">
-            <div style="font-size:2rem;margin-bottom:8px">👆</div>
+            <div style="font-size:2rem;margin-bottom:8px">▸</div>
             <div style="font-weight:500">Tap a command above to run it</div>
             <div style="font-size:12px;margin-top:4px">Results appear here</div>
           </div>
@@ -170,7 +170,7 @@ async function _mc_run(cmd) {
     }
     results.innerHTML = html;
   } catch (err) {
-    results.innerHTML = `<div class="mc-result-card"><div class="mc-result-body"><div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div></div>`;
+    results.innerHTML = `<div class="mc-result-card"><div class="mc-result-body"><div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div></div>`;
   }
 }
 
@@ -185,13 +185,13 @@ async function _mc_coverage() {
   const todayStr = today.toISOString().slice(0,10);
 
   let html = `<div class="mc-result-card">
-    <div class="mc-result-header">📅 Coverage — ${today.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</div>
+    <div class="mc-result-header">Coverage — ${today.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</div>
     <div class="mc-result-body">`;
 
   if (oncall.length > 0) {
     html += oncall.map(e => `
       <div class="mc-coverage-item">
-        <div><strong>🏥 ${escapeHtml(e.hospital)}</strong></div>
+        <div><strong>${escapeHtml(e.hospital)}</strong></div>
         <div class="text-right">
           <div>Primary: <strong>${escapeHtml(e.primary_attending || '—')}</strong></div>
           <div class="text-xs text-muted">Backup: ${escapeHtml(e.backup_attending || '—')} · Peds: ${escapeHtml(e.peds_attending || '—')}</div>
@@ -206,15 +206,15 @@ async function _mc_coverage() {
     <div class="mc-flex-gap">
       ${hospitals.map(h => `
         <span class="mc-stat-pill" style="background:rgba(0,122,255,0.08);color:var(--text)">
-          🏥 ${escapeHtml(h.name)} — ${h.total_dates} days (${h.start_date} → ${h.end_date})
+          ${escapeHtml(h.name)} — ${h.total_dates} days (${h.start_date} → ${h.end_date})
         </span>
       `).join('')}
     </div>`;
 
   html += `<div class="mc-section-title">Coverage Status</div>
     <div class="mc-flex-gap">
-      <span class="mc-stat-pill" style="background:rgba(52,199,89,0.12);color:#34c759">✅ ${oncall.length} assignments today</span>
-      <span class="mc-stat-pill" style="background:rgba(0,122,255,0.12);color:#007aff">📅 ${hospitals.reduce((s,h) => s + h.total_dates, 0)} total schedule entries</span>
+      <span class="mc-stat-pill" style="background:rgba(52,199,89,0.12);color:#34c759">✓ ${oncall.length} assignments today</span>
+      <span class="mc-stat-pill" style="background:rgba(0,122,255,0.12);color:#007aff">${hospitals.reduce((s,h) => s + h.total_dates, 0)} total schedule entries</span>
     </div>`;
 
   html += `</div></div>`;
@@ -227,10 +227,10 @@ async function _mc_team() {
     .sort((a,b) => (a.lastName || '').localeCompare(b.lastName || ''));
 
   let html = `<div class="mc-result-card">
-    <div class="mc-result-header">👥 My Team — ${residents.length} Residents</div>
+    <div class="mc-result-header">My Team — ${residents.length} Residents</div>
     <div class="mc-result-body">
       <div class="mc-flex-gap" style="margin-bottom:12px">
-        <span class="mc-stat-pill" style="background:rgba(52,199,89,0.12);color:#34c759">✅ ${residents.length} total</span>
+        <span class="mc-stat-pill" style="background:rgba(52,199,89,0.12);color:#34c759">✓ ${residents.length} total</span>
         <span class="mc-stat-pill" style="background:rgba(0,122,255,0.12);color:#007aff">PG-1 to PG-5</span>
       </div>
       <table class="ud-gme-table" style="width:100%">
@@ -269,7 +269,7 @@ async function _mc_approvals() {
   });
 
   let html = `<div class="mc-result-card">
-    <div class="mc-result-header">✅ Pending Approvals</div>
+    <div class="mc-result-header">✓ Pending Approvals</div>
     <div class="mc-result-body">`;
 
   if (expended.length > 0) {
@@ -302,7 +302,7 @@ async function _mc_gaps() {
   const todayStr = now.toISOString().slice(0,10);
 
   let html = `<div class="mc-result-card">
-    <div class="mc-result-header">⚠️ Coverage Gaps</div>
+    <div class="mc-result-header">! Coverage Gaps</div>
     <div class="mc-result-body">`;
 
   // Check if the faculty schedule has started
@@ -316,7 +316,7 @@ async function _mc_gaps() {
     <div class="mc-flex-gap">
       ${hospitals.map(h => `
         <span class="mc-stat-pill" style="background:rgba(255,69,58,0.08);color:var(--text)">
-          🏥 ${escapeHtml(h.name)}: ${escapeHtml(h.start_date)} → ${escapeHtml(h.end_date)} (${h.total_dates} days)
+          ${escapeHtml(h.name)}: ${escapeHtml(h.start_date)} → ${escapeHtml(h.end_date)} (${h.total_dates} days)
         </span>
       `).join('')}
     </div>`;
@@ -350,12 +350,12 @@ async function _mc_today() {
   const totalRemaining = totalPool - totalUsed;
 
   let html = `<div class="mc-result-card">
-    <div class="mc-result-header">📋 Daily Briefing — ${new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</div>
+    <div class="mc-result-header">Daily Briefing — ${new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}</div>
     <div class="mc-result-body">
       <div class="mc-flex-gap" style="margin-bottom:16px">
-        <span class="mc-stat-pill" style="background:rgba(52,199,89,0.12);color:#34c759">👥 ${residents.length} residents</span>
-        <span class="mc-stat-pill" style="background:rgba(0,122,255,0.12);color:#007aff">💰 $${totalUsed.toLocaleString()} / $${totalPool.toLocaleString()} GME used</span>
-        <span class="mc-stat-pill" style="background:rgba(255,204,0,0.12);color:#ffcc00">📅 ${new Date().toLocaleDateString('en-US', { weekday:'long' })}</span>
+        <span class="mc-stat-pill" style="background:rgba(52,199,89,0.12);color:#34c759">${residents.length} residents</span>
+        <span class="mc-stat-pill" style="background:rgba(0,122,255,0.12);color:#007aff">$${totalUsed.toLocaleString()} / $${totalPool.toLocaleString()} GME used</span>
+        <span class="mc-stat-pill" style="background:rgba(255,204,0,0.12);color:#ffcc00">${new Date().toLocaleDateString('en-US', { weekday:'long' })}</span>
       </div>
       <div class="mc-section-title">Today's Coverage</div>
     `;
@@ -366,7 +366,7 @@ async function _mc_today() {
   if (oncall.length > 0) {
     oncall.slice(0,5).forEach(e => {
       html += `<div class="mc-coverage-item">
-        <div><strong>🏥 ${escapeHtml(e.hospital)}</strong> — ${escapeHtml(e.primary_attending || '—')}</div>
+        <div><strong>${escapeHtml(e.hospital)}</strong> — ${escapeHtml(e.primary_attending || '—')}</div>
         <div class="text-xs text-muted">Backup: ${escapeHtml(e.backup_attending || '—')}</div>
       </div>`;
     });
@@ -385,10 +385,10 @@ async function _mc_today() {
   });
 
   if (exhausted.length > 0) {
-    html += exhausted.map(r => `<div class="mc-coverage-item"><span>⚠️ <strong>${escapeHtml(r.firstName)} ${escapeHtml(r.lastName)}</strong> — GME exhausted</span></div>`).join('');
+    html += exhausted.map(r => `<div class="mc-coverage-item"><span>! <strong>${escapeHtml(r.firstName)} ${escapeHtml(r.lastName)}</strong> — GME exhausted</span></div>`).join('');
   }
   if (zeroUsed.length > 0) {
-    html += zeroUsed.map(r => `<div class="mc-coverage-item"><span>💡 <strong>${escapeHtml(r.firstName)} ${escapeHtml(r.lastName)}</strong> — hasn't used any GME yet</span></div>`).join('');
+    html += zeroUsed.map(r => `<div class="mc-coverage-item"><span><strong>${escapeHtml(r.firstName)} ${escapeHtml(r.lastName)}</strong> — hasn't used any GME yet</span></div>`).join('');
   }
   if (exhausted.length === 0 && zeroUsed.length === 0) {
     html += `<div class="text-muted text-sm">All residents are in good standing.</div>`;
@@ -410,7 +410,7 @@ async function _mc_gme() {
   const usedPct = totalPool > 0 ? Math.round((totalUsed / totalPool) * 100) : 0;
 
   let html = `<div class="mc-result-card">
-    <div class="mc-result-header">💰 GME Status</div>
+    <div class="mc-result-header">GME Status</div>
     <div class="mc-result-body">
       <div class="mc-flex-gap" style="margin-bottom:16px">
         <span class="mc-stat-pill" style="background:rgba(52,199,89,0.12);color:#34c759">$${totalUsed.toLocaleString()} used</span>
@@ -453,7 +453,7 @@ async function _mc_runSwap(dryRun) {
     const stderr = escapeHtml(data.stderr || '').replace(/\n/g, '<br>');
     results.innerHTML = `
       <div class="mc-result-card" style="border-color:${ok ? 'var(--green)' : 'var(--red)'}">
-        <div class="mc-result-header">${ok ? '✅' : '❌'} Swap Processor — ${dryRun ? 'Dry Run' : 'Live'}</div>
+        <div class="mc-result-header">${ok ? '✓' : '✕'} Swap Processor — ${dryRun ? 'Dry Run' : 'Live'}</div>
         <div class="mc-result-body">
           <div class="mc-flex-gap" style="margin-bottom:12px">
             <span class="mc-stat-pill" style="background:${ok ? 'rgba(52,199,89,0.12)' : 'rgba(255,69,58,0.12)'};color:${ok ? '#34c759' : '#ff453a'}">${ok ? 'Success' : 'Failed'}</span>
@@ -464,6 +464,6 @@ async function _mc_runSwap(dryRun) {
         </div>
       </div>`;
   } catch (err) {
-    results.innerHTML = `<div class="mc-result-card"><div class="mc-result-body"><div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Request failed</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div></div>`;
+    results.innerHTML = `<div class="mc-result-card"><div class="mc-result-body"><div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Request failed</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div></div>`;
   }
 }

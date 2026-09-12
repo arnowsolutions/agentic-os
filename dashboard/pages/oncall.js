@@ -5,16 +5,16 @@
  * Each tab has its own weekly schedule table.
  */
 
-async function renderOncall() {
-  const content = document.getElementById('pageContent');
+async function renderOncall(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📅 Montefiore Urology On-Call Schedule</h1>
+        <h1 class="page-title">Montefiore Urology On-Call Schedule</h1>
         <p class="page-subtitle">3 locations — Moses · Wakefield · Weiler. Switch tabs to view each hospital's schedule.</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderOncall()">🔄 Refresh</button>
+        <button class="btn" onclick="renderOncall()">↻ Refresh</button>
       </div>
     </div>
 
@@ -22,7 +22,7 @@ async function renderOncall() {
       <div id="oncallNowCard"></div>
       <div id="oncallSearchCard">
         <div class="card" style="padding:20px">
-          <h3 style="margin:0 0 12px 0;font-size:15px">🔍 Look Up a Date</h3>
+          <h3 style="margin:0 0 12px 0;font-size:15px">Look Up a Date</h3>
           <div style="display:flex;gap:8px">
             <input type="date" id="oncallSearchDate" value="${new Date().toISOString().split('T')[0]}"
                    style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;
@@ -38,29 +38,29 @@ async function renderOncall() {
     <div style="display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--border);padding-bottom:0">
       <button class="oncall-tab active" data-tab="Moses" onclick="switchHospitalTab('Moses')" 
               style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;
-                     border-bottom:3px solid #6c5ce7;color:var(--text);border-radius:6px 6px 0 0">
-        🏥 Moses
+                     border-bottom:3px solid var(--accent);color:var(--text);border-radius:6px 6px 0 0">
+        Moses
       </button>
       <button class="oncall-tab" data-tab="Wakefield" onclick="switchHospitalTab('Wakefield')"
               style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;
                      border-bottom:3px solid transparent;color:var(--text-muted);border-radius:6px 6px 0 0">
-        🏥 Wakefield
+        Wakefield
       </button>
       <button class="oncall-tab" data-tab="Weiler" onclick="switchHospitalTab('Weiler')"
               style="padding:10px 20px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;
                      border-bottom:3px solid transparent;color:var(--text-muted);border-radius:6px 6px 0 0">
-        🏥 Weiler
+        Weiler
       </button>
     </div>
 
     <div class="card" style="padding:20px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h3 style="margin:0;font-size:15px" id="oncallScheduleTitle">📅 Moses — Weekly Schedule</h3>
+        <h3 style="margin:0;font-size:15px" id="oncallScheduleTitle">Moses — Weekly Schedule</h3>
         <div style="display:flex;gap:6px;align-items:center">
           <button class="btn" onclick="navigateWeek(-1)">◀ Prev Week</button>
           <span id="oncallWeekLabel" style="font-weight:600;font-size:14px;min-width:220px;text-align:center"></span>
           <button class="btn" onclick="navigateWeek(1)">Next Week ▶</button>
-          <button class="btn" style="margin-left:4px" onclick="goToThisWeek()">📅 This Week</button>
+          <button class="btn" style="margin-left:4px" onclick="goToThisWeek()">This Week</button>
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -130,8 +130,7 @@ function esc(s) {
   return d.innerHTML;
 }
 
-const HOSPITAL_COLORS = { Moses: '#6c5ce7', Wakefield: '#0984e3', Weiler: '#00b894' };
-const HOSPITAL_EMOJIS = { Moses: '🏥', Wakefield: '🏥', Weiler: '🏥' };
+const HOSPITAL_COLORS = { Moses: 'var(--accent)', Wakefield: 'var(--accent)', Weiler: 'var(--accent)' };
 
 function switchHospitalTab(hospital) {
   activeHospital = hospital;
@@ -144,7 +143,7 @@ function switchHospitalTab(hospital) {
   });
   
   // Update title
-  document.getElementById('oncallScheduleTitle').textContent = `📅 ${hospital} — Weekly Schedule`;
+  document.getElementById('oncallScheduleTitle').textContent = `${hospital} — Weekly Schedule`;
   
   // Re-render week view with selected hospital
   renderWeekView();
@@ -187,7 +186,7 @@ function attendingCell(name) {
               title="${esc(tooltip).replace(/"/g, '&quot;')}">
       ${esc(doc1)} / ${esc(doc2)}
       <span style="display:inline-flex;align-items:center;justify-content:center;
-                   width:16px;height:16px;border-radius:50%;background:${HOSPITAL_COLORS[activeHospital] || '#6c5ce7'};
+                   width:16px;height:16px;border-radius:50%;background:${HOSPITAL_COLORS[activeHospital] || 'var(--accent)'};
                    color:#fff;font-size:10px;font-weight:700;margin-left:4px;
                    cursor:help;vertical-align:middle">i</span>
     </span>`;
@@ -197,8 +196,8 @@ function attendingCell(name) {
               title="${esc(note).replace(/"/g, '&quot;')}">
     ${esc(doctor)}
     <span style="display:inline-flex;align-items:center;justify-content:center;
-                 width:16px;height:16px;border-radius:50%;background:rgba(108,92,231,0.2);
-                 color:#6c5ce7;font-size:10px;font-weight:700;margin-left:4px;
+                 width:16px;height:16px;border-radius:50%;background:var(--accent-dim);
+                 color:var(--accent);font-size:10px;font-weight:700;margin-left:4px;
                  cursor:help;vertical-align:middle">i</span>
   </span>`;
 }
@@ -217,11 +216,11 @@ async function loadOncallNow() {
       const weiler = entries.find(e => e.hospital === 'Weiler');
 
       let html = `<div class="card" style="padding:20px;border-left:4px solid #00b894">
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">🟢 ON CALL NOW — ${data.date}</div>`;
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">● ON CALL NOW — ${data.date}</div>`;
 
       if (moses) {
         html += `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
-          <div style="font-weight:600;font-size:14px;color:${HOSPITAL_COLORS.Moses}">🏥 Moses</div>
+          <div style="font-weight:600;font-size:14px;color:${HOSPITAL_COLORS.Moses}">Moses</div>
           <div style="margin-top:2px"><strong>Attending:</strong> ${attendingCell(moses.primary_attending)}</div>
           ${moses.backup_attending && moses.backup_attending !== 'None' ? `<div><strong>Backup:</strong> ${attendingCell(moses.backup_attending)}</div>` : ''}
           ${moses.peds_attending && moses.peds_attending !== 'None' ? `<div><strong>PEDS:</strong> ${attendingCell(moses.peds_attending)}</div>` : ''}
@@ -231,7 +230,7 @@ async function loadOncallNow() {
       }
       if (wakefield) {
         html += `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
-          <div style="font-weight:600;font-size:14px;color:${HOSPITAL_COLORS.Wakefield}">🏥 Wakefield</div>
+          <div style="font-weight:600;font-size:14px;color:${HOSPITAL_COLORS.Wakefield}">Wakefield</div>
           <div style="margin-top:2px"><strong>Attending:</strong> ${attendingCell(wakefield.primary_attending)}</div>
           ${wakefield.backup_attending && wakefield.backup_attending !== 'None' ? `<div><strong>Backup:</strong> ${attendingCell(wakefield.backup_attending)}</div>` : ''}
           ${wakefield.peds_attending && wakefield.peds_attending !== 'None' ? `<div><strong>PEDS:</strong> ${attendingCell(wakefield.peds_attending)}</div>` : ''}
@@ -241,7 +240,7 @@ async function loadOncallNow() {
       }
       if (weiler) {
         html += `<div style="margin-bottom:4px">
-          <div style="font-weight:600;font-size:14px;color:${HOSPITAL_COLORS.Weiler}">🏥 Weiler</div>
+          <div style="font-weight:600;font-size:14px;color:${HOSPITAL_COLORS.Weiler}">Weiler</div>
           <div style="margin-top:2px"><strong>Attending:</strong> ${attendingCell(weiler.primary_attending)}</div>
           ${weiler.backup_attending && weiler.backup_attending !== 'None' ? `<div><strong>Backup:</strong> ${attendingCell(weiler.backup_attending)}</div>` : ''}
           ${weiler.peds_attending && weiler.peds_attending !== 'None' ? `<div><strong>PEDS:</strong> ${attendingCell(weiler.peds_attending)}</div>` : ''}
@@ -253,13 +252,13 @@ async function loadOncallNow() {
       card.innerHTML = html;
     } else {
       card.innerHTML = `<div class="card" style="padding:20px">
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">🔴 ON CALL</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">● ON CALL</div>
         <div style="font-size:14px;color:var(--text-muted)">${esc(data.message || 'No data for today')}</div>
       </div>`;
     }
   } catch (err) {
     document.getElementById('oncallNowCard').innerHTML =
-      `<div class="card" style="padding:20px"><div style="color:var(--red)">⚠ ${esc(err.message)}</div></div>`;
+      `<div class="card" style="padding:20px"><div style="color:var(--red)">! ${esc(err.message)}</div></div>`;
   }
 }
 
@@ -318,7 +317,7 @@ async function renderWeekView() {
       const isWeekend = i >= 5;
 
       const rowStyle = isToday ? 'background:rgba(0,184,148,0.08);font-weight:500' :
-                       isWeekend ? 'background:rgba(108,92,231,0.04)' : '';
+                       isWeekend ? 'background:var(--accent-dim)' : '';
 
       const attendingDisplay = entry ? attendingCell(entry.primary_attending) : '<span style="color:var(--text-muted)">—</span>';
       const backupDisplay = entry && entry.backup_attending && entry.backup_attending !== 'None' ? attendingCell(entry.backup_attending) : '<span style="color:var(--text-muted)">—</span>';
@@ -329,21 +328,21 @@ async function renderWeekView() {
       const secondCallDisplay = entry && entry.second_call_resident ? esc(entry.second_call_resident) : '<span style="color:var(--text-muted)">—</span>';
 
       html += `<tr style="${rowStyle};border-bottom:1px solid var(--border)">
-        <td style="padding:8px 12px;white-space:nowrap"><strong>${isToday ? '🟢 ' : ''}${fmtDateShort(dateStr)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${dayName}</span></td>
+        <td style="padding:8px 12px;white-space:nowrap"><strong>${isToday ? '● ' : ''}${fmtDateShort(dateStr)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${dayName}</span></td>
         <td style="padding:8px 12px">${attendingDisplay}</td>
         <td style="padding:8px 12px">${backupDisplay}</td>
         <td style="padding:8px 12px">${pedsDisplay}</td>
         <td style="padding:8px 12px">${firstCallDisplay}</td>
         <td style="padding:8px 12px">${secondCallDisplay}</td>
         <td style="padding:8px 12px">${chiefDisplay}</td>
-        <td style="padding:8px 12px;text-align:center"><span class="tag" style="background:${isWeekend ? 'rgba(108,92,231,0.15)' : 'rgba(0,184,148,0.15)'};color:${isWeekend ? '#6c5ce7' : '#00b894'};border:none">${isWeekend ? 'WE' : 'WD'}</span></td>
+        <td style="padding:8px 12px;text-align:center"><span class="tag" style="background:${isWeekend ? 'var(--accent-dim)' : 'rgba(0,184,148,0.15)'};color:${isWeekend ? 'var(--accent)' : 'var(--accent)'};border:none">${isWeekend ? 'WE' : 'WD'}</span></td>
       </tr>`;
     }
 
     tbody.innerHTML = html;
   } catch (err) {
     document.getElementById('oncallTableBody').innerHTML =
-      `<tr><td colspan="8" style="padding:20px;color:var(--red);text-align:center">⚠ ${esc(err.message)}</td></tr>`;
+      `<tr><td colspan="8" style="padding:20px;color:var(--red);text-align:center">! ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -357,9 +356,9 @@ async function loadHospitalSummary() {
 
     let html = '';
     hospitals.forEach(h => {
-      const color = HOSPITAL_COLORS[h.name] || '#636e72';
+      const color = HOSPITAL_COLORS[h.name] || 'var(--accent)';
       html += `<div class="card" style="padding:16px;border-left:3px solid ${color}">
-        <div style="font-size:14px;font-weight:600;margin-bottom:6px;color:${color}">🏥 ${esc(h.name)}</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px;color:${color}">${esc(h.name)}</div>
         <div style="font-size:12px;color:var(--text-muted)">
           ${h.total_dates} days · ${h.start_date} to ${h.end_date}<br>
           ${h.unique_primary_attendings.length} attendings on rotation
@@ -393,9 +392,9 @@ async function searchOncall() {
 
     let html = '';
     entries.forEach(e => {
-      const color = HOSPITAL_COLORS[e.hospital] || '#636e72';
+      const color = HOSPITAL_COLORS[e.hospital] || 'var(--accent)';
       html += `<div style="margin-bottom:8px;padding:10px;background:var(--surface);border-radius:6px;border:1px solid var(--border);border-left:3px solid ${color}">
-        <div style="font-weight:600;font-size:14px;margin-bottom:4px;color:${color}">🏥 ${esc(e.hospital)}</div>
+        <div style="font-weight:600;font-size:14px;margin-bottom:4px;color:${color}">${esc(e.hospital)}</div>
         <table style="font-size:13px;width:100%">
           <tr><td style="color:var(--text-muted);width:80px">On-Call:</td><td style="font-weight:500">${attendingCell(e.primary_attending)}</td></tr>
           ${e.backup_attending && e.backup_attending !== 'None' ? `<tr><td style="color:var(--text-muted)">Backup:</td><td>${attendingCell(e.backup_attending)}</td></tr>` : ''}
@@ -408,6 +407,6 @@ async function searchOncall() {
     });
     resultDiv.innerHTML = html;
   } catch (err) {
-    resultDiv.innerHTML = `<div style="color:var(--red)">⚠ ${esc(err.message)}</div>`;
+    resultDiv.innerHTML = `<div style="color:var(--red)">! ${esc(err.message)}</div>`;
   }
 }

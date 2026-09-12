@@ -8,8 +8,11 @@ import io as _io
 import json
 import os
 import re
+import socket as _socket
+import urllib.request as _urlrequest
 import uuid as _uuid
 import time as _time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -34,7 +37,15 @@ CRM_ACCESS_LOG_DAYS = 30
 GME_ANNUAL_LIMIT = 1250
 
 # ─── AY Filtering ────────────────────────────────────────────────
-CURRENT_AY = "2025-26"
+
+def _current_ay() -> str:
+    """Current academic year (Jul 1 – Jun 30), computed at import time."""
+    now = datetime.now()
+    if now.month >= 7:
+        return f"{now.year}-{str(now.year + 1)[-2:]}"
+    return f"{now.year - 1}-{str(now.year)[-2:]}"
+
+CURRENT_AY = _current_ay()
 
 def _compute_ay(date_str: str) -> str:
     """Compute academic year from a date string (MM/DD/YYYY format).
@@ -266,24 +277,116 @@ def crm_delete(contact_id: str):
     )
     return {"success": True}
 
-# ─── Routes: GME Reimbursement ──────────────────────────────────
+# ─── Routes: GME Reimbursement (source of truth: unified.reimb_* in Postgres) ──
+
+def _gme_pg():
+    """Shared Postgres connection (modules.crm_db), or None."""
+    try:
+        from modules.crm_db import _get_pg_connection
+        return _get_pg_connection()
+    except Exception:
+        return None
+
+
+def _gme_fetch_rows(ay: str):
+    """All reimbursement submissions (any fund) joined to person identity.
+    Resident filtering happens in Python (contacts roster + beneficiary_type)."""
+    conn = _gme_pg()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Reimbursement database unavailable")
+    ay_clause = "" if (not ay or ay == "all") else "AND rs.academic_year = %s"
+    params = [] if not ay_clause else [ay]
+    sql = f"""
+        SELECT LOWER(rp.email) AS email, rp.name AS person_name, rp.cls AS person_cls,
+               LOWER(COALESCE(rp.beneficiary_type, '')) AS person_type,
+               rs.id AS txn_id, rs.date AS txn_date, rs.amount, rs.status,
+               rs.description, rs.category, rs.academic_year,
+               fa.code AS fund_code, fa.name AS fund_name
+        FROM unified.reimb_submissions rs
+        JOIN unified.reimb_persons rp ON rp.id = rs.person_id
+        LEFT JOIN unified.reimb_fund_accounts fa ON fa.id = rs.fund_account_id
+        WHERE COALESCE(rs.is_deleted, false) = false
+          {ay_clause}
+        ORDER BY rs.date, rs.id
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute(sql, params)
+    except Exception:
+        conn.rollback()
+        cur.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def _gme_resident_payload(ay: str):
+    """Per-resident reimbursement payload built from the unified platform data."""
+    rows = _gme_fetch_rows(ay)
+    contacts = _load_crm()
+    roster = {}
+    for c in contacts:
+        if c.get("category") == "Resident":
+            em = (c.get("email") or "").strip().lower()
+            if em:
+                roster[em] = c
+
+    residents = {}
+    for em, c in roster.items():
+        residents[em] = {
+            "id": c.get("id") or em,
+            "firstName": c.get("firstName", ""),
+            "lastName": c.get("lastName", ""),
+            "pgy": c.get("pgy", ""),
+            "email": c.get("email", ""),
+            "total_used": 0.0,
+            "reimbursements": [],
+        }
+
+    for r in rows:
+        em = (r.get("email") or "").lower()
+        if em not in roster and r.get("person_type") != "resident":
+            continue  # skip non-resident spend (faculty/staff)
+        if em not in residents:
+            # Resident with activity not on the current contacts roster (alumni)
+            name = (r.get("person_name") or "").strip()
+            first, _, last = name.partition(" ")
+            residents[em] = {
+                "id": em, "firstName": first, "lastName": last,
+                "pgy": r.get("person_cls") or "", "email": r.get("email") or "",
+                "total_used": 0.0, "reimbursements": [],
+            }
+        amount = float(r.get("amount") or 0)
+        status = (r.get("status") or "").lower()
+        fund_code = (r.get("fund_code") or "").upper()
+        if fund_code == "GME" and status in ("approved", "paid"):
+            residents[em]["total_used"] += amount
+        txn_date = r.get("txn_date")
+        residents[em]["reimbursements"].append({
+            "date": txn_date.isoformat() if hasattr(txn_date, "isoformat") else str(txn_date or ""),
+            "amount": amount,
+            "description": r.get("description") or r.get("category") or "",
+            "account": r.get("fund_name") or r.get("fund_code") or "",
+            "account_type": fund_code,
+            "status": status,
+            "ay": r.get("academic_year") or "",
+        })
+
+    return sorted(
+        residents.values(),
+        key=lambda x: ((x["lastName"] or "").lower(), (x["firstName"] or "").lower()),
+    )
+
 
 @router.get("/gme/summary")
 def gme_summary(ay: str = CURRENT_AY):
-    contacts = _load_crm()
     _log_crm_access(
         action="read", contact_id="", contact_name="GME Summary",
         endpoint="/api/crm/gme/summary", method="GET", agent="dashboard"
     )
-    residents = [c for c in contacts if c.get("category") == "Resident"]
+    residents = _gme_resident_payload(ay)
     total_pool = len(residents) * GME_ANNUAL_LIMIT
-    total_used = 0
-    residents_with_funds = 0
-    for r in residents:
-        used = _calc_total_used(r.get("reimbursements") or [], ay)
-        total_used += used
-        if used < GME_ANNUAL_LIMIT:
-            residents_with_funds += 1
+    total_used = sum(r["total_used"] for r in residents)
+    residents_with_funds = sum(1 for r in residents if r["total_used"] < GME_ANNUAL_LIMIT)
     return {
         "total_pool": total_pool,
         "total_used": total_used,
@@ -293,55 +396,87 @@ def gme_summary(ay: str = CURRENT_AY):
         "ay": ay,
     }
 
+
 @router.get("/gme/residents")
 def gme_residents(ay: str = CURRENT_AY):
-    contacts = _load_crm()
-    residents = [c for c in contacts if c.get("category") == "Resident"]
-    for r in residents:
-        cname = f"{r.get('firstName', '')} {r.get('lastName', '')}".strip()
-        _log_crm_access(
-            action="read", contact_id=r.get("id", ""), contact_name=cname,
-            endpoint="/api/crm/gme/residents", method="GET", agent="dashboard"
-        )
-    result = []
-    for r in residents:
-        reimbursements = r.get("reimbursements") or []
-        filtered_reims = _ay_filter(reimbursements, ay)
-        total_used = _calc_total_used(reimbursements, ay)
-        result.append({
-            "id": r.get("id"), "firstName": r.get("firstName", ""),
-            "lastName": r.get("lastName", ""), "pgy": r.get("pgy", ""),
-            "email": r.get("email", ""), "total_used": total_used,
-            "reimbursements": sorted(filtered_reims, key=lambda x: x.get("date", "")),
-        })
-    return {"residents": result, "ay": ay}
+    _log_crm_access(
+        action="read", contact_id="", contact_name="GME Residents",
+        endpoint="/api/crm/gme/residents", method="GET", agent="dashboard"
+    )
+    return {"residents": _gme_resident_payload(ay), "ay": ay}
+
 
 @router.post("/gme/reimbursement")
 def gme_add_reimbursement(req: ReimbursementRequest):
+    """Add a GME reimbursement directly into unified.reimb_submissions."""
+    conn = _gme_pg()
+    if conn is None:
+        return {"success": False, "error": "Reimbursement database unavailable"}
     contacts = _load_crm()
-    for c in contacts:
-        if c.get("id") == req.resident_id:
-            if c.get("category") != "Resident":
-                return {"success": False, "error": "Contact is not a resident"}
-            reimbursements = c.get("reimbursements") or []
-            total_used = sum(rem.get("amount", 0) for rem in reimbursements)
-            if total_used + req.amount > GME_ANNUAL_LIMIT:
-                return {"success": False, "error": f"Exceeds remaining funds (${GME_ANNUAL_LIMIT - total_used:.2f})"}
-            new_rem = {
-                "date": req.date, "amount": req.amount,
-                "category": req.category, "status": req.status,
-                "ay": _compute_ay(req.date),
-            }
-            reimbursements.append(new_rem)
-            c["reimbursements"] = reimbursements
-            _save_crm(contacts)
-            cname = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
-            _log_crm_access(
-                action="write", contact_id=req.resident_id, contact_name=cname,
-                endpoint="/api/crm/gme/reimbursement", method="POST", agent="dashboard"
-            )
-            return {"success": True, "remaining": GME_ANNUAL_LIMIT - total_used - req.amount}
-    raise HTTPException(status_code=404, detail="Resident not found")
+    contact = next((c for c in contacts if c.get("id") == req.resident_id), None)
+    email = ((contact or {}).get("email") or "").strip().lower()
+    if not email:
+        return {"success": False, "error": "Resident not found"}
+    try:
+        y, mo, da = (int(x) for x in req.date.split("-"))
+        iso_date = f"{y:04d}-{mo:02d}-{da:02d}"
+    except Exception:
+        return {"success": False, "error": "Invalid date (expected YYYY-MM-DD)"}
+    ay = f"{y}-{str(y + 1)[-2:]}" if mo >= 7 else f"{y - 1}-{str(y)[-2:]}"
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM unified.reimb_persons WHERE LOWER(email) = %s LIMIT 1", [email])
+        row = cur.fetchone()
+        if not row:
+            return {"success": False, "error": "Resident is not linked to the reimbursement system"}
+        person_id = row[0]
+        cur.execute("SELECT id FROM unified.reimb_fund_accounts WHERE UPPER(code) = 'GME' LIMIT 1")
+        row = cur.fetchone()
+        if not row:
+            return {"success": False, "error": "GME fund account not found"}
+        fund_id = row[0]
+
+        cur.execute(
+            """SELECT COALESCE(SUM(rs.amount), 0)
+               FROM unified.reimb_submissions rs
+               JOIN unified.reimb_fund_accounts fa ON fa.id = rs.fund_account_id
+               WHERE rs.person_id = %s AND UPPER(fa.code) = 'GME' AND rs.academic_year = %s
+                 AND COALESCE(rs.is_deleted, false) = false
+                 AND LOWER(rs.status) IN ('approved', 'paid')""",
+            [person_id, ay],
+        )
+        used = float(cur.fetchone()[0] or 0)
+        if used + req.amount > GME_ANNUAL_LIMIT:
+            return {"success": False, "error": f"Exceeds remaining funds (${GME_ANNUAL_LIMIT - used:.2f})"}
+
+        status = (req.status or "paid").lower()
+        db_status = {"paid": "paid", "pending": "pending", "denied": "rejected"}.get(status, "approved")
+        cur.execute(
+            """INSERT INTO unified.reimb_submissions
+                 (date, academic_year, description, amount, status, fund_account_id, person_id,
+                  category, created_at, updated_at, is_deleted, payment_confirmed_at)
+               VALUES (%s::date, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), false,
+                       CASE WHEN %s = 'paid' THEN NOW() ELSE NULL END)
+               RETURNING id""",
+            [iso_date, ay, req.category or "GME reimbursement", req.amount, db_status,
+             fund_id, person_id, req.category or "GME", db_status],
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {"success": False, "error": f"Database error: {e}"}
+
+    cname = f"{(contact or {}).get('firstName', '')} {(contact or {}).get('lastName', '')}".strip()
+    _log_crm_access(
+        action="write", contact_id=req.resident_id, contact_name=cname,
+        endpoint="/api/crm/gme/reimbursement", method="POST", agent="dashboard"
+    )
+    return {"success": True, "id": new_id, "remaining": GME_ANNUAL_LIMIT - used - req.amount}
 
 
 # ─── Email Groups (Grand Rounds / Resident Conference) ────────────
@@ -653,5 +788,69 @@ def execute_workflow(data: dict):
 # (canonical). Editing happens through PUT /api/conference/schedule/{id}
 # (server.py -> unified.grand_rounds). The old GR_DATA-in-JS editor was removed;
 # never restore embedded schedule arrays in dashboard pages.
+
+
+# ─── Launchpad — VPS service registry with live health probes ──
+
+LAUNCHPAD_FILE = Path(__file__).resolve().parent.parent / "data" / "launchpad.json"
+LAUNCHPAD_TTL_SECONDS = 60
+_launchpad_cache = {"ts": 0.0, "payload": None}
+
+
+def _probe_service(svc: dict) -> dict:
+    """Probe one launchpad registry entry. Returns {state, latency_ms, detail}."""
+    probe = svc.get("probe") or {}
+    ptype = probe.get("type")
+    t0 = _time.time()
+    state, detail = "unknown", ""
+    try:
+        if ptype == "tcp":
+            with _socket.create_connection((probe["host"], int(probe["port"])), timeout=1.5):
+                pass
+            state = "up"
+        elif ptype == "https":
+            req = _urlrequest.Request(probe["url"], headers={"User-Agent": "aos-launchpad/1.0"})
+            try:
+                with _urlrequest.urlopen(req, timeout=5) as resp:
+                    code = resp.status
+            except _urlrequest.HTTPError as he:
+                code = he.code  # 401/403/404 still means the server is alive
+            if code < 500:
+                state = "up"
+            else:
+                state, detail = "down", f"HTTP {code}"
+        else:
+            detail = "no probe configured"
+    except Exception as e:
+        state, detail = "down", f"{type(e).__name__}: {e}"[:140]
+    return {"state": state, "latency_ms": int((_time.time() - t0) * 1000), "detail": detail}
+
+
+@router.get("/launchpad")
+def get_launchpad(refresh: int = 0):
+    """Service tiles for the dashboard Launchpad + live health from data/launchpad.json."""
+    now = _time.time()
+    if not refresh and _launchpad_cache["payload"] is not None and (now - _launchpad_cache["ts"]) < LAUNCHPAD_TTL_SECONDS:
+        return _launchpad_cache["payload"]
+    if not LAUNCHPAD_FILE.exists():
+        raise HTTPException(status_code=500, detail="data/launchpad.json missing")
+    registry = json.loads(LAUNCHPAD_FILE.read_text())
+    services = registry.get("services", [])
+    with ThreadPoolExecutor(max_workers=min(20, max(4, len(services)))) as pool:
+        results = list(pool.map(_probe_service, services))
+    tiles = []
+    for svc, status in zip(services, results):
+        tile = {k: svc.get(k) for k in ("id", "label", "desc", "kind", "group", "host", "url")}
+        tile["status"] = status
+        tiles.append(tile)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ttl_seconds": LAUNCHPAD_TTL_SECONDS,
+        "groups": registry.get("groups", []),
+        "services": tiles,
+    }
+    _launchpad_cache["ts"] = now
+    _launchpad_cache["payload"] = payload
+    return payload
 
 

@@ -1,5 +1,5 @@
-async function renderEvalPortal() {
-  const content = document.getElementById('pageContent');
+async function renderEvalPortal(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   
   content.innerHTML = `
     <div class="page-header">

@@ -26,7 +26,35 @@ function trackRecentPage(hash) {
 
 const PAGE_BASE = '/dashboard/pages/';
 
-const DEFAULT_ROUTE = 'tasks';
+const DEFAULT_ROUTE = 'dashboard';
+
+// Legacy merged routes (PR5+PR6) → canonical target. Keeps old bookmarks alive:
+// `#oncall` opens the Schedule Suite on its Weekly Call tab, `#cal-new` and
+// `#calendar2` open the canonical Calendar; PR6 adds the Compliance Suite,
+// Grand Rounds Hub and CRM suite redirects.
+const LEGACY_REDIRECTS = {
+  'oncall':             'schedule-suite?tab=call',
+  'staff-schedule':     'schedule-suite?tab=staff',
+  'call-schedule-pdf':  'schedule-suite?tab=pdf',
+  'cal-new':            'calendar',
+  'calendar2':          'calendar',
+  // PR6 — Compliance Suite
+  'compliance':             'compliance-suite?tab=overview',
+  'eval-portal':            'compliance-suite?tab=eval-portal',
+  'eval-dashboard':         'compliance-suite?tab=eval-dashboard',
+  'gme-tracker':            'compliance-suite?tab=gme-tracker',
+  'gme-detail':             'compliance-suite?tab=gme-detail',
+  // PR6 — Grand Rounds Hub
+  'grand-rounds':           'grand-rounds-hub?tab=events',
+  'grand-rounds-attendance': 'grand-rounds-hub?tab=attendance',
+  'conference-email':       'grand-rounds-hub?tab=invites',
+  'chief-meetings':         'grand-rounds-hub?tab=chief-meetings',
+  // PR6 — CRM suite
+  'people':                 'crm-suite?tab=people',
+  'contacts':               'crm-suite?tab=contacts',
+  'resident-roster':        'crm-suite?tab=residents',
+  'crm-audit':              'crm-suite?tab=audit',
+};
 
 async function loadPage(name) {
   // Remove any previously loaded page script so it always reloads fresh
@@ -90,11 +118,11 @@ async function navigateLoadPage(hash, info) {
       renderSidebar();
       if (bar) { bar.style.width = '100%'; setTimeout(() => { bar.style.width = '0'; bar.classList.remove('active'); }, 400); }
     } else {
-      content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" doesn't have a render function</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
+      content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⌕</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" doesn't have a render function</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
       if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
     }
   } catch (err) {
-    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">${escapeHtml(err.message)}</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
+    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">${escapeHtml(err.message)}</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
     if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
   }
 }
@@ -117,6 +145,8 @@ async function navigateLoadPage(hash, info) {
  * - Active-state handling: `.active` is cleared from every `[data-page]`
  *   item and set on the matched one. The external VS Code link has no
  *   `data-page` attribute, so it can never become active.
+ * - Legacy-route handling (PR5): hashes in LEGACY_REDIRECTS rewrite to their
+ *   canonical target (suite + tab param) before route resolution.
  */
 async function navigate(page) {
   // Redirect-to-hash short-circuit. When the caller passes a page that
@@ -124,12 +154,26 @@ async function navigate(page) {
   // hashchange listener will re-invoke navigate() with no argument to
   // do the actual render. This prevents a double render and keeps URL
   // back/forward in sync.
-  if (page && `#${page}` !== window.location.hash) {
+  // Legacy merged routes (PR5): rewrite to the canonical target and bail —
+  // the hashchange listener re-invokes navigate() for the actual render.
+  const requested = page || window.location.hash.slice(1) || DEFAULT_ROUTE;
+  const hashBase = requested.split('?')[0];
+  if (LEGACY_REDIRECTS[hashBase]) {
+    const target = LEGACY_REDIRECTS[hashBase];
+    if (window.location.hash.slice(1) !== target) {
+      window.location.hash = target;
+      return;
+    }
+  }
+
+  // Redirect-to-hash short-circuit (legacy keys excluded — handled above).
+  // The hash may carry ?tab=… params; compare only the route part.
+  if (page && !LEGACY_REDIRECTS[page] && window.location.hash.slice(1).split('?')[0] !== page) {
     window.location.hash = page;
     return;
   }
 
-  const hash = page || window.location.hash.slice(1) || DEFAULT_ROUTE;
+  const hash = (page || window.location.hash.slice(1) || DEFAULT_ROUTE).split('?')[0];
   if (!hash) { window.location.hash = DEFAULT_ROUTE; return; }
 
   const route = getNavRoute(hash);
@@ -151,9 +195,9 @@ async function navigate(page) {
 
   // Custom pages not in NAV_CONFIG (social-media-hub, etc.)
   const CUSTOM_PAGES = {
-    'tasks': { title: '📋 Tasks', breadcrumb: 'Your task list' },
-    'social-media-hub': { title: '📱 Social Media Hub', breadcrumb: '42+ integrated social skills' },
-    'distribution': { title: '👥 Distribution Lists', breadcrumb: 'Recipient groups — faculty, residents, supervisors' },
+    'tasks': { title: 'Tasks', breadcrumb: 'Your task list' },
+    'social-media-hub': { title: 'Social Media Hub', breadcrumb: '42+ integrated social skills' },
+    'distribution': { title: 'Distribution Lists', breadcrumb: 'Recipient groups — faculty, residents, supervisors' },
   };
   if (!route && CUSTOM_PAGES[hash]) {
     return navigateLoadPage(hash, CUSTOM_PAGES[hash]);
@@ -174,14 +218,14 @@ async function navigate(page) {
 
   // Unknown route — render "Page not found"
   if (!route) {
-    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" isn't a known route.</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
+    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⌕</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" isn't a known route.</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
     if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
     return;
   }
 
   // Disabled route — render "Coming soon" empty state
   if (route.enabled === false) {
-    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🚧</div><div class="empty-state-title">Coming soon</div><div class="empty-state-desc">${escapeHtml(route.title)} is not yet available.</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
+    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">△</div><div class="empty-state-title">Coming soon</div><div class="empty-state-desc">${escapeHtml(route.title)} is not yet available.</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
     if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
     return;
   }
@@ -202,11 +246,11 @@ async function navigate(page) {
       renderSidebar();  // update "Recent" section
       if (bar) { bar.style.width = '100%'; setTimeout(() => { bar.style.width = '0'; bar.classList.remove('active'); }, 400); }
     } else {
-      content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" doesn't have a render function</div></div>`;
+      content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⌕</div><div class="empty-state-title">Page not found</div><div class="empty-state-desc">The page "${escapeHtml(hash)}" doesn't have a render function</div></div>`;
       if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
     }
   } catch (err) {
-    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">${escapeHtml(err.message)}</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
+    content.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">${escapeHtml(err.message)}</div><button class="btn btn-primary mt-3" onclick="navigate('dashboard')">Go to Dashboard</button></div>`;
     if (bar) { bar.style.width = '0'; bar.classList.remove('active'); }
   }
 }
@@ -353,9 +397,9 @@ window.openEventEditor = function(event) {
 
   const footer =
     `<button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
-     <button class="btn" style="background:#f59e0b;color:#0f172a;border:none;font-weight:700" onclick="sendEdited()">📧 Open in Outlook</button>`;
+     <button class="btn" style="background:#f59e0b;color:#0f172a;border:none;font-weight:700" onclick="sendEdited()">Open in Outlook</button>`;
 
-  showModal('✏️ Edit Invite & Send', bodyHtml, footer);
+  showModal('Edit Invite & Send', bodyHtml, footer);
 };
 
 /**

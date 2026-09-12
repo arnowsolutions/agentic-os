@@ -2,26 +2,26 @@ async function renderQuickActions() {
   const content = document.getElementById('pageContent');
   
   const actions = [
-    { icon: '📋', title: 'Generate Call Schedule PDF', desc: 'Create the Q3-Q4 call schedule PDF and email it', cmd: 'schedule', color: '#6c5ce7' },
-    { icon: '💰', title: 'Send GME Report', desc: 'Run GME reimbursement report and email to coordinators', cmd: 'gme', color: '#0984e3' },
-    { icon: '📊', title: 'Grand Rounds Report', desc: 'Generate attendance compliance report', cmd: 'grand-rounds', color: '#00b894' },
-    { icon: '📝', title: 'CMS Eval Portal', desc: 'Check evaluation form completion status', cmd: 'eval', color: '#fdcb6e' },
-    { icon: '🗓️', title: 'Sync Schedule to Calendar', desc: 'Push call schedule to Google Calendar', cmd: 'calendar-sync', color: '#e17055' },
-    { icon: '📧', title: 'Send Test Email', desc: 'Send an email report to test@email.com', cmd: 'test-email', color: '#fd79a8' },
-    { icon: '🔑', title: 'Vapi PIN Manager', desc: 'Reset voice assistant PINs', cmd: 'pin-manager', color: '#a29bfe' },
-    { icon: '🌙', title: 'Deploy Vapi Assistant', desc: 'Re-deploy the Vapi voice assistant', cmd: 'deploy-vapi', color: '#636e72' },
-    { icon: '💻', title: 'Open VS Coder', desc: 'Launch the code editor', cmd: 'vs-coder', color: '#00cec9' },
-    { icon: '⏱', title: 'Restart Dashboard Server', desc: 'Restart the agentic-os server', cmd: 'restart-server', color: '#d63031' },
+    { icon: '▸', title: 'Generate Call Schedule PDF', desc: 'Create the Q3-Q4 call schedule PDF and email it', cmd: 'schedule', color: 'var(--accent)' },
+    { icon: '▸', title: 'Send GME Report', desc: 'Run GME reimbursement report and email to coordinators', cmd: 'gme', color: 'var(--accent)' },
+    { icon: '▸', title: 'Grand Rounds Report', desc: 'Generate attendance compliance report', cmd: 'grand-rounds', color: 'var(--accent)' },
+    { icon: '▸', title: 'CMS Eval Portal', desc: 'Check evaluation form completion status', cmd: 'eval', color: 'var(--accent)' },
+    { icon: '▸', title: 'Sync Schedule to Calendar', desc: 'Push call schedule to Google Calendar', cmd: 'calendar-sync', color: 'var(--accent)' },
+    { icon: '▸', title: 'Send Test Email', desc: 'Send an email report to test@email.com', cmd: 'test-email', color: 'var(--accent)' },
+    { icon: '▸', title: 'Vapi PIN Manager', desc: 'Reset voice assistant PINs', cmd: 'pin-manager', color: 'var(--accent)' },
+    { icon: '▸', title: 'Deploy Vapi Assistant', desc: 'Re-deploy the Vapi voice assistant', cmd: 'deploy-vapi', color: 'var(--accent)' },
+    { icon: '▸', title: 'Open VS Coder', desc: 'Launch the code editor', cmd: 'vs-coder', color: 'var(--accent)' },
+    { icon: '▸', title: 'Restart Dashboard Server', desc: 'Restart the agentic-os server', cmd: 'restart-server', color: 'var(--accent)' },
   ];
 
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">⚡ Quick Actions</div>
+        <div class="page-title">Quick Actions</div>
         <div class="page-subtitle">One-click operations for your most common workflows</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderQuickActions()">🔄 Refresh Status</button>
+        <button class="btn btn-ghost" onclick="renderQuickActions()">↻ Refresh Status</button>
       </div>
     </div>
     <div class="qa-grid" id="qaGrid"></div>
@@ -65,16 +65,16 @@ async function renderQuickActions() {
 
 async function runQuickAction(idx) {
   const actions = [
-    { icon: '📋', title: 'Generate Call Schedule PDF', cmd: 'schedule' },
-    { icon: '💰', title: 'Send GME Report', cmd: 'gme' },
-    { icon: '📊', title: 'Grand Rounds Report', cmd: 'grand-rounds' },
-    { icon: '📝', title: 'CMS Eval Portal', cmd: 'eval' },
-    { icon: '🗓️', title: 'Sync Schedule to Calendar', cmd: 'calendar-sync' },
-    { icon: '📧', title: 'Send Test Email', cmd: 'test-email' },
-    { icon: '🔑', title: 'Vapi PIN Manager', cmd: 'pin-manager' },
-    { icon: '🌙', title: 'Deploy Vapi Assistant', cmd: 'deploy-vapi' },
-    { icon: '💻', title: 'Open VS Coder', cmd: 'vs-coder' },
-    { icon: '⏱', title: 'Restart Dashboard Server', cmd: 'restart-server' },
+    { icon: '▸', title: 'Generate Call Schedule PDF', cmd: 'schedule' },
+    { icon: '▸', title: 'Send GME Report', cmd: 'gme' },
+    { icon: '▸', title: 'Grand Rounds Report', cmd: 'grand-rounds' },
+    { icon: '▸', title: 'CMS Eval Portal', cmd: 'eval' },
+    { icon: '▸', title: 'Sync Schedule to Calendar', cmd: 'calendar-sync' },
+    { icon: '▸', title: 'Send Test Email', cmd: 'test-email' },
+    { icon: '▸', title: 'Vapi PIN Manager', cmd: 'pin-manager' },
+    { icon: '▸', title: 'Deploy Vapi Assistant', cmd: 'deploy-vapi' },
+    { icon: '▸', title: 'Open VS Coder', cmd: 'vs-coder' },
+    { icon: '▸', title: 'Restart Dashboard Server', cmd: 'restart-server' },
   ];
 
   const action = actions[idx];
@@ -82,7 +82,7 @@ async function runQuickAction(idx) {
   const statusEl = document.getElementById(`qaStatus${idx}`);
   
   card.classList.add('running');
-  statusEl.textContent = '⏳ Running...';
+  statusEl.textContent = 'Running...';
 
   // Non-nav actions call the API
   if (action.cmd === 'vs-coder') {
@@ -104,11 +104,11 @@ async function runQuickAction(idx) {
     
     if (data.success) {
       card.classList.add('done');
-      statusEl.textContent = '✅ Done';
+      statusEl.textContent = '✓ Done';
       showToast(`${action.title} completed`, 'success');
     } else {
       card.classList.add('fail');
-      statusEl.textContent = `❌ Failed: ${data.error || 'Unknown error'}`;
+      statusEl.textContent = `✕ Failed: ${data.error || 'Unknown error'}`;
     }
 
     const resultDiv = document.getElementById('qaResult');
@@ -118,7 +118,7 @@ async function runQuickAction(idx) {
     }
   } catch (err) {
     card.classList.add('fail');
-    statusEl.textContent = '❌ Error: ' + err.message;
+    statusEl.textContent = '✕ Error: ' + err.message;
   }
 
   setTimeout(() => {

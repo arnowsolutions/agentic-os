@@ -24,7 +24,7 @@ async function ensureGRData() {
     return true;
   } catch (err) {
     console.error('GR schedule load failed:', err);
-    const c = document.getElementById('pageContent');
+    const c = document.getElementById('suitePane') || document.getElementById('pageContent');
     if (c) c.innerHTML = '<div class="card" style="padding:24px;color:var(--red)">⚠️ Could not load schedule from the database: ' + escapeHtml(String(err && err.message || err)) + '</div>';
     return false;
   }
@@ -36,8 +36,8 @@ let grCmeCodes = {};  // { "YYYY-MM-DD": { hour1: "code", hour2: "code" } }
 // ──────────────────────────────────────────────────────────────
 // Main render function
 // ──────────────────────────────────────────────────────────────
-async function renderGrandRounds() {
-  const content = document.getElementById('pageContent');
+async function renderGrandRounds(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   
   // Build the parsed meeting list from embedded data
   const meetings = await parseGrandRoundsData();
@@ -330,7 +330,7 @@ tbody.innerHTML = rows.map(r => `
 
 async function viewMonday() {
   await ensureGRData();
-  const content = document.getElementById('pageContent');
+  const content = document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
