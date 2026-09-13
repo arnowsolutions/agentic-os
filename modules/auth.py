@@ -391,10 +391,17 @@ async def me(request: Request):
     touch_session(token)
     crm_id = session["crm_id"]
 
-    # Load CRM contact
+    # Load CRM contact (best-effort enrichment — the session is authoritative).
+    # A transient miss (e.g. the CRM file being rewritten mid-read) must not
+    # look like an auth failure: retry once with a cache refresh, then degrade.
     user = identity_module.get_user_by_id(crm_id)
     if not user:
-        return JSONResponse({"detail": "User not found"}, status_code=400)
+        try:
+            identity_module._invalidate_cache(identity_module.CRM_PATH)
+        except Exception:
+            pass
+        user = identity_module.get_user_by_id(crm_id)
+    user = user or {}
 
     # Load identity map entry
     imap = identity_module.get_identity_map_entry(crm_id) or {}

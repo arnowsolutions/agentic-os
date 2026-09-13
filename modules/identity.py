@@ -28,7 +28,7 @@ def _load_json_cached(path: Path):
     now = time.time()
     with _cache_lock:
         entry = _cache.get(path)
-        if entry:
+        if entry and entry.get("data") is not None:
             if now - entry["ts"] < settings.CACHE_TTL_SECONDS:
                 return entry["data"]
             try:
@@ -42,6 +42,14 @@ def _load_json_cached(path: Path):
             data = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             data = None
+        if data is None:
+            # Don't poison the cache on a failed/racing read (e.g. the file is
+            # being rewritten by the CRM sync). Keep serving the last good copy
+            # when we have one; otherwise retry fresh on the next call.
+            if entry and entry.get("data") is not None:
+                entry["ts"] = now
+                return entry["data"]
+            return None
         _cache[path] = {"data": data, "mtime": path.stat().st_mtime if path.exists() else 0, "ts": now}
         return data
 
