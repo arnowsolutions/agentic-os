@@ -6,7 +6,8 @@ so Shareef can double-click each one in Outlook, review, and hit Send.
 This is the SAME flow as Chief Meetings / Grand Rounds (.eml generation) —
 NOT deeplinks, which hit Outlook's URL length limit (AADSTS90015).
 
-Reads interview rows from the subi_exit_interviews table (urology_qgenda DB).
+Reads interview rows from the CANONICAL store: unified.subi_exit_interviews
+(postgres DB). Do not point this at urology_qgenda — that database was renamed.
 Each email: To = <student>, <Dr. Schoenberg>; subject "Invitation: Sub-I Exit
 Interview: <Name>"; rich HTML body matching the Grand Rounds look; .ics with
 RSVP so the event lands on the calendar.
@@ -89,9 +90,9 @@ def _get_db_conn():
             capture_output=True, text=True, timeout=5)
         if r.returncode == 0:
             pw = r.stdout.strip().split('=', 1)[1].strip()
-    for host in ("127.0.0.1", "172.16.3.1"):
+    for host in ("172.16.3.1", "127.0.0.1"):
         try:
-            kwargs = dict(host=host, port=5432, dbname="urology_qgenda", user="postgres", connect_timeout=3)
+            kwargs = dict(host=host, port=5432, dbname="postgres", user="postgres", connect_timeout=3)
             if pw:
                 kwargs["password"] = pw
             return psycopg2.connect(**kwargs)
@@ -110,7 +111,7 @@ def get_interviews(target_date=None, target_id=None):
         cur = conn.cursor()
         sql = '''SELECT id, interviewee, recipient_email, interview_date::text, interview_time,
                         duration_minutes, notes
-                 FROM subi_exit_interviews WHERE 1=1'''
+                 FROM unified.subi_exit_interviews WHERE 1=1'''
         params = []
         if target_id:
             sql += " AND id = %s"

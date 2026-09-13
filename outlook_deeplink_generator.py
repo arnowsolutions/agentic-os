@@ -61,27 +61,31 @@ def parse_gr_data():
 
 
 def _get_db_conn():
-    """psycopg2 connection to urology_qgenda (legacy sub-I endpoints only)."""
+    """psycopg2 connection to the CANONICAL store (postgres DB, unified schema).
+
+    Was pointing at urology_qgenda, which no longer exists (renamed
+    urology_roster, 2026-09) — a connection to a missing dbname returns None and
+    callers silently render empty data. Keep this on the live store.
+    """
     import psycopg2, subprocess
     pw = os.environ.get("POSTGRES_PASSWORD", "")
     if not pw:
         try:
-            r = subprocess.run(['grep', 'POSTGRES_PASSWORD', '/workspace/projects/unified/app/.env'],
+            r = subprocess.run(['grep', 'POSTGRES_PASSWORD', '/workspace/agentic-os/.env'],
                 capture_output=True, text=True, timeout=5)
             if r.returncode == 0:
                 pw = r.stdout.strip().split('=', 1)[1].strip()
         except Exception:
             return None
-    if not pw:
-        # Try without password — local PostgreSQL often trusts local connections
-        pass
-    try:
-        kwargs = dict(host="127.0.0.1", port=5432, dbname="urology_qgenda", user="postgres", connect_timeout=3)
-        if pw:
-            kwargs["password"] = pw
-        return psycopg2.connect(**kwargs)
-    except Exception:
-        return None
+    for host in ("172.16.3.1", "127.0.0.1"):
+        try:
+            kwargs = dict(host=host, port=5432, dbname="postgres", user="postgres", connect_timeout=3)
+            if pw:
+                kwargs["password"] = pw
+            return psycopg2.connect(**kwargs)
+        except Exception:
+            continue
+    return None
 
 
 def get_schedule_from_db():

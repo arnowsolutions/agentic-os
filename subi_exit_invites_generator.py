@@ -29,6 +29,29 @@ def esc(s):
     """HTML-escape for embedding values in data attributes."""
     return str(s).replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
 
+
+def find_cv(interviewee, email):
+    """Locate a student's CV in data/subi-cvs/ from name/email tokens.
+
+    Directory-driven on purpose (2026-09-13): the previous version keyed off
+    hardcoded student IDs, so a CV added for anyone else never surfaced.
+    """
+    import re as _re
+    if not CV_DIR.exists():
+        return None
+    tokens = set()
+    for tok in _re.split(r"[._\-0-9]+", (email or "").split("@")[0].lower()):
+        if len(tok) >= 4:
+            tokens.add(tok)
+    for part in (interviewee or "").lower().split():
+        if len(part) >= 4:
+            tokens.add(part)
+    for f in sorted(CV_DIR.iterdir()):
+        flat = _re.sub(r"[^a-z0-9]", "", f.name.lower())
+        if f.is_file() and any(_re.sub(r"[^a-z0-9]", "", t) in flat for t in tokens):
+            return f
+    return None
+
 # ── Fixed Sub-I Exit Interview Zoom template (does NOT change per row) ──────
 ZOOM_JOIN_URL = "https://us02web.zoom.us/j/5172907646?pwd=SVRqbElnTHRUNGxLL3B3bVZFVFYzUT09&omn=81977282270"
 ZOOM_MEETING_ID = "517 290 7646"
@@ -39,17 +62,33 @@ DEFAULT_DURATION_MINUTES = 10
 
 # ── DB connection (identical to server.py _get_db_conn) ─────────────────────
 def _get_db_conn():
+    """psycopg2 connection to the CANONICAL store: postgres DB, unified schema.
+
+    2026-09-13: urology_qgenda no longer exists (renamed urology_roster) and the
+    Sub-I interviews now live in unified.subi_exit_interviews — the same store
+    server.py's API reads. A retired dbname connects as None and yields an empty
+    list, which silently blanked the mass-email page; never point this back at a
+    DB name that is not in pg_database.
+    """
     import psycopg2
     pw = os.environ.get("POSTGRES_PASSWORD", "")
     if not pw:
-        import subprocess as _sp
-        r = _sp.run(['grep', 'POSTGRES_PASSWORD', '/workspace/projects/unified/app/.env'],
-            capture_output=True, text=True, timeout=5)
-        if r.returncode == 0:
-            pw = r.stdout.strip().split('=', 1)[1].strip()
-    for host in ("127.0.0.1", "172.16.3.1"):
+        for env_path in ("/workspace/agentic-os/.env",
+                         "/workspace/projects/unified/app/.env"):
+            try:
+                if os.path.exists(env_path):
+                    with open(env_path) as ef:
+                        for line in ef:
+                            if line.strip().startswith("POSTGRES_PASSWORD="):
+                                pw = line.strip().split("=", 1)[1].strip()
+                                break
+            except Exception:
+                continue
+            if pw:
+                break
+    for host in ("172.16.3.1", "127.0.0.1"):
         try:
-            kwargs = dict(host=host, port=5432, dbname="urology_qgenda", user="postgres", connect_timeout=3)
+            kwargs = dict(host=host, port=5432, dbname="postgres", user="postgres", connect_timeout=3)
             if pw:
                 kwargs["password"] = pw
             return psycopg2.connect(**kwargs)
@@ -61,13 +100,15 @@ def _get_db_conn():
 def get_interviews():
     conn = _get_db_conn()
     if not conn:
+        print("WARNING: no DB connection — cannot read unified.subi_exit_interviews",
+              file=sys.stderr)
         return []
     try:
         cur = conn.cursor()
         cur.execute('''
             SELECT id, interviewee, recipient_email, interview_date::text, interview_time,
                    duration_minutes, notes, created_at::text, sent_status
-            FROM subi_exit_interviews ORDER BY interview_date, interview_time
+            FROM unified.subi_exit_interviews ORDER BY interview_date, interview_time
         ''')
         rows = []
         for r in cur.fetchall():
@@ -81,7 +122,8 @@ def get_interviews():
         cur.close()
         conn.close()
         return rows
-    except Exception:
+    except Exception as e:
+        print(f"WARNING: subi exit interview read failed: {e}", file=sys.stderr)
         return []
 
 
@@ -355,9 +397,8 @@ def generate_html_page(test_mode=True):
             pass
         has_date = bool(r["date"])
         outlook_btn = f'<a href="{r["url"]}" target="_blank" data-event-id="{r["event_id"]}" data-normal-url="{r["url"]}" data-update-url="{r["update_url"]}" class="invite-btn" style="display:inline-block;background:#1a3a5c;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600">Open in Outlook</a>'
-        # Check if CV exists for this student
-        has_cv = os.path.exists(CV_DIR / f"Yang_Matthew_CV.docx") if r["id"] in (3,) else \
-                 os.path.exists(CV_DIR / "OLIVER_MENKEN_CV_07_26.pdf") if r["id"] in (4,) else False
+        # CV presence is resolved from data/subi-cvs/ (no hardcoded student IDs)
+        has_cv = bool(find_cv(r.get("interviewee", ""), r.get("recipient_email", "")))
         eml_label = "⬇ .eml (CV)" if has_cv else "⬇ .eml"
         eml_link = f'<a href="/api/subi-exit/eml?id={r["id"]}" style="display:inline-block;color:#71717a;font-size:11px;margin-left:8px;text-decoration:none;border:1px solid #d4d4d8;padding:3px 10px;border-radius:4px" title="Download .eml file — double-click in Outlook to open with CV attached">{eml_label}</a>' if has_date else ''
         action_cell = f'{outlook_btn}{eml_link}' if has_date else '<span style="color:#71717a;font-size:12px">TBD — date not set</span>'
