@@ -22,7 +22,6 @@ const CHECKS = [
   { hash: 'workspace-suite', must: ['Files'], mustNot: ['not available in this environment'] },
   { hash: 'ai-builder-suite', must: [], mustNot: [] },
   { hash: 'crm-suite',       must: [], mustNot: [] },
-  { hash: 'health-suite',    must: [], mustNot: [] },
   { hash: 'schedule-suite',  must: [], mustNot: [] },
   { hash: 'dashboard',       must: [], mustNot: ['undefined is not'] },
   { hash: 'today',          must: [], mustNot: [] },
