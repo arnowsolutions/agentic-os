@@ -61,3 +61,7 @@ google_workspace.py
 
 # AOS audit sweep outputs (regenerated each run)
 scripts/aos-audit/*-report.json
+
+# generated runtime output
+data/notebooklm_cache/
+data/letters/
