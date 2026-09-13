@@ -13,6 +13,11 @@ from pathlib import Path
 BASE_DIR = Path('/workspace/agentic-os')
 DATA_FILE = BASE_DIR / 'data' / 'calendar_events.json'
 
+# Archive engine (shared with server.py so both apply one rule)
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+from modules.calendar_archive import archive_past_events  # noqa: E402
+
 # Google API imports
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request as AuthRequest
@@ -85,6 +90,7 @@ def main():
             pass
     
     manual_events = existing.get("manual_events", [])
+    archived_events = existing.get("archived_events", [])
     all_synced = []
     errors = []
     
@@ -102,10 +108,12 @@ def main():
             errors.append(f"{label}: {e}")
             print(f"Sync failed for {label}: {e}")
     
-    # Merge: manual events + all synced events
+    # Merge: manual events + all synced events. The archive section is carried
+    # forward untouched so a re-sync never resurrects or drops archived events.
     merged = {
         "events": manual_events + all_synced,
         "manual_events": manual_events,
+        "archived_events": archived_events,
         "last_synced": datetime.now().isoformat(),
         "sync_count": len(all_synced),
     }
@@ -117,6 +125,15 @@ def main():
     
     DATA_FILE.write_text(json.dumps(merged, indent=2))
     print(f"Total events in data file: {len(merged['events'])}")
+
+    # Move anything that has finished into the archive so the live list stays forward-looking
+    try:
+        stats = archive_past_events(path=DATA_FILE)
+        if stats["moved"]:
+            print(f"Archived {stats['moved']} finished event(s) — archive now holds {stats['archived_total']}")
+    except Exception as e:
+        print(f"Archive step failed (events left in place): {e}")
+
     print("Sync complete!")
 
 def add_manual_event(summary, start_date, end_date, description=""):

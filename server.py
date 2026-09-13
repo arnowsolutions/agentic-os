@@ -45,6 +45,7 @@ from modules import brain_routes
 from modules import skills_routes
 from modules import scheduler_routes
 from modules import ssot
+from modules import calendar_archive
 from modules import chat_routes
 from modules import generalist_routes
 from modules.agent_executor import _resolve_hermes_bin, _resolve_opencode_bin
@@ -2443,8 +2444,46 @@ def refresh_notebooks_cache():
 
 @app.get("/api/tools/cron")
 def tools_cron():
-    out, _, rc = _run_cmd("hermes cron list", timeout=10)
-    return {"output": out, "status": "ok" if rc == 0 else "error"}
+    """List Hermes cron jobs from the jobs.json stores.
+
+    The hermes CLI is not installed in the AOS container, so read the cron
+    job stores directly from the mounted hermes-home volume instead.
+    """
+    import glob as _glob
+    entries = []
+    bases = [("/home/hermeswebui/.hermes", "default")]
+    for p in sorted(_glob.glob("/home/hermeswebui/.hermes/profiles/*")):
+        if os.path.isdir(p):
+            bases.append((p, os.path.basename(p)))
+    for base, profile in bases:
+        jf = Path(base) / "cron" / "jobs.json"
+        if not jf.exists():
+            continue
+        try:
+            data = json.loads(jf.read_text())
+            jobs = data if isinstance(data, list) else data.get("jobs", [])
+            for j in jobs:
+                sched = j.get("schedule")
+                if isinstance(sched, dict):
+                    sched = sched.get("display") or sched.get("expr") or ""
+                entries.append({
+                    "profile": profile,
+                    "name": j.get("name"),
+                    "schedule": sched,
+                    "enabled": j.get("enabled", True),
+                    "last_run_at": j.get("last_run_at"),
+                    "last_status": j.get("last_status"),
+                })
+        except Exception as e:
+            entries.append({"profile": profile, "name": f"(error reading {jf})", "error": str(e)[:120]})
+    lines = []
+    for e in entries:
+        if "error" in e:
+            lines.append(f"{e['profile']:<12} {e['name']} — {e['error']}")
+        else:
+            flag = "" if e["enabled"] else " [paused]"
+            lines.append(f"{e['profile']:<12} {str(e['name'])[:46]:<48} {str(e['schedule'])[:22]:<22} last={str(e['last_run_at'])[:19]} {e['last_status'] or ''}{flag}")
+    return {"output": "\n".join(lines), "status": "ok", "jobs": entries, "count": len(entries)}
 
 @app.get("/api/tools/telegram")
 def tools_telegram():
@@ -3939,23 +3978,40 @@ def eval_dashboard():
 CALENDAR_DATA_FILE = BASE_DIR / "data" / "calendar_events.json"
 
 @app.get("/api/calendar/events")
-def calendar_events(days: int = Query(90, description="Number of days to look ahead"), include_todos: bool = Query(False)):
-    """Return calendar events pulled from Google Calendar. Optionally include kanban todos."""
+def calendar_events(days: int = Query(90, description="Number of days to look ahead"),
+                    include_todos: bool = Query(False),
+                    include_past: bool = Query(False, description="Also return events that have already finished")):
+    """Return upcoming calendar events pulled from Google Calendar. Optionally include kanban todos.
+
+    Events that have finished are archived automatically (modules/calendar_archive.py) so this
+    list stays forward-looking as dates pass; the archived copies remain readable via
+    /api/calendar/archived. Pass include_past=true to force them back into this response.
+    """
     from datetime import datetime, timezone, timedelta
-    
+
     if not CALENDAR_DATA_FILE.exists():
         result = {"events": [], "source": "no_data"}
         if include_todos:
             result["todos"] = _get_todos()
         return result
-    
+
+    # Self-healing: persist anything that finished since the last read. No-op unless
+    # an event actually crossed the horizon, so this is not a write on every request.
+    try:
+        archive_stats = calendar_archive.archive_past_events()
+    except Exception as e:
+        logger.warning(f"calendar archive failed: {e}")
+        archive_stats = {"moved": 0, "archived_total": None}
+
     data = json.loads(CALENDAR_DATA_FILE.read_text())
     now = datetime.now(TZ)
     cutoff = now + timedelta(days=days)
-    
+
     events = data.get("events", [])
     filtered = []
     for ev in events:
+        if not include_past and calendar_archive.is_past(ev):
+            continue
         start_str = ev.get("start", {}).get("date") or ev.get("start", {}).get("dateTime", "")
         if start_str:
             try:
@@ -3968,12 +4024,77 @@ def calendar_events(days: int = Query(90, description="Number of days to look ah
                 filtered.append(ev)
         else:
             filtered.append(ev)
-    
-    result = {"events": sorted(filtered, key=lambda e: e.get("start", {}).get("date") or e.get("start", {}).get("dateTime", "")), "count": len(filtered), "total": len(events)}
+
+    archived = data.get("archived_events", [])
+    result = {"events": sorted(filtered, key=lambda e: e.get("start", {}).get("date") or e.get("start", {}).get("dateTime", "")),
+              "count": len(filtered), "total": len(events),
+              "archived_count": len(archived),
+              "last_archived": data.get("last_archived"),
+              "archived_this_read": archive_stats.get("newly_archived", 0)}
     if include_todos:
         result["todos"] = _get_todos()
     result.update(ssot.calendar_stamp_only())
     return result
+
+
+# ─── Calendar archive (past events kept for reference) ───────
+
+@app.get("/api/calendar/archived")
+def calendar_archived(month: str = Query(None, description="Filter to a YYYY-MM month"),
+                      q: str = Query(None, description="Search summary/description"),
+                      limit: int = Query(500, ge=1, le=2000),
+                      offset: int = Query(0, ge=0)):
+    """List archived (finished) calendar events, newest first, with per-month counts."""
+    res = calendar_archive.archived_events(month=month, q=q, limit=limit, offset=offset)
+    for ev in res["events"]:
+        ev["archive_key"] = calendar_archive.event_key(ev)
+    res["source"] = "data/calendar_events.json (archived_events)"
+    return res
+
+
+@app.post("/api/calendar/archive/run")
+def calendar_archive_run(dry_run: bool = Query(False)):
+    """Archive every finished event now. dry_run=true reports without writing."""
+    stats = calendar_archive.archive_past_events(dry_run=dry_run)
+    return {
+        "ok": True,
+        "dry_run": dry_run,
+        "removed": stats["removed"],
+        "newly_archived": stats["newly_archived"],
+        "archived_total": stats["archived_total"],
+        "moved_events": [{"summary": e.get("summary"),
+                          "start": e.get("start", {}).get("date") or e.get("start", {}).get("dateTime"),
+                          "end": e.get("end", {}).get("date") or e.get("end", {}).get("dateTime")}
+                         for e in stats["moved_events"]],
+    }
+
+
+@app.post("/api/calendar/archive/restore")
+def calendar_archive_restore(data: dict):
+    """Move archived events back into the live list and keep them there (keep_active)."""
+    keys = data.get("keys") or ([data["key"]] if data.get("key") else [])
+    if not keys:
+        raise HTTPException(400, "Provide 'keys': [archive keys] to restore")
+    res = calendar_archive.restore_events(keys)
+    return {"ok": True, **res}
+
+
+@app.get("/api/calendar/archive/status")
+def calendar_archive_status():
+    """Archive health: how many events are archived and when it last ran."""
+    try:
+        data = json.loads(CALENDAR_DATA_FILE.read_text())
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    archived = data.get("archived_events", [])
+    return {
+        "ok": True,
+        "archived_count": len(archived),
+        "active_count": len(data.get("events", [])),
+        "last_archived": data.get("last_archived"),
+        "last_archive_moved": data.get("last_archive_moved"),
+        "pending": sum(1 for e in data.get("events", []) if calendar_archive.is_past(e)),
+    }
 
 def _get_todos():
     """Helper: return tasks from /workspace/task-list.json."""

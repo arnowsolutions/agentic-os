@@ -79,6 +79,13 @@ function hexToRgba(hex, alpha) {
 }
 
 // ─── Main Render ─────────────────────────────────────────────
+// Past events are archived server-side as their dates pass; this page shows the
+// upcoming list by default and the archive behind the "Archived" tab.
+let calMode = 'upcoming';
+window._calArchMonth = null;
+window._calArchQuery = '';
+window._calActiveCat = 'all';
+
 async function renderCalendar() {
   const content = document.getElementById('pageContent');
   content.innerHTML = `
@@ -88,10 +95,11 @@ async function renderCalendar() {
         <p class="page-subtitle">Vacation, call schedule, conferences, and department deadlines</p>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost btn-sm" onclick="renderCalendar()">Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="calRerender()">Refresh</button>
       </div>
     </div>
-    <div id="calFilterBar" style="margin-bottom:20px"></div>
+    <div id="calFilterBar" style="margin-bottom:12px"></div>
+    <div id="calArchiveNote" style="margin:0 0 16px;font-size:0.75rem;color:var(--text-muted)"></div>
     <div id="todoPanel" class="todo-panel collapsed">
       <div class="todo-header" onclick="toggleTodoPanel()">
         <span class="todo-header-title">Tasks</span>
@@ -162,10 +170,19 @@ async function renderCalendar() {
       filterHtml += `<button class="tab" data-cat="${cat}" onclick="calFilter('${cat}')" style="--cat-color:${c.color}">${c.label} <span style="opacity:0.5;margin-left:4px;font-size:0.7em">${catCounts[cat]}</span></button>`;
     }
     filterHtml += '</div>';
-    document.getElementById('calFilterBar').innerHTML = filterHtml;
 
     // Store events for filtering
+    window._calCatTabsHtml = filterHtml;
+    window._calArchivedCount = data.archived_count || 0;
     window._calEvents = events;
+    window._calActiveCat = 'all';
+    calMode = 'upcoming';
+
+    renderCalToolbar();
+    renderCalArchiveNote(data);
+    if (data.archived_this_read) {
+      showToast(`${data.archived_this_read} finished event${data.archived_this_read !== 1 ? 's' : ''} moved to the archive`, 'success');
+    }
 
     renderCalGrid(events);
 
@@ -290,8 +307,180 @@ function renderCalGrid(events, activeCat = 'all') {
   document.getElementById('calendarContent').innerHTML = html;
 }
 
+// ─── Archive / mode switch ───────────────────────────────────
+function calModeTabsHtml() {
+  const n = window._calArchivedCount || 0;
+  return `<div class="tabs" id="calModeTabs">
+    <button class="tab ${calMode === 'upcoming' ? 'active' : ''}" onclick="calSetMode('upcoming')">Upcoming</button>
+    <button class="tab ${calMode === 'archived' ? 'active' : ''}" onclick="calSetMode('archived')">Archived <span style="opacity:0.5;margin-left:4px;font-size:0.7em">${n}</span></button>
+  </div>`;
+}
+
+function renderCalToolbar() {
+  const bar = document.getElementById('calFilterBar');
+  if (!bar) return;
+  bar.innerHTML = calModeTabsHtml() + (calMode === 'upcoming' ? (window._calCatTabsHtml || '') : '');
+}
+
+function renderCalArchiveNote(data) {
+  const el = document.getElementById('calArchiveNote');
+  if (!el) return;
+  const n = data.archived_count || 0;
+  el.innerHTML = n
+    ? `Finished events are archived automatically as their dates pass — <a href="#calendar" onclick="calSetMode('archived');return false;" style="color:inherit;text-decoration:underline">${n} in the archive</a>.`
+    : 'Finished events are archived automatically as their dates pass.';
+}
+
+async function calSetMode(mode) {
+  calMode = mode;
+  const note = document.getElementById('calArchiveNote');
+  if (mode === 'archived') {
+    if (note) note.innerHTML = '';
+    await renderArchivedView();
+  } else {
+    renderCalToolbar();
+    renderCalArchiveNote({ archived_count: window._calArchivedCount });
+    renderCalGrid(window._calEvents || [], window._calActiveCat || 'all');
+  }
+}
+
+function calRerender() {
+  if (calMode === 'archived') renderArchivedView();
+  else renderCalendar();
+}
+
+async function renderArchivedView() {
+  const bar = document.getElementById('calFilterBar');
+  const content = document.getElementById('calendarContent');
+  const params = new URLSearchParams();
+  if (window._calArchMonth) params.set('month', window._calArchMonth);
+  if (window._calArchQuery) params.set('q', window._calArchQuery);
+
+  let data;
+  try {
+    data = await fetch('/api/calendar/archived?' + params.toString()).then(r => r.json());
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state"><div class="empty-state-title">Failed to load archive</div>
+      <div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+    return;
+  }
+
+  window._calArchivedCount = data.total || 0;
+
+  let monthChips = `<button class="tab ${!window._calArchMonth ? 'active' : ''}" onclick="calArchMonth(null)">All months</button>`;
+  (data.months || []).forEach(m => {
+    const [y, mm] = m.month.split('-');
+    const label = new Date(parseInt(y), parseInt(mm) - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    monthChips += `<button class="tab ${window._calArchMonth === m.month ? 'active' : ''}" onclick="calArchMonth('${m.month}')">${label} <span style="opacity:0.5;margin-left:4px;font-size:0.7em">${m.count}</span></button>`;
+  });
+
+  bar.innerHTML = calModeTabsHtml() + `
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <input class="form-input" id="calArchSearch" style="max-width:260px" placeholder="Search archived events..."
+             value="${escapeHtml(window._calArchQuery)}"
+             onkeydown="if(event.key==='Enter')calArchSearch(this.value)">
+      <button class="btn btn-ghost btn-sm" onclick="calArchSearch(document.getElementById('calArchSearch').value)">Search</button>
+      ${window._calArchQuery ? `<button class="btn btn-ghost btn-sm" onclick="calArchSearch('')">Clear</button>` : ''}
+    </div>
+    <div class="tabs" style="flex-wrap:wrap;margin-top:8px">${monthChips}</div>`;
+
+  const events = data.events || [];
+  if (events.length === 0) {
+    content.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">—</div>
+      <div class="empty-state-title">Nothing archived yet</div>
+      <div class="empty-state-desc">${window._calArchQuery || window._calArchMonth
+        ? 'No archived events match this filter.'
+        : 'Events land here automatically once their dates have passed.'}</div>
+    </div>`;
+    return;
+  }
+
+  // Group by month, newest first, collapsed by default
+  const months = {};
+  events.forEach(ev => {
+    const start = ev.start?.date || ev.start?.dateTime?.slice(0, 10) || 'unknown';
+    const mk = start.slice(0, 7);
+    if (!months[mk]) months[mk] = [];
+    months[mk].push(ev);
+  });
+
+  let html = `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:12px">
+    ${data.count} archived event${data.count !== 1 ? 's' : ''}${window._calArchQuery || window._calArchMonth ? ' (filtered)' : ''} of ${data.total} — kept for reference.
+  </div>`;
+
+  Object.keys(months).sort().reverse().forEach(mk => {
+    const [y, m] = mk.split('-');
+    const monthName = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const monthEvents = months[mk].sort((a, b) => (b.start?.date || b.start?.dateTime || '').localeCompare(a.start?.date || a.start?.dateTime || ''));
+
+    html += `<div class="cal-month collapsed">
+      <div class="cal-month-header" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="cal-month-name">${monthName}</span>
+        <span class="cal-month-count">${monthEvents.length} archived event${monthEvents.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="cal-month-body">`;
+
+    monthEvents.forEach(ev => {
+      const cat = detectCategory(ev.summary);
+      const catDef = CATEGORIES[cat] || { label: 'Other', color: '#6b7280' };
+      const start = ev.start?.date || ev.start?.dateTime?.slice(0, 10) || '';
+      const end = ev.end?.date || ev.end?.dateTime?.slice(0, 10) || '';
+      const isMultiDay = end && end !== start;
+      html += `<div class="cal-event" style="--event-color:${catDef.color};--event-bg:${hexToRgba(catDef.color, 0.06)}">
+        <div class="cal-event-indicator" style="background:${catDef.color}"></div>
+        <div class="cal-event-body">
+          <div class="cal-event-title">${escapeHtml(cleanSummary(ev.summary))}</div>
+          <div class="cal-event-meta">
+            <span class="cal-event-date">${fmtDateRange(ev.start?.date || ev.start?.dateTime, ev.end?.date || ev.end?.dateTime)}</span>
+            ${isMultiDay ? `<span class="cal-event-days">Multi-day</span>` : ''}
+            <span class="cal-event-days" style="opacity:0.7">Archived</span>
+          </div>
+          ${ev.description ? `<div class="cal-event-desc">${escapeHtml((ev.description || '').trim())}</div>` : ''}
+          <div style="margin-top:8px">
+            <button class="btn btn-ghost btn-sm" onclick="calRestore('${ev.archive_key}')" title="Put this event back in the Upcoming list">Restore to list</button>
+          </div>
+        </div>
+      </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  content.innerHTML = html;
+}
+
+function calArchSearch(v) {
+  window._calArchQuery = (v || '').trim();
+  renderArchivedView();
+}
+
+function calArchMonth(m) {
+  window._calArchMonth = m;
+  renderArchivedView();
+}
+
+async function calRestore(key) {
+  if (!key) return;
+  try {
+    const res = await fetch('/api/calendar/archive/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: [key] })
+    });
+    const out = await res.json();
+    if (!out.ok) throw new Error(out.detail || 'restore failed');
+    showToast('Event restored to the Upcoming list', 'success');
+    await renderCalendar();
+    await calSetMode('archived');
+  } catch (err) {
+    showToast('Restore failed: ' + err.message, 'error');
+  }
+}
+
 // ─── Filter ──────────────────────────────────────────────────
 function calFilter(cat) {
+  window._calActiveCat = cat;
   // Update tabs
   document.querySelectorAll('#calFilterTabs .tab').forEach(t => t.classList.remove('active'));
   const tab = document.querySelector(`#calFilterTabs .tab[data-cat="${cat}"]`);
