@@ -22,11 +22,11 @@ async function renderDistribution() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">👥 Distribution Lists</h1>
+        <h1 class="page-title">Distribution Lists</h1>
         <p class="page-subtitle">Manage every recipient group (faculty, residents, supervisors, conference lists) — full-width, searchable, from the CRM</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderDistribution()">🔄 Refresh</button>
+        <button class="btn" onclick="renderDistribution()">↻ Refresh</button>
       </div>
     </div>
 
@@ -55,7 +55,7 @@ async function loadDistribution() {
     renderDistPanel();
   } catch (err) {
     const panel = document.getElementById('distPanel');
-    if (panel) panel.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+    if (panel) panel.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -94,13 +94,13 @@ function renderDistPanel() {
   }
 
   const modeColor = group.test_mode ? '#f59e0b' : '#10b981';
-  const modeLabel = group.test_mode ? '🧪 TEST MODE' : '🚀 LIVE';
+  const modeLabel = group.test_mode ? 'TEST MODE' : 'LIVE';
 
   panel.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px">
       <div class="card" style="padding:14px 16px"><div style="font-size:12px;color:var(--muted)">Selected</div><div id="distSelectedCount" style="font-size:22px;font-weight:700">${savedEmails.size}</div></div>
       <div class="card" style="padding:14px 16px"><div style="font-size:12px;color:var(--muted)">Contacts in CRM</div><div style="font-size:22px;font-weight:700">${distContacts.length}</div></div>
-      <div class="card" style="padding:14px 16px"><div style="font-size:12px;color:var(--muted)">Mode</div><div style="font-size:14px;font-weight:700;color:${group.test_mode ? '#f59e0b' : '#10b981'}">${group.test_mode ? '🧪 Test' : '🚀 Live'}</div></div>
+      <div class="card" style="padding:14px 16px"><div style="font-size:12px;color:var(--muted)">Mode</div><div style="font-size:14px;font-weight:700;color:${group.test_mode ? '#f59e0b' : '#10b981'}">${group.test_mode ? 'Test' : 'Live'}</div></div>
       <div class="card" style="padding:14px 16px"><div style="font-size:12px;color:var(--muted)">Label</div><div style="font-size:13px;font-weight:600">${escapeHtml(group.label || distActive)}</div></div>
     </div>
 
@@ -111,7 +111,7 @@ function renderDistPanel() {
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-        <input type="text" id="distSearch" placeholder="🔍 Search by name or email..." value="${escapeHtml(distSearch)}"
+        <input type="text" id="distSearch" placeholder="⌕ Search by name or email..." value="${escapeHtml(distSearch)}"
           oninput="distSearch=this.value;renderDistContacts()"
           style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px">
         <select id="distCatSel" onchange="distCat=this.value;renderDistContacts()" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px">
@@ -126,7 +126,7 @@ function renderDistPanel() {
       <div id="distContactsArea" style="display:flex;flex-direction:column;gap:10px"></div>
 
       <div style="margin-top:16px;margin-bottom:12px">
-        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">➕ Manual emails (not in CRM — auto-added on save)</label>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">+ Manual emails (not in CRM — auto-added on save)</label>
         <textarea id="distManual" rows="3" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:monospace;resize:vertical" placeholder="one@email.com, two@email.com"></textarea>
       </div>
 
@@ -136,13 +136,13 @@ function renderDistPanel() {
         </label>
         <input type="email" id="distTestEmail" value="${escapeHtml(group.test_email || 'sfrasier@montefiore.org')}" placeholder="Test email" style="flex:1;max-width:260px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px" ${!group.test_mode ? 'disabled' : ''}>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;min-width:200px">
-          📋 Attendance link
+          Attendance link
           <input type="url" id="distAttendance" value="${escapeHtml(group.attendance_link || '')}" placeholder="https://forms.gle/..." style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">
         </label>
       </div>
 
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn" style="background:#f59e0b;color:#0f172a;border:none;font-weight:700" onclick="saveDistGroup()">💾 Save Group</button>
+        <button class="btn" style="background:#f59e0b;color:#0f172a;border:none;font-weight:700" onclick="saveDistGroup()">Save Group</button>
         <span id="distStatus" style="font-size:12px"></span>
       </div>
     </div>
@@ -316,12 +316,12 @@ async function saveDistGroup() {
       test_email: testEmail || null,
       attendance_link: attendanceLink || null
     });
-    status.innerHTML = '<span style="color:#10b981">✅ Saved</span>';
+    status.innerHTML = '<span style="color:#10b981">✓ Saved</span>';
     setTimeout(() => { status.innerHTML = ''; }, 3000);
     // Reload to reflect authoritative group data
     await loadDistribution();
   } catch (err) {
-    status.innerHTML = `<span style="color:#ef4444">❌ ${escapeHtml(err.message)}</span>`;
+    status.innerHTML = `<span style="color:#ef4444">✕ ${escapeHtml(err.message)}</span>`;
   }
 }
 

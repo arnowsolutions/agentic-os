@@ -20,7 +20,7 @@ async function renderSettings() {
 
     document.getElementById('settingsForm').innerHTML = `
       <div class="card">
-        <div class="card-header"><span class="card-title">🤖 Agent Preferences</span></div>
+        <div class="card-header"><span class="card-title">◆ Agent Preferences</span></div>
         <div class="grid grid-3">
           ${['opencode', 'hermes', 'gemini'].map(a => `
             <div class="card" style="padding:14px">
@@ -42,7 +42,7 @@ async function renderSettings() {
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">🎨 Dashboard</span></div>
+        <div class="card-header"><span class="card-title">Dashboard</span></div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Port</label>
@@ -63,7 +63,7 @@ async function renderSettings() {
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">🔑 API Keys</span></div>
+        <div class="card-header"><span class="card-title">API Keys</span></div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Gemini API Key</label>
@@ -77,7 +77,7 @@ async function renderSettings() {
       </div>
 
       <div class="card">
-        <div class="card-header"><span class="card-title">💰 Free Tier Limits</span></div>
+        <div class="card-header"><span class="card-title">Free Tier Limits</span></div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Gemini Flash — Requests/Day</label>
@@ -101,13 +101,13 @@ async function renderSettings() {
       </div>
 
       <div class="card" style="border-color:var(--red)">
-        <div class="card-header"><span class="card-title" style="color:var(--red)">⚠ Danger Zone</span></div>
+        <div class="card-header"><span class="card-title" style="color:var(--red)">! Danger Zone</span></div>
         <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Reset all settings to factory defaults.</p>
         <button class="btn btn-danger" onclick="resetSettings()">Reset to Defaults</button>
       </div>
     `;
   } catch (err) {
-    document.getElementById('settingsForm').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('settingsForm').innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -156,7 +156,7 @@ async function saveAllSettings() {
 async function resetSettings() {
   showModal('Reset to Defaults', `
     <div class="card" style="background:var(--red-dim);border-color:transparent">
-      <div class="flex items-center gap-2"><span style="font-size:18px">⚠</span><div><strong style="font-size:13px">Warning</strong><div style="font-size:12px;color:var(--text-secondary);margin-top:2px">This will reset all settings to factory defaults and cannot be undone.</div></div></div>
+      <div class="flex items-center gap-2"><span style="font-size:18px">!</span><div><strong style="font-size:13px">Warning</strong><div style="font-size:12px;color:var(--text-secondary);margin-top:2px">This will reset all settings to factory defaults and cannot be undone.</div></div></div>
     </div>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>

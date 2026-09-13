@@ -97,7 +97,7 @@ async function generateReport() {
       // Email / status response
       resultDiv.innerHTML = `
         <div style="padding:20px;text-align:center">
-          <div style="font-size:40px;margin-bottom:12px">${data.status === 'success' ? '✅' : '⚠️'}</div>
+          <div style="font-size:40px;margin-bottom:12px">${data.status === 'success' ? '✓' : '!'}</div>
           <div style="font-size:15px;font-weight:600;margin-bottom:4px">${escapeHtml(data.message || 'Done')}</div>
         </div>
       `;
@@ -106,7 +106,7 @@ async function generateReport() {
   } catch (err) {
     resultDiv.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">⚠</div>
+        <div class="empty-state-icon">!</div>
         <div class="empty-state-title">${escapeHtml(err.message)}</div>
       </div>
     `;

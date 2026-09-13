@@ -43,7 +43,7 @@ async function renderEmailSendLog() {
   const content = document.getElementById('pageContent');
   await loadSendLogData();
   if (!sendLogReady) {
-    content.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--red)">⚠️ Could not load send log — is the server DB reachable?</div>';
+    content.innerHTML = '<div class="card" style="padding:24px;text-align:center;color:var(--red)">! Could not load send log — is the server DB reachable?</div>';
     return;
   }
 
@@ -67,15 +67,15 @@ async function renderEmailSendLog() {
     if (real) {
       badge = 'SENT TO ALL';
       badgeClass = 'status-sent';
-      statusIcon = '✅';
+      statusIcon = '✓';
     } else if (isTest) {
       badge = 'TEST ONLY';
       badgeClass = 'status-test';
-      statusIcon = '🧪';
+      statusIcon = '';
     } else {
       badge = 'PENDING';
       badgeClass = 'status-pending';
-      statusIcon = '⬜';
+      statusIcon = '○';
     }
 
     // Type tag
@@ -93,13 +93,13 @@ async function renderEmailSendLog() {
     let detail = '';
     if (real) {
       detail = `<div class="event-detail">
-        <span class="detail-item">📧 ${real.emails} emails sent</span>
-        <span class="detail-item">❌ ${real.failed} failed</span>
-        <span class="detail-item">📅 Sent on ${real.sentAt}</span>
-        <span class="detail-item">🔗 Zoom ${ZOOM_DETAILS.id}</span>
+        <span class="detail-item">${real.emails} emails sent</span>
+        <span class="detail-item">✕ ${real.failed} failed</span>
+        <span class="detail-item">Sent on ${real.sentAt}</span>
+        <span class="detail-item">Zoom ${ZOOM_DETAILS.id}</span>
       </div>`;
     } else if (isTest) {
-      detail = `<div class="event-detail"><span class="detail-item warn">⚠️ Only sent to test address (sfrasier@montefiore.org) — not delivered to team</span></div>`;
+      detail = `<div class="event-detail"><span class="detail-item warn">! Only sent to test address (sfrasier@montefiore.org) — not delivered to team</span></div>`;
     } else {
       detail = `<div class="event-detail"><span class="detail-item muted">Not yet sent to the team</span></div>`;
     }
@@ -221,11 +221,11 @@ async function renderEmailSendLog() {
 
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📤 Email Send Log</h1>
+        <h1 class="page-title">Email Send Log</h1>
         <p class="page-subtitle">Grand Rounds calendar invites — tracking real sends vs test/pending</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderEmailSendLog()">🔄 Refresh</button>
+        <button class="btn" onclick="renderEmailSendLog()">↻ Refresh</button>
       </div>
     </div>
 

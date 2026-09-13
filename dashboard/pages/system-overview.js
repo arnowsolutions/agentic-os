@@ -3,8 +3,8 @@
    No emoji. Uses design system classes.
    ═══════════════════════════════════════════════════════════════════════ */
 
-async function renderSystemOverview() {
-  const content = document.getElementById('pageContent');
+async function renderSystemOverview(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">

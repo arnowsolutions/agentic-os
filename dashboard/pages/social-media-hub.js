@@ -16,15 +16,15 @@ async function renderSocialMediaHub() {
       <!-- Stats Overview -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px">
         <div class="card"><div class="card-body" style="text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#6c5ce7">42</div>
+          <div style="font-size:28px;font-weight:700;color:#14b8a6">42</div>
           <div style="font-size:12px;color:#888">SKILL.md Files</div>
         </div></div>
         <div class="card"><div class="card-body" style="text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#a29bfe">14</div>
+          <div style="font-size:28px;font-weight:700;color:#2dd4bf">14</div>
           <div style="font-size:12px;color:#888">Skill Categories</div>
         </div></div>
         <div class="card"><div class="card-body" style="text-align:center">
-          <div style="font-size:28px;font-weight:700;color:#fd79a8">4</div>
+          <div style="font-size:28px;font-weight:700;color:#0d9488">4</div>
           <div style="font-size:12px;color:#888">Platform Connectors</div>
         </div></div>
         <div class="card"><div class="card-body" style="text-align:center">
@@ -112,7 +112,7 @@ function renderIntegrations() {
     <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1a1a2e">
       <span>${i.status.split(' ')[0]}</span>
       <div style="flex:1">
-        <a href="${i.url}" target="_blank" style="color:#a29bfe;text-decoration:none;font-weight:500">${i.name}</a>
+        <a href="${i.url}" target="_blank" style="color:#2dd4bf;text-decoration:none;font-weight:500">${i.name}</a>
         <div style="font-size:12px;color:#666;margin-top:2px">${i.desc}</div>
       </div>
       <span style="font-size:11px;color:#888">${i.status}</span>
@@ -126,7 +126,7 @@ function renderRelated() {
     <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1a1a2e">
       <span>↗</span>
       <div style="flex:1">
-        <div style="color:#a29bfe;font-weight:500;font-size:13px">${r.name}</div>
+        <div style="color:#2dd4bf;font-weight:500;font-size:13px">${r.name}</div>
         <div style="font-size:12px;color:#666;margin-top:2px">${r.desc}</div>
       </div>
     </div>

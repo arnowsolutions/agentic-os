@@ -20,7 +20,7 @@ async function renderDataGaps() {
       .gap-tag.ok { background:rgba(0,184,148,0.15); color:#00b894; }
       .gap-table { width:100%; border-collapse:collapse; }
       .gap-table th { text-align:left; padding:8px 12px; font-size:11px; color:#888; border-bottom:1px solid #2a2a3a; text-transform:uppercase; }
-      .gap-table td { padding:8px 12px; font-size:12px; border-bottom:1px solid rgba(255,255,255,0.04); }
+      .gap-table td { padding:8px 12px; font-size:12px; border-bottom:1px solid var(--border-soft); }
       .gap-summary { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
       .gap-stat { flex:1; min-width:100px; background:#232340; border-radius:8px; padding:12px; text-align:center; border:1px solid #2a2a3a; }
       .gap-stat div:first-child { font-size:24px; font-weight:700; }
@@ -63,7 +63,7 @@ function renderGaps(data) {
     const pct = Math.round((f.count / total) * 100);
     fieldsHtml += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">
       <span style="min-width:130px">${f.field}</span>
-      <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px">
+      <div style="flex:1;height:6px;background:var(--fill-muted);border-radius:3px">
         <div style="height:100%;width:${pct}%;background:${pct > 50 ? '#d63031' : pct > 20 ? '#fdcb6e' : '#00b894'};border-radius:3px"></div>
       </div>
       <span style="min-width:60px;text-align:right;color:#888">${f.count}/${total}</span>

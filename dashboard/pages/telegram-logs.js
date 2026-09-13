@@ -4,28 +4,28 @@ async function renderTelegramLogs() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">✈️ Telegram Logs</div>
+        <div class="page-title">Telegram Logs</div>
         <div class="page-subtitle">Recent messages, gateway activity, and delivery history</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderTelegramLogs()">🔄 Refresh</button>
-        <button class="btn btn-primary" onclick="fetchTelegramLogs()">📥 Load Logs</button>
+        <button class="btn btn-ghost" onclick="renderTelegramLogs()">↻ Refresh</button>
+        <button class="btn btn-primary" onclick="fetchTelegramLogs()">Load Logs</button>
       </div>
     </div>
     <div class="tl-grid">
       <div class="tl-section" id="tlRecentSection">
-        <div class="tl-section-header"><span>📨 Recent Telegram Activity</span></div>
+        <div class="tl-section-header"><span>Recent Telegram Activity</span></div>
         <div id="tlRecent" class="tl-loading"><div class="loading-spinner"></div></div>
       </div>
       <div class="tl-section" id="tlGatewaySection">
-        <div class="tl-section-header"><span>🔌 Gateway Connection</span></div>
+        <div class="tl-section-header"><span>Gateway Connection</span></div>
         <div id="tlGateway" class="tl-loading"><div class="loading-spinner"></div></div>
       </div>
     </div>
     <div class="tl-section" style="margin-top:12px" id="tlLogSection">
       <div class="tl-section-header">
-        <span>📋 Gateway Log (last 50 lines)</span>
-        <button class="btn btn-ghost btn-xs" onclick="fetchTelegramLogs()">🔄 Refresh</button>
+        <span>Gateway Log (last 50 lines)</span>
+        <button class="btn btn-ghost btn-xs" onclick="fetchTelegramLogs()">↻ Refresh</button>
       </div>
       <div id="tlLogContent" class="tl-loading"><div class="loading-spinner"></div></div>
     </div>
@@ -35,14 +35,14 @@ async function renderTelegramLogs() {
       .tl-section { background:var(--bg-card); border-radius:var(--radius-md); border:1px solid var(--border); overflow:hidden; }
       .tl-section-header { padding:10px 14px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
       .tl-loading { padding:20px; text-align:center; color:var(--text-muted); font-size:13px; display:flex; flex-direction:column; align-items:center; gap:8px; }
-      .tl-log-line { padding:3px 14px; font-family:monospace; font-size:10.5px; line-height:1.5; border-bottom:1px solid rgba(255,255,255,0.03); white-space:pre-wrap; word-break:break-all; }
-      .tl-log-line:hover { background:rgba(255,255,255,0.03); }
+      .tl-log-line { padding:3px 14px; font-family:monospace; font-size:10.5px; line-height:1.5; border-bottom:1px solid var(--border-soft); white-space:pre-wrap; word-break:break-all; }
+      .tl-log-line:hover { background:var(--hover-bg); }
       .tl-log-line .time { color:#636e72; margin-right:8px; }
       .tl-log-line .info { color:#74b9ff; }
       .tl-log-line .warn { color:#fdcb6e; }
       .tl-log-line .error { color:#d63031; }
-      .tl-message { padding:8px 14px; border-bottom:1px solid rgba(255,255,255,0.04); font-size:12px; display:flex; gap:8px; align-items:start; }
-      .tl-message:hover { background:rgba(255,255,255,0.02); }
+      .tl-message { padding:8px 14px; border-bottom:1px solid var(--border-soft); font-size:12px; display:flex; gap:8px; align-items:start; }
+      .tl-message:hover { background:var(--hover-bg); }
       .tl-message .avatar { width:28px; height:28px; border-radius:50%; background:var(--gradient); display:grid; place-items:center; font-size:11px; font-weight:700; color:#fff; flex-shrink:0; }
       .tl-message .body { flex:1; min-width:0; }
       .tl-message .sender { font-weight:600; font-size:12px; }
@@ -77,7 +77,7 @@ async function fetchTelegramLogs() {
     gatewayEl.innerHTML = `
       <div class="tl-status">
         <span class="dot ${connected ? 'green' : 'red'}"></span>
-        <span style="font-weight:600">${connected ? '✅ Connected' : '❌ Disconnected'}</span>
+        <span style="font-weight:600">${connected ? '✓ Connected' : '✕ Disconnected'}</span>
         <span style="color:var(--text-muted);font-size:11px">${gatewayRes.detail || ''}</span>
       </div>
       ${gatewayRes.platforms ? `
@@ -105,7 +105,7 @@ async function fetchTelegramLogs() {
         </div>
       `).join('');
     } else {
-      recentEl.innerHTML = '<div class="tl-loading">📭 No recent messages — gateway may be idle</div>';
+      recentEl.innerHTML = '<div class="tl-loading">No recent messages — gateway may be idle</div>';
     }
 
     // Logs
@@ -120,11 +120,11 @@ async function fetchTelegramLogs() {
         return `<div class="tl-log-line"><span class="time">${escapeHtml(time)}</span><span class="${cls}">${escapeHtml(rest)}</span></div>`;
       }).join('');
     } else {
-      logEl.innerHTML = '<div class="tl-loading">📭 No log data available</div>';
+      logEl.innerHTML = '<div class="tl-loading">No log data available</div>';
     }
   } catch (err) {
-    recentEl.innerHTML = `<div class="tl-loading">⚠️ Error: ${escapeHtml(err.message)}</div>`;
-    gatewayEl.innerHTML = `<div class="tl-loading">⚠️ Error loading status</div>`;
-    logEl.innerHTML = `<div class="tl-loading">⚠️ Error loading logs</div>`;
+    recentEl.innerHTML = `<div class="tl-loading">! Error: ${escapeHtml(err.message)}</div>`;
+    gatewayEl.innerHTML = `<div class="tl-loading">! Error loading status</div>`;
+    logEl.innerHTML = `<div class="tl-loading">! Error loading logs</div>`;
   }
 }

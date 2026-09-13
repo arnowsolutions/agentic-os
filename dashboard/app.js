@@ -54,6 +54,23 @@ const LEGACY_REDIRECTS = {
   'contacts':               'crm-suite?tab=contacts',
   'resident-roster':        'crm-suite?tab=residents',
   'crm-audit':              'crm-suite?tab=audit',
+  // PR7 — AI Builder Suite
+  'ai-builder':             'ai-builder-suite?tab=builder',
+  'prompt-tools-image':     'ai-builder-suite?tab=image',
+  'prompt-tools-video':     'ai-builder-suite?tab=video',
+  'image-gallery':          'ai-builder-suite?tab=gallery',
+  // PR7 — Workspace suite
+  'file-browser':           'workspace-suite?tab=files',
+  'script-runner':          'workspace-suite?tab=scripts',
+  'vs-coder':               'workspace-suite?tab=coder',
+  'google-studio':          'workspace-suite?tab=apps',
+  // 2026-09 SSOT stage 3 — overview collapse (Today + Health Suite)
+  'unified-dashboard':      'today?tab=overview',
+  'manager':                'today?tab=manager',
+  'health':                 'health-suite?tab=services',
+  'system-overview':        'health-suite?tab=overview',
+  'operations':             'health-suite?tab=metrics',
+  'agent-health':           'health-suite?tab=agents',
 };
 
 async function loadPage(name) {
@@ -175,6 +192,8 @@ async function navigate(page) {
 
   const hash = (page || window.location.hash.slice(1) || DEFAULT_ROUTE).split('?')[0];
   if (!hash) { window.location.hash = DEFAULT_ROUTE; return; }
+  // AI-generalist: remember the last data page so chat can pre-attach context.
+  if (hash !== 'chat') window._lastDataPage = hash;
 
   const route = getNavRoute(hash);
 

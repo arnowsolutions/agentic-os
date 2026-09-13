@@ -4,8 +4,8 @@
 
 let managerLastResult = '';
 
-async function renderManager() {
-  return renderManagerCommandCenter();
+async function renderManager(target) {
+  return renderManagerCommandCenter(target);
 }
 
 async function renderManagerCommandCenter() {

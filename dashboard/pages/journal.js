@@ -12,7 +12,7 @@ async function renderJournal() {
       </div>
       <div class="btn-group">
         <input class="form-input" type="date" id="journalDatePicker" value="${today}" onchange="loadJournalEntry(this.value)" style="width:160px">
-        <button class="btn btn-ghost" onclick="renderJournal()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderJournal()">↻ Refresh</button>
       </div>
     </div>
     <div class="flex gap-3" style="margin-bottom:16px">
@@ -32,7 +32,7 @@ async function renderJournal() {
     <div class="flex gap-3" style="margin-bottom:16px">
       <div style="flex:1;display:flex;gap:8px">
         <input class="form-input" id="journalSearchInput" placeholder="Search entries..." style="flex:1">
-        <button class="btn btn-ghost" onclick="searchJournal()">🔍 Search</button>
+        <button class="btn btn-ghost" onclick="searchJournal()">⌕ Search</button>
       </div>
     </div>
     <div class="journal-entry" id="journalEditor">
@@ -120,7 +120,7 @@ async function loadJournalEntries() {
     const list = document.getElementById('journalEntriesList');
     if (!list) return;
     if (entries.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📓</div><div class="empty-state-title">No journal entries yet</div><div class="empty-state-desc">Write your first entry above</div></div>`;
+      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No journal entries yet</div><div class="empty-state-desc">Write your first entry above</div></div>`;
       return;
     }
     list.innerHTML = `
@@ -147,7 +147,7 @@ async function searchJournal() {
     const list = document.getElementById('journalEntriesList');
     if (!list) return;
     if (results.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">No results for "${escapeHtml(q)}"</div></div>`;
+      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⌕</div><div class="empty-state-title">No results for "${escapeHtml(q)}"</div></div>`;
       return;
     }
     list.innerHTML = `

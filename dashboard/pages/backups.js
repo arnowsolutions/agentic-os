@@ -16,7 +16,7 @@ async function renderBackups() {
     const container = document.getElementById('backupList');
 
     if (backups.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💾</div><div class="empty-state-title">No backups yet</div><div class="empty-state-desc">Create your first backup to protect your system configuration</div><button class="btn btn-primary mt-3" onclick="createBackup()">Create Backup</button></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No backups yet</div><div class="empty-state-desc">Create your first backup to protect your system configuration</div><button class="btn btn-primary mt-3" onclick="createBackup()">Create Backup</button></div>';
       return;
     }
 
@@ -39,7 +39,7 @@ async function renderBackups() {
       <div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:8px">${backups.length} backup${backups.length !== 1 ? 's' : ''}</div>
     `;
   } catch (err) {
-    document.getElementById('backupList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('backupList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -57,7 +57,7 @@ async function restoreBackup(name) {
   showModal('Restore Backup', `
     <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">Restore <strong>${name}</strong>? This will overwrite current brain, skills, agents, registry, standards, and prompts data.</p>
     <div class="card" style="background:var(--red-dim);border-color:transparent">
-      <div class="flex items-center gap-2"><span>⚠</span><span style="font-size:13px;font-weight:500">This action cannot be undone</span></div>
+      <div class="flex items-center gap-2"><span>!</span><span style="font-size:13px;font-weight:500">This action cannot be undone</span></div>
     </div>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>

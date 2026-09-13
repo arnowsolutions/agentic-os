@@ -1,7 +1,7 @@
 let agentHealthInterval = null;
 
-async function renderAgentHealth() {
-  const content = document.getElementById('pageContent');
+async function renderAgentHealth(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
@@ -14,7 +14,7 @@ async function renderAgentHealth() {
           <span class="switch-slider"></span>
         </label>
         <span class="text-sm text-muted">Auto</span>
-        <button class="btn btn-primary" onclick="refreshAgentHealth()">🔄 Refresh Now</button>
+        <button class="btn btn-primary" onclick="refreshAgentHealth()">↻ Refresh Now</button>
       </div>
     </div>
     <div id="agentHealthCards" class="grid grid-3" style="margin-bottom:20px">
@@ -59,7 +59,7 @@ async function refreshAgentHealth() {
     const agents = data.agents || [];
     const cards = document.getElementById('agentHealthCards');
     if (!cards) return;
-    const agentIcons = { opencode: '🔧', hermes: '⚡', gemini: '🧠' };
+    const agentIcons = { opencode: '◆', hermes: '●', gemini: '○' };
     const agentColors = { opencode: 'purple', hermes: 'green', gemini: 'blue' };
     const healthLabels = {
       not_configured: { label: 'Not Configured', color: 'var(--text-muted)', badge: 'badge-secondary' },
@@ -87,7 +87,7 @@ async function refreshAgentHealth() {
       return `
       <div class="agent-health-card">
         <div class="agent-health-avatar" style="background:var(--${agentColors[a.name] || 'accent'}-dim);color:var(--${agentColors[a.name] || 'accent'})">
-          ${agentIcons[a.name] || '🤖'}
+          ${agentIcons[a.name] || '▸'}
         </div>
         <div class="agent-health-info">
           <div class="agent-health-name" style="text-transform:capitalize">${a.name}</div>
@@ -154,6 +154,6 @@ async function refreshAgentHealth() {
     }
   } catch (err) {
     const cards = document.getElementById('agentHealthCards');
-    if (cards) cards.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load health data</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+    if (cards) cards.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">!</div><div class="empty-state-title">Failed to load health data</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }

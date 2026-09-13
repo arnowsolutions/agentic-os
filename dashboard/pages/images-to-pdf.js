@@ -4,19 +4,19 @@ async function renderImagesToPdf() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">🖼️ Images → PDF</div>
+        <div class="page-title">▣ Images → PDF</div>
         <div class="page-subtitle">Upload images, reorder by dragging, convert to a single PDF</div>
       </div>
       <div class="btn-group" id="convActions" style="display:none">
-        <button class="btn btn-ghost" onclick="clearPdfUploads()">🗑️ Clear All</button>
-        <button class="btn btn-primary" onclick="convertToPdf()" id="convertBtn">📄 Convert to PDF</button>
+        <button class="btn btn-ghost" onclick="clearPdfUploads()">✕ Clear All</button>
+        <button class="btn btn-primary" onclick="convertToPdf()" id="convertBtn">Convert to PDF</button>
       </div>
     </div>
 
     <div class="ip-grid">
       <div class="ip-dropzone" id="dropzone">
         <div class="ip-dropzone-inner" id="dropzoneInner">
-          <div class="ip-dropzone-icon">📁</div>
+          <div class="ip-dropzone-icon"></div>
           <div class="ip-dropzone-text">Drop images here or click to browse</div>
           <div class="ip-dropzone-hint">PNG, JPG, GIF, BMP, TIFF, WEBP</div>
           <input type="file" id="fileInput" multiple accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif,.webp" style="display:none">
@@ -26,7 +26,7 @@ async function renderImagesToPdf() {
 
       <div class="ip-list" id="fileList">
         <div class="ip-list-empty" id="emptyState">
-          <div class="ip-list-empty-icon">📸</div>
+          <div class="ip-list-empty-icon"></div>
           <div class="ip-list-empty-text">No images added yet</div>
           <div class="ip-list-empty-hint">Drop files above or click the button</div>
         </div>
@@ -35,9 +35,9 @@ async function renderImagesToPdf() {
 
     <div class="ip-output" id="outputArea" style="display:none">
       <div class="ip-output-header">
-        <span id="outputTitle">📄 Output</span>
+        <span id="outputTitle">Output</span>
         <div>
-          <button class="btn btn-ghost btn-xs" onclick="downloadPdf()" id="downloadBtn" style="display:none">⬇️ Download</button>
+          <button class="btn btn-ghost btn-xs" onclick="downloadPdf()" id="downloadBtn" style="display:none">↓ Download</button>
         </div>
       </div>
       <iframe id="pdfPreview" style="width:100%;height:500px;border:none;border-radius:6px;background:#fff" sandbox="allow-scripts"></iframe>
@@ -162,7 +162,7 @@ function renderFileList() {
   if (files.length === 0) {
     list.innerHTML = `
       <div class="ip-list-empty" id="emptyState">
-        <div class="ip-list-empty-icon">📸</div>
+        <div class="ip-list-empty-icon"></div>
         <div class="ip-list-empty-text">No images added yet</div>
         <div class="ip-list-empty-hint">Drop files or click the button</div>
       </div>
@@ -172,12 +172,12 @@ function renderFileList() {
   }
 
   actions.style.display = 'flex';
-  document.getElementById('convertBtn').textContent = `📄 Convert ${files.length} file${files.length > 1 ? 's' : ''} to PDF`;
+  document.getElementById('convertBtn').textContent = `Convert ${files.length} file${files.length > 1 ? 's' : ''} to PDF`;
 
   list.innerHTML = files.map((f, i) => `
     <div class="ip-file-item" draggable="true" data-idx="${i}">
       <span class="ip-file-drag" title="Drag to reorder">⠿</span>
-      <span class="ip-file-icon">🖼️</span>
+      <span class="ip-file-icon">▣</span>
       <div class="ip-file-info">
         <div class="ip-file-name">${escapeHtml(f.name)}</div>
         <div class="ip-file-size">${formatSize(f.size)}</div>
@@ -229,7 +229,7 @@ async function convertToPdf() {
 
   const btn = document.getElementById('convertBtn');
   const originalText = btn.textContent;
-  btn.textContent = '⏳ Converting...';
+  btn.textContent = 'Converting...';
   btn.disabled = true;
 
   try {
@@ -261,15 +261,15 @@ async function convertToPdf() {
     document.getElementById('downloadBtn').style.display = 'inline-flex';
 
     const filename = `images_${files.length}_${new Date().toISOString().slice(0,10)}.pdf`;
-    document.getElementById('outputTitle').textContent = `📄 ${filename} (${formatSize(blob.size)})`;
+    document.getElementById('outputTitle').textContent = `${filename} (${formatSize(blob.size)})`;
 
     // Display preview
     const preview = document.getElementById('pdfPreview');
     preview.src = _lastPdfBlobUrl;
 
-    showToast(`✅ PDF created — ${files.length} page${files.length > 1 ? 's' : ''}`, 'success');
+    showToast(`✓ PDF created — ${files.length} page${files.length > 1 ? 's' : ''}`, 'success');
   } catch (err) {
-    showToast(`❌ ${err.message}`, 'error');
+    showToast(`✕ ${err.message}`, 'error');
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;

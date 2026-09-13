@@ -17,7 +17,7 @@ async function renderPlugins() {
     const container = document.getElementById('pluginList');
 
     if (plugins.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔌</div><div class="empty-state-title">No plugins installed</div><div class="empty-state-desc">Install plugins from the registry or create your own</div></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No plugins installed</div><div class="empty-state-desc">Install plugins from the registry or create your own</div></div>';
       return;
     }
 
@@ -40,7 +40,7 @@ async function renderPlugins() {
       <div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:8px">${plugins.length} plugin${plugins.length !== 1 ? 's' : ''}</div>
     `;
   } catch (err) {
-    document.getElementById('pluginList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('pluginList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
   }
 }
 

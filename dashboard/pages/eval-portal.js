@@ -4,12 +4,12 @@ async function renderEvalPortal(target) {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">📝 Eval Portal</div>
+        <div class="page-title">Eval Portal</div>
         <div class="page-subtitle">CMS evaluation forms — track completion, send reminders</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderEvalPortal()">🔄 Refresh</button>
-        <button class="btn btn-primary" onclick="sendEvalReminders()">📧 Send Reminders</button>
+        <button class="btn btn-ghost" onclick="renderEvalPortal()">↻ Refresh</button>
+        <button class="btn btn-primary" onclick="sendEvalReminders()">Send Reminders</button>
       </div>
     </div>
     <div class="eval-summary" id="evalSummary">
@@ -17,11 +17,11 @@ async function renderEvalPortal(target) {
     </div>
     <div class="eval-tables" id="evalTables" style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="eval-section">
-        <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">👨‍⚕️ Faculty Evaluations</h3>
+        <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">Faculty Evaluations</h3>
         <div id="evalFaculty"><div class="loading"><div class="loading-spinner"></div></div></div>
       </div>
       <div class="eval-section">
-        <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">🩺 Resident Evaluations</h3>
+        <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">Resident Evaluations</h3>
         <div id="evalResidents"><div class="loading"><div class="loading-spinner"></div></div></div>
       </div>
     </div>
@@ -37,7 +37,7 @@ async function renderEvalPortal(target) {
       .eval-stat-row { display: flex; gap: 16px; flex-wrap: wrap; }
       .eval-stat {
         flex: 1; min-width: 120px; text-align: center; padding: 12px;
-        background: rgba(255,255,255,0.03); border-radius: var(--radius-sm);
+        background: var(--hover-bg); border-radius: var(--radius-sm);
       }
       .eval-stat .num { font-size: 28px; font-weight: 700; }
       .eval-stat .label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-top: 2px; }
@@ -48,7 +48,7 @@ async function renderEvalPortal(target) {
       .eval-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
       .eval-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
       .eval-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
-      .eval-table tr:hover td { background: rgba(255,255,255,0.03); }
+      .eval-table tr:hover td { background: var(--hover-bg); }
       .eval-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
       .eval-badge.done { background: rgba(0,184,148,0.15); color: #00b894; }
       .eval-badge.pending { background: rgba(253,203,110,0.15); color: #fdcb6e; }
@@ -64,24 +64,16 @@ async function renderEvalPortal(target) {
     try {
       const res = await fetch('/api/eval/forms');
       const data = await res.json();
+      stampPage(data);
       faculty = data.faculty || [];
       residents = data.residents || [];
     } catch {
-      // Demo data if API not available
-      faculty = [
-        { name: 'Dr. A. Smith', form: 'Faculty Evaluation Q3', status: 'done', date: '2026-06-15' },
-        { name: 'Dr. B. Johnson', form: 'Faculty Evaluation Q3', status: 'pending', date: '-' },
-        { name: 'Dr. C. Williams', form: 'Faculty Evaluation Q3', status: 'done', date: '2026-06-10' },
-        { name: 'Dr. D. Brown', form: 'Faculty Evaluation Q3', status: 'overdue', date: '2026-06-01' },
-        { name: 'Dr. E. Davis', form: 'Faculty Evaluation Q3', status: 'pending', date: '-' },
-      ];
-      residents = [
-        { name: 'Kelli Aibel (PGY-3)', form: 'Resident Eval Q3', status: 'pending', date: '-' },
-        { name: 'J. Chen (PGY-2)', form: 'Resident Eval Q3', status: 'done', date: '2026-06-14' },
-        { name: 'M. Patel (PGY-4)', form: 'Resident Eval Q3', status: 'pending', date: '-' },
-        { name: 'R. Garcia (PGY-1)', form: 'Resident Eval Q3', status: 'done', date: '2026-06-12' },
-        { name: 'S. Kim (PGY-3)', form: 'Resident Eval Q3', status: 'overdue', date: '2026-05-28' },
-      ];
+      faculty = [];
+      residents = [];
+    }
+    if (!faculty.length && !residents.length) {
+      document.getElementById('evalSummary').innerHTML =
+        '<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">No eval forms loaded</div><div class="empty-state-desc">The eval forms file has no entries. Run the eval sync, then refresh.</div></div>';
     }
 
     const all = [...faculty, ...residents];
@@ -137,7 +129,7 @@ async function renderEvalPortal(target) {
   } catch (err) {
     document.getElementById('evalSummary').innerHTML = `
       <div style="text-align:center;padding:20px">
-        <div style="font-size:24px;margin-bottom:8px">⚠️</div>
+        <div style="font-size:24px;margin-bottom:8px">!</div>
         <div style="color:var(--text-muted)">Could not load evaluation data</div>
       </div>
     `;

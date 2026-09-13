@@ -38,12 +38,12 @@ async function renderChiefMeetings(target) {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">👑 Chief Residents' Meetings</h1>
-        <p class="page-subtitle">Click 📧 to open Outlook with pre-filled invite — just press Send</p>
+        <h1 class="page-title">Chief Residents' Meetings</h1>
+        <p class="page-subtitle">Click to open Outlook with pre-filled invite — just press Send</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="openAllChiefOutlook()">📧 Open All in Outlook</button>
-        <button class="btn" onclick="renderChiefMeetings()">🔄 Refresh</button>
+        <button class="btn" onclick="openAllChiefOutlook()">Open All in Outlook</button>
+        <button class="btn" onclick="renderChiefMeetings()">↻ Refresh</button>
       </div>
     </div>
     <div id="chiefContent" style="display:flex;flex-direction:column;gap:16px">Loading...</div>
@@ -118,7 +118,7 @@ function renderChiefDashboard() {
               <td style="padding:10px 16px;white-space:nowrap">${startTime} – ${endTime}</td>
               <td style="padding:10px 16px">${escapeHtml(loc)}</td>
               <td style="padding:10px 16px;text-align:center">
-                <button class="btn btn-sm" style="font-size:16px;padding:3px 8px" onclick="openChiefOutlook('${date}')" title="Open in Outlook">📧</button>
+                <button class="btn btn-sm" style="font-size:16px;padding:3px 8px" onclick="openChiefOutlook('${date}')" title="Open in Outlook"></button>
               </td>
             </tr>`;
           }).join('')}

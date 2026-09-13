@@ -114,6 +114,7 @@ async function renderCalendar() {
   try {
     const res = await fetch('/api/calendar/events?days=365&include_todos=true');
     const data = await res.json();
+    stampPage(data);
     let events = (data.events || []).map(e => ({
       ...e,
       category: detectCategory(e.summary),

@@ -79,7 +79,11 @@ def _load_faculty_lookup():
     return _faculty_lookup
 
 def _resolve_attending_email(attending_name):
-    """Given an attending last name, return their email from CRM."""
+    """Given an attending last name, return their email from CRM.
+    Returns "" for names that are NOT active Faculty — Archived (departed)
+    people are excluded by the Faculty category filter, so invites are never
+    addressed to them. Empty result for a non-empty name = red flag; callers
+    surface it (departed/unknown attending in the schedule)."""
     if not attending_name:
         return ""
     # attending_name is "Dr. LastName" — strip prefix

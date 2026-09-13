@@ -25,7 +25,7 @@ async function renderStaffSchedule(target) {
       .ss-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
       .ss-card { background:var(--bg-card); border-radius:var(--radius-md); border:1px solid var(--border); padding:14px; }
       .ss-card .name { font-size:13px; font-weight:600; }
-      .ss-card .role { font-size:11px; color:var(--text-muted); display:inline-block; padding:1px 6px; border-radius:4px; background:rgba(255,255,255,0.06); margin-top:4px; }
+      .ss-card .role { font-size:11px; color:var(--text-muted); display:inline-block; padding:1px 6px; border-radius:4px; background:var(--fill-muted); margin-top:4px; }
       .ss-card .detail { font-size:11px; color:var(--text-muted); margin-top:6px; }
       .ss-card .detail span { display:block; padding:2px 0; }
     </style>
@@ -42,6 +42,7 @@ async function loadStaffSchedule(hospital) {
       return r.json();
     });
     const staff = res.staff || [];
+    stampPage(res);
     if (!staff.length) {
       container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted)">No staff listed for ${escapeHtml(hospital)} yet.</div>`;
       return;

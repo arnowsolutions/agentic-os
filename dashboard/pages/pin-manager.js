@@ -96,7 +96,7 @@ class VapiPinManager {
                     </div>
                 </div>
                 <div class="card" style="margin-top:16px">
-                    <div class="card-header"><h3>ℹ️ How PINs Work</h3></div>
+                    <div class="card-header"><h3>ℹ How PINs Work</h3></div>
                     <div class="card-body" style="font-size:13px;color:#aaa;line-height:1.6">
                         <p>Default PINs are the <strong>last 4 digits of the person's phone number</strong> on file in the CRM.
                         For contacts without a phone number, a default of 1234 is used (or ezId digits if available).</p>

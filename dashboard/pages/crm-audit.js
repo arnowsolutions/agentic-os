@@ -3,17 +3,17 @@ async function renderCrmAudit(target) {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">🔍 CRM Audit</h1>
+        <h1 class="page-title">⌕ CRM Audit</h1>
         <p class="page-subtitle">Access log for all CRM operations — read, write, add, delete</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderCrmAudit()">🔄 Refresh</button>
-        <button class="btn btn-danger" onclick="confirmClearAccessLog()">🗑 Clear Log</button>
+        <button class="btn" onclick="renderCrmAudit()">↻ Refresh</button>
+        <button class="btn btn-danger" onclick="confirmClearAccessLog()">✕ Clear Log</button>
       </div>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
       <div style="flex:1;min-width:200px">
-        <input type="text" id="auditSearch" placeholder="🔍 Search by contact name..." 
+        <input type="text" id="auditSearch" placeholder="⌕ Search by contact name..." 
                style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;
                       background:var(--surface);color:var(--text);font-size:14px"
                oninput="filterAuditLog()">
@@ -21,10 +21,10 @@ async function renderCrmAudit(target) {
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="auditActionFilters">
         <span style="font-size:13px;color:var(--text-muted);margin-right:4px">Action:</span>
         <button class="tag audit-filter-btn active-filter" data-action="" onclick="setAuditFilter(this,'')">All</button>
-        <button class="tag audit-filter-btn" data-action="read" onclick="setAuditFilter(this,'read')">📖 Read</button>
-        <button class="tag audit-filter-btn" data-action="write" onclick="setAuditFilter(this,'write')">✏️ Write</button>
-        <button class="tag audit-filter-btn" data-action="add" onclick="setAuditFilter(this,'add')">➕ Add</button>
-        <button class="tag audit-filter-btn" data-action="delete" onclick="setAuditFilter(this,'delete')">🗑 Delete</button>
+        <button class="tag audit-filter-btn" data-action="read" onclick="setAuditFilter(this,'read')">Read</button>
+        <button class="tag audit-filter-btn" data-action="write" onclick="setAuditFilter(this,'write')">✎ Write</button>
+        <button class="tag audit-filter-btn" data-action="add" onclick="setAuditFilter(this,'add')">+ Add</button>
+        <button class="tag audit-filter-btn" data-action="delete" onclick="setAuditFilter(this,'delete')">✕ Delete</button>
       </div>
     </div>
     <div id="auditLogContainer">
@@ -43,7 +43,7 @@ async function loadAuditLog() {
     renderAuditTable(allAuditEntries);
   } catch (err) {
     document.getElementById('auditLogContainer').innerHTML = 
-      `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error loading audit log</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+      `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Error loading audit log</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -78,7 +78,7 @@ function renderAuditTable(entries) {
     return;
   }
   
-  const actionIcons = { read: '📖', write: '✏️', add: '➕', delete: '🗑' };
+  const actionIcons = { read: '', write: '✎', add: '+', delete: '✕' };
   const actionColors = { read: '#0984e3', write: '#fdcb6e', add: '#00b894', delete: '#e17055' };
   
   let html = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${entries.length} entr${entries.length!==1?'ies':'y'}</div>
@@ -97,7 +97,7 @@ function renderAuditTable(entries) {
       <tbody>`;
   
   entries.forEach(e => {
-    const icon = actionIcons[e.action] || '❓';
+    const icon = actionIcons[e.action] || '?';
     const color = actionColors[e.action] || '#636e72';
     const ts = e.datetime ? formatDate(e.datetime) : (e.timestamp ? new Date(e.timestamp * 1000).toLocaleString() : '-');
     const name = escapeHtml(e.contact_name || '-');
@@ -106,7 +106,7 @@ function renderAuditTable(entries) {
     const agent = escapeHtml(e.agent || '-');
     
     html += `
-      <tr style="border-bottom:1px solid var(--border-light, rgba(255,255,255,0.05))">
+      <tr style="border-bottom:1px solid var(--border-light, var(--border-soft))">
         <td style="padding:8px 10px;white-space:nowrap;font-size:12px;color:var(--text-muted)">${ts}</td>
         <td style="padding:8px 10px"><span style="color:${color};font-weight:600">${icon} ${e.action}</span></td>
         <td style="padding:8px 10px;font-weight:500">${name}</td>

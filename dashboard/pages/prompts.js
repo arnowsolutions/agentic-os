@@ -16,7 +16,7 @@ async function renderPrompts() {
     const grid = document.getElementById('promptGrid');
 
     if (entries.length === 0) {
-      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">📝</div><div class="empty-state-title">No prompt templates</div></div>';
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon"></div><div class="empty-state-title">No prompt templates</div></div>';
       return;
     }
 
@@ -26,7 +26,7 @@ async function renderPrompts() {
       const lines = content.split('\n').length;
       return `<div class="skill-card" onclick="viewPrompt('${name}')">
         <div class="skill-card-header">
-          <div class="skill-card-icon">📝</div>
+          <div class="skill-card-icon"></div>
           <div class="skill-card-name">${displayName}</div>
         </div>
         <div class="skill-card-desc"><pre style="background:none;border:none;padding:0;max-height:100px;overflow:hidden;font-size:11px;color:var(--text-muted)">${escapeHtml(preview)}${preview.length >= 180 ? '...' : ''}</pre></div>
@@ -34,7 +34,7 @@ async function renderPrompts() {
       </div>`;
     }).join('');
   } catch (err) {
-    document.getElementById('promptGrid').innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('promptGrid').innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -53,7 +53,7 @@ async function viewPrompt(name) {
   showModal(`Prompt: ${displayName}`, `
     <pre style="white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto">${escapeHtml(content)}</pre>
   `, `
-    <button class="btn btn-primary" onclick="copyPromptFromModal()">📋 Copy</button>
+    <button class="btn btn-primary" onclick="copyPromptFromModal()">Copy</button>
     <button class="btn btn-ghost" onclick="closeModal()">Close</button>
   `);
 }

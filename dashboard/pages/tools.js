@@ -42,13 +42,13 @@ async function renderTools() {
 
     <div class="grid grid-2 mt-3">
       <div class="card">
-        <div class="card-header"><span class="card-title">Big Reef Dashboard</span></div>
+        <div class="card-header"><span class="card-title">System Status</span></div>
         <div style="padding:12px">
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Integrated dashboard at port 8501</div>
-          <a href="http://localhost:8501" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--accent);color:white;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
-            Open Big Reef Dashboard
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Guardrails, services & cron health — both environments</div>
+          <a href="https://status.srv1738752.hstgr.cloud" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--accent);color:white;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500">
+            Open System Status
           </a>
-          <div style="margin-top:8px;font-size:11px;color:var(--green)">● Running — NotebookLM, Cron, KB stats</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--green)">● Live — status.srv1738752.hstgr.cloud</div>
         </div>
       </div>
       <div class="card">

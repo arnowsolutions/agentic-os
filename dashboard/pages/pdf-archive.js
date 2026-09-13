@@ -3,11 +3,11 @@ async function renderPdfArchive() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">📄 PDF Archive</div>
+        <div class="page-title">PDF Archive</div>
         <div class="page-subtitle">All generated PDFs — call schedules, GME reports, attendance records</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderPdfArchive()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderPdfArchive()">↻ Refresh</button>
       </div>
     </div>
     <div id="paGrid" class="pa-grid"><div class="loading"><div class="loading-spinner"></div></div></div>
@@ -23,36 +23,28 @@ async function renderPdfArchive() {
   `;
   try {
     const res = await fetch('/api/pdf-archive').then(r => r.json()).catch(() => ({}));
+    stampPage(res);
     const pdfs = res.pdfs || [];
-
-    const demoPdfs = [
-      {name:'Call Schedule Q3-Q4 2026.pdf', date:'2026-06-22', size:'245 KB', type:'schedule', icon:'📋'},
-      {name:'GME Report - June 2026.pdf', date:'2026-06-15', size:'180 KB', type:'gme', icon:'💰'},
-      {name:'Grand Rounds Attendance - Q2.pdf', date:'2026-06-10', size:'92 KB', type:'attendance', icon:'📊'},
-      {name:'Call Schedule Test - sfrasier.pdf', date:'2026-06-08', size:'128 KB', type:'schedule', icon:'📋'},
-      {name:'Resident Eval Status.pdf', date:'2026-06-01', size:'56 KB', type:'eval', icon:'📝'},
-    ];
-
-    const data = pdfs.length > 0 ? pdfs : demoPdfs;
+    const data = pdfs;
     const grid = document.getElementById('paGrid');
 
     if (data.length === 0) {
-      grid.innerHTML = '<div class="pa-empty">📭 No PDFs generated yet</div>';
+      grid.innerHTML = '<div class="pa-empty">No PDFs generated yet</div>';
       return;
     }
 
     grid.innerHTML = data.map(p => `
       <div class="pa-card">
-        <div class="icon">${p.icon || '📄'}</div>
+        <div class="icon">${p.icon || ''}</div>
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="meta">${p.date || ''} ${p.size ? '· ' + p.size : ''}</div>
         <div class="actions">
-          <button class="btn btn-sm btn-primary" onclick="showToast('Download started','info')">⬇ Download</button>
-          <button class="btn btn-sm btn-ghost" onclick="showToast('Re-emailing PDF','info')">📤 Re-email</button>
+          <button class="btn btn-sm btn-primary" onclick="showToast('Download started','info')">↓ Download</button>
+          <button class="btn btn-sm btn-ghost" onclick="showToast('Re-emailing PDF','info')">Re-email</button>
         </div>
       </div>
     `).join('');
   } catch(e) {
-    document.getElementById('paGrid').innerHTML = `<div class="pa-empty">⚠️ ${escapeHtml(e.message)}</div>`;
+    document.getElementById('paGrid').innerHTML = `<div class="pa-empty">! ${escapeHtml(e.message)}</div>`;
   }
 }

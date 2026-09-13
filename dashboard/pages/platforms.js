@@ -21,17 +21,17 @@ async function renderPlatforms() {
     </style>
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">🔌 Platform Connections</h1>
+        <h1 class="page-title">Platform Connections</h1>
         <p class="page-subtitle">Connected systems — top 10 items from each platform</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderPlatforms()">🔄 Refresh All</button>
+        <button class="btn" onclick="renderPlatforms()">↻ Refresh All</button>
       </div>
     </div>
     <div class="pages-platforms pf-grid" id="platformGrid">
-      ${buildCard('scl', '🤒', '#fef2f2', 'Sick Call Line', 'Staff absence & coverage management', '/scl')}
-      ${buildCard('reimbursement', '💰', '#f0fdf4', 'Reimbursement', 'GME & expense tracking', '/reimbursement')}
-      ${buildCard('qgenda', '📅', '#eff6ff', 'Qgenda Scheduler', 'OR schedule, swaps & resident assignments', '/qgenda')}
+      ${buildCard('scl', '', '#fef2f2', 'Sick Call Line', 'Staff absence & coverage management', '/scl')}
+      ${buildCard('reimbursement', '', '#f0fdf4', 'Reimbursement', 'GME & expense tracking', '/reimbursement')}
+      ${buildCard('qgenda', '', '#eff6ff', 'Qgenda Scheduler', 'OR schedule, swaps & resident assignments', '/qgenda')}
     </div>
   `;
 
@@ -72,7 +72,7 @@ async function fetchJson(url) {
 async function loadSclTop10() {
   const body = document.getElementById('body-scl');
   const data = await fetchJson('/api/crm/contacts');
-  if (data.error) { body.innerHTML = `<div class="pf-item-empty">⚠️ ${escapeHtml(data.error)}</div>`; return; }
+  if (data.error) { body.innerHTML = `<div class="pf-item-empty">! ${escapeHtml(data.error)}</div>`; return; }
 
   const contacts = Array.isArray(data) ? data : (data.contacts || []);
   const byCat = {};
@@ -121,7 +121,7 @@ async function loadReimbursementTop10() {
 async function loadQgendaTop10() {
   const body = document.getElementById('body-qgenda');
   const data = await fetchJson('/api/qgenda/users?limit=10');
-  if (data.error) { body.innerHTML = `<div class="pf-item-empty">⚠️ ${escapeHtml(data.error)}</div>`; return; }
+  if (data.error) { body.innerHTML = `<div class="pf-item-empty">! ${escapeHtml(data.error)}</div>`; return; }
   body.innerHTML = (Array.isArray(data) ? data : []).map(u =>
     `<div class="pf-item">
       <span class="pf-item-name">${escapeHtml(u.name||'')}</span>

@@ -1,6 +1,6 @@
 /* System Health — detailed view of /api/health/full */
-async function renderHealth() {
-  const content = document.getElementById('pageContent');
+async function renderHealth(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="pages-health">
       <style>
@@ -19,11 +19,11 @@ async function renderHealth() {
 
       <div class="mc-header" style="margin-bottom:24px">
         <div class="mc-header-left">
-          <h1>🏥 System Health</h1>
+          <h1>System Health</h1>
           <p>Central monitor for dashboard, data service, Vapi bridge, cron, disk, and reports</p>
         </div>
         <div class="btn-group">
-          <button class="btn btn-sm btn-ghost" onclick="renderHealth()">🔄 Refresh</button>
+          <button class="btn btn-sm btn-ghost" onclick="renderHealth()">↻ Refresh</button>
         </div>
       </div>
 
@@ -32,7 +32,7 @@ async function renderHealth() {
       </div>
 
       <div class="hlt-card" style="margin-top:16px">
-        <h3>🔄 Cron Raw Output</h3>
+        <h3>↻ Cron Raw Output</h3>
         <div id="healthCronRaw" class="hlt-raw">Loading...</div>
       </div>
     </div>
@@ -73,22 +73,22 @@ async function loadHealthDetail() {
 
     detail.innerHTML = `
       <div class="hlt-card">
-        <h3>🔧 Services</h3>
+        <h3>Services</h3>
         ${serviceHtml || '<div class="text-muted">No services configured</div>'}
       </div>
       <div class="hlt-card">
-        <h3>⏰ Cron</h3>
+        <h3>Cron</h3>
         <div class="hlt-service"><span>Total jobs</span><span class="hlt-mono">${cron.total ?? '?'}</span></div>
         <div class="hlt-service"><span>Failing</span><span class="${(cron.failing || 0) > 0 ? 'hlt-down' : 'hlt-ok'}">${cron.failing ?? 0}</span></div>
         <div class="hlt-service"><span>Delivery errors</span><span class="${(cron.delivery_errors || 0) > 0 ? 'hlt-down' : 'hlt-ok'}">${cron.delivery_errors ?? 0}</span></div>
         ${cron.error ? `<div class="hlt-mono" style="margin-top:8px">${escapeHtml(cron.error)}</div>` : ''}
       </div>
       <div class="hlt-card">
-        <h3>💾 Disk</h3>
+        <h3>Disk</h3>
         ${diskHtml || '<div class="text-muted">No disk data</div>'}
       </div>
       <div class="hlt-card">
-        <h3>📊 Reports</h3>
+        <h3>Reports</h3>
         <div class="hlt-service"><span>PDF count</span><span class="hlt-mono">${reports.report_count ?? 0}</span></div>
         <div class="hlt-service"><span>Latest</span><span class="hlt-mono">${reports.latest_pdf ? escapeHtml(reports.latest_pdf.split('/').pop()) : 'none'}</span></div>
         <div class="hlt-service"><span>Age</span><span class="hlt-mono">${reports.latest_pdf_age_seconds !== null ? timeAgo(new Date(Date.now() - reports.latest_pdf_age_seconds * 1000).toISOString()) : '-'}</span></div>
@@ -97,7 +97,7 @@ async function loadHealthDetail() {
 
     raw.textContent = (cron.raw_lines || []).join('\n') || 'No cron output';
   } catch (err) {
-    detail.innerHTML = `<div class="hlt-card"><div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Health check failed</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div>`;
+    detail.innerHTML = `<div class="hlt-card"><div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Health check failed</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div>`;
     raw.textContent = err.message;
   }
 }

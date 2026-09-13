@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from modules.config import get_settings
 from modules.agent_executor import execute_agent
+from modules import skill_manifest
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -19,6 +20,28 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 class ChatRequest(BaseModel):
     agent: str
     message: str
+    page_context: str | None = None  # current dashboard page key (AI-generalist layer)
+
+
+def _build_context_block(page: str) -> str:
+    """Inject the live page's manifest entry so the agent can answer about
+    the data the user is looking at. Empty string when page unknown."""
+    if not page:
+        return ""
+    ctx = skill_manifest.page_context(page)
+    if not ctx:
+        return ""
+    eps = "\n".join(f"  - {e}" for e in ctx.get("endpoints", [])) or "  (none detected)"
+    return (
+        "\n\n---\n"
+        f"CONTEXT — the user is viewing the Agentic OS dashboard page '{page}'"
+        f" ({ctx.get('title', page)}).\n"
+        f"What this page is for: {ctx.get('description', '—')}\n"
+        "Its live data endpoints:\n" + eps + "\n"
+        "The user's question is probably about THIS page/data. "
+        "Answer using the endpoint data where you can; read files under "
+        "/workspace/agentic-os to answer precisely.\n"
+    )
 
 # ─── Helpers ─────────────────────────────────────────────────────
 
@@ -91,7 +114,8 @@ def chat(req: ChatRequest):
     }
     _save_chat_message(user_msg)
 
-    response_text = execute_agent(agent, req.message)
+    prompt = req.message + _build_context_block(req.page_context or "")
+    response_text = execute_agent(agent, prompt)
 
     agent_msg = {
         "id": str(uuid.uuid4())[:8],
@@ -110,6 +134,7 @@ def chat(req: ChatRequest):
         metadata={
             "msg_preview": req.message[:100],
             "response_preview": response_text[:100],
+            "page": req.page_context or "",
         },
     )
 

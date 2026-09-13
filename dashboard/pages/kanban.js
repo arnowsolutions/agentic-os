@@ -10,7 +10,7 @@ async function renderKanban() {
       </div>
       <div class="btn-group">
         <button class="btn btn-primary" onclick="showAddKanbanTask()">+ Add Task</button>
-        <button class="btn btn-ghost" onclick="renderKanban()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderKanban()">↻ Refresh</button>
       </div>
     </div>
     <div class="kanban-toolbar">
@@ -44,7 +44,7 @@ async function loadKanbanData() {
     renderKanbanBoard();
   } catch (err) {
     const board = document.getElementById('kanbanBoard');
-    if (board) board.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">Failed to load kanban</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+    if (board) board.innerHTML = `<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">Failed to load kanban</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -58,7 +58,7 @@ function renderKanbanBoard() {
   const filterPriority = document.getElementById('kanbanFilterPriority')?.value || 'all';
   const filterCategory = document.getElementById('kanbanFilterCategory')?.value || 'all';
   const columnLabels = { triage: 'Triage', todo: 'To Do', ready: 'Ready', in_progress: 'In Progress', blocked: 'Blocked', done: 'Done', backlog: 'Backlog', review: 'Review' };
-  const columnIcons = { triage: '🔍', todo: '📝', ready: '✅', in_progress: '🔄', blocked: '🚫', done: '🎉', backlog: '📋', review: '🔍' };
+  const columnIcons = { triage: '⌕', todo: '', ready: '✓', in_progress: '↻', blocked: '✕', done: '', backlog: '', review: '⌕' };
   board.innerHTML = columns.map(col => {
     let colTasks = (columnsObj[col] || []).filter(t => {
       if (filterText) return (t.title || '').toLowerCase().includes(filterText) || (t.body || t.description || '').toLowerCase().includes(filterText);
@@ -69,7 +69,7 @@ function renderKanbanBoard() {
       <div class="kanban-column" data-column="${col}">
         <div class="kanban-column-header">
           <div class="kanban-column-title">
-            <span>${columnIcons[col] || '📌'}</span>
+            <span>${columnIcons[col] || ''}</span>
             ${columnLabels[col] || col}
             <span class="kanban-count">${colTasks.length}</span>
           </div>
@@ -84,9 +84,9 @@ function renderKanbanBoard() {
                 <div class="kanban-card-title">${escapeHtml(t.title)}</div>
                 ${t.body ? `<div class="kanban-card-desc">${escapeHtml(t.body.substring(0, 80))}${t.body.length > 80 ? '...' : ''}</div>` : ''}
                 <div class="kanban-card-meta">
-                  ${t.assignee ? `<span>👤 ${escapeHtml(t.assignee)}</span>` : ''}
+                  ${t.assignee ? `<span>▸ ${escapeHtml(t.assignee)}</span>` : ''}
                 </div>
-                ${t.status === 'blocked' ? `<div class="kanban-blocked-badge">🚫 Blocked</div>` : ''}
+                ${t.status === 'blocked' ? `<div class="kanban-blocked-badge">✕ Blocked</div>` : ''}
               </div>
             `).join('')}
         </div>
@@ -233,18 +233,18 @@ function showKanbanDetail(id) {
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
             <span class="badge badge-${task.status === 'done' ? 'success' : task.status === 'in_progress' ? 'info' : 'warning'}">${task.status}</span>
             <span class="kanban-priority priority-${task.priority || 'medium'}">${task.priority}</span>
-            ${task.status === 'blocked' ? `<span class="badge badge-danger">🚫 Blocked</span>` : ''}
+            ${task.status === 'blocked' ? `<span class="badge badge-danger">✕ Blocked</span>` : ''}
           </div>
           ${task.body ? `<div style="margin-bottom:12px;color:var(--text-secondary);font-size:13px">${escapeHtml(task.body)}</div>` : ''}
           <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
-            ${task.assignee ? `<span>👤 <strong>${escapeHtml(task.assignee)}</strong></span>` : ''}
-            <span>📅 <strong>${task.created || 'N/A'}</strong></span>
-            ${task.completed_at ? `<span>✅ <strong>${task.completed_at}</strong></span>` : ''}
+            ${task.assignee ? `<span>▸ <strong>${escapeHtml(task.assignee)}</strong></span>` : ''}
+            <span><strong>${task.created || 'N/A'}</strong></span>
+            ${task.completed_at ? `<span>✓ <strong>${task.completed_at}</strong></span>` : ''}
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${task.status !== 'done' ? `<button class="btn btn-sm btn-primary" onclick="completeKanbanTask('${task.id}')">✅ Mark Done</button>` : ''}
-            ${task.status !== 'blocked' ? `<button class="btn btn-sm btn-ghost" onclick="blockKanbanTask('${task.id}')">🚫 Block</button>` : `<button class="btn btn-sm btn-ghost" onclick="unblockKanbanTask('${task.id}')">🔓 Unblock</button>`}
-            <button class="btn btn-sm btn-ghost" onclick="deleteKanbanTask('${task.id}')" style="color:var(--red)">🗑 Delete</button>
+            ${task.status !== 'done' ? `<button class="btn btn-sm btn-primary" onclick="completeKanbanTask('${task.id}')">✓ Mark Done</button>` : ''}
+            ${task.status !== 'blocked' ? `<button class="btn btn-sm btn-ghost" onclick="blockKanbanTask('${task.id}')">✕ Block</button>` : `<button class="btn btn-sm btn-ghost" onclick="unblockKanbanTask('${task.id}')">○ Unblock</button>`}
+            <button class="btn btn-sm btn-ghost" onclick="deleteKanbanTask('${task.id}')" style="color:var(--red)">✕ Delete</button>
           </div>
         </div>
       </div>
@@ -257,7 +257,7 @@ async function completeKanbanTask(id) {
     await api.completeKanbanTask(id);
     closeModal();
     renderKanban();
-    showToast('Task completed! ✅', 'success');
+    showToast('Task completed! ✓', 'success');
   } catch (err) {
     showToast('Failed: ' + err.message, 'error');
   }
@@ -268,7 +268,7 @@ async function blockKanbanTask(id) {
     await api.blockKanbanTask(id);
     closeModal();
     renderKanban();
-    showToast('Task blocked 🚫', 'warning');
+    showToast('Task blocked ✕', 'warning');
   } catch (err) {
     showToast('Failed: ' + err.message, 'error');
   }
@@ -279,7 +279,7 @@ async function unblockKanbanTask(id) {
     await api.unblockKanbanTask(id);
     closeModal();
     renderKanban();
-    showToast('Task unblocked 🔓', 'success');
+    showToast('Task unblocked ○', 'success');
   } catch (err) {
     showToast('Failed: ' + err.message, 'error');
   }

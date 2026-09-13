@@ -35,9 +35,9 @@ async function renderCost() {
     const days = Object.keys(totals).length;
 
     document.getElementById('costStats').innerHTML = `
-      <div class="card stat-card"><div class="stat-icon purple">💰</div><div class="stat-value">$${totalCost.toFixed(4)}</div><div class="stat-label">Total Cost</div></div>
-      <div class="card stat-card"><div class="stat-icon blue">🔤</div><div class="stat-value">${totalTokens.toLocaleString()}</div><div class="stat-label">Total Tokens</div></div>
-      <div class="card stat-card"><div class="stat-icon ${alerts.length > 0 ? 'red' : 'green'}">${alerts.length > 0 ? '⚠' : '✓'}</div><div class="stat-value">${alerts.length}</div><div class="stat-label">Free Tier Alerts</div></div>
+      <div class="card stat-card"><div class="stat-icon purple"></div><div class="stat-value">$${totalCost.toFixed(4)}</div><div class="stat-label">Total Cost</div></div>
+      <div class="card stat-card"><div class="stat-icon blue"></div><div class="stat-value">${totalTokens.toLocaleString()}</div><div class="stat-label">Total Tokens</div></div>
+      <div class="card stat-card"><div class="stat-icon ${alerts.length > 0 ? 'red' : 'green'}">${alerts.length > 0 ? '!' : '✓'}</div><div class="stat-value">${alerts.length}</div><div class="stat-label">Free Tier Alerts</div></div>
     `;
 
     const entriesContainer = document.getElementById('costEntries');
@@ -46,7 +46,7 @@ async function renderCost() {
     if (!collectionState.has_real_metadata || entries.length === 0) {
       entriesContainer.innerHTML = `
         <div class="empty-state" style="padding:40px 20px">
-          <div class="empty-state-icon">📊</div>
+          <div class="empty-state-icon"></div>
           <div class="empty-state-title">No cost data yet</div>
           <div class="empty-state-desc">Cost tracking begins automatically when agents are used. Data will appear here once chat messages or skills are executed with real usage metadata.</div>
           <div style="margin-top:16px;font-size:11px;color:var(--text-muted)">
@@ -84,7 +84,7 @@ async function renderCost() {
       header.insertAdjacentHTML('afterend', `
         <div class="card mb-3" style="border-color:var(--yellow)">
           <div class="flex items-center gap-2">
-            <span style="font-size:18px">⚠</span>
+            <span style="font-size:18px">!</span>
             <div>
               <strong style="font-size:13px">Free Tier Alerts</strong>
               ${alerts.map(a => `<div style="font-size:12px;color:var(--text-muted)">${escapeHtml(a)}</div>`).join('')}
@@ -125,6 +125,6 @@ async function renderCost() {
       });
     }
   } catch (err) {
-    document.getElementById('costStats').innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div></div>`;
+    document.getElementById('costStats').innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div></div>`;
   }
 }

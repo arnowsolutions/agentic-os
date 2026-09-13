@@ -11,7 +11,7 @@
   --border: #2a2a4a;
   --text: #ffffff;
   --text-muted: #a0a0c0;
-  --accent: #667eea;
+  --accent: #14b8a6;
   --green: #27c93f;
   --red: #ff5f56;
   --yellow: #f0a040;
@@ -68,8 +68,8 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 16px; flex-shrink: 0;
 }
-.msg.assistant .avatar { background: linear-gradient(135deg, #667eea, #764ba2); }
-.msg.user .avatar { background: linear-gradient(135deg, #f093fb, #f5576c); }
+.msg.assistant .avatar { background: linear-gradient(135deg, #14b8a6, #0d9488); }
+.msg.user .avatar { background: linear-gradient(135deg, #5eead4, #14b8a6); }
 .msg .bubble {
   max-width: 75%; padding: 10px 14px; border-radius: 16px;
   font-size: 14px; line-height: 1.55; word-wrap: break-word;
@@ -141,18 +141,18 @@ textarea:focus { outline: none; border-color: var(--accent); }
 <body>
 
 <div class="header">
-  <h1>💬 OmniRoute Chat</h1>
+  <h1>OmniRoute Chat</h1>
   <div style="display:flex;align-items:center;gap:12px">
     <select id="modelSelect">
       <optgroup label="Auto Routing">
-        <option value="auto/cheap">💰 auto/cheap</option>
-        <option value="auto/best-free">🆓 auto/best-free</option>
-        <option value="auto/coding:free">💻 auto/coding:free</option>
-        <option value="auto/best-coding">🏆 auto/best-coding</option>
-        <option value="auto/best-fast">⚡ auto/best-fast</option>
-        <option value="auto/best-reasoning">🧠 auto/best-reasoning</option>
-        <option value="auto/coding" selected>🔧 auto/coding</option>
-        <option value="auto/chat">💬 auto/chat</option>
+        <option value="auto/cheap">auto/cheap</option>
+        <option value="auto/best-free">auto/best-free</option>
+        <option value="auto/coding:free">auto/coding:free</option>
+        <option value="auto/best-coding">auto/best-coding</option>
+        <option value="auto/best-fast">auto/best-fast</option>
+        <option value="auto/best-reasoning">auto/best-reasoning</option>
+        <option value="auto/coding" selected>auto/coding</option>
+        <option value="auto/chat">auto/chat</option>
       </optgroup>
       <optgroup label="Direct Models">
         <option value="groq/llama-3.3-70b-versatile">Groq Llama 3.3 70B</option>
@@ -162,24 +162,24 @@ textarea:focus { outline: none; border-color: var(--accent); }
       </optgroup>
     </select>
     <span class="status"><span class="dot checking" id="statusDot"></span><span id="statusText">checking</span></span>
-    <button onclick="newChat()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px">🆕 New</button>
+    <button onclick="newChat()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px">New</button>
   </div>
 </div>
 
 <div class="messages" id="messages">
   <div class="empty">
-    <div class="icon">🚀</div>
+    <div class="icon"></div>
     <h2>OmniRoute Chat</h2>
-    <p>237 providers · auto-fallback · free routing<br>Paste images with Ctrl+V or click 🖼️ to upload</p>
+    <p>237 providers · auto-fallback · free routing<br>Paste images with Ctrl+V or click ▣ to upload</p>
   </div>
 </div>
 
 <div class="input-area">
   <div class="img-previews" id="imgPreviews"></div>
   <div class="input-row">
-    <label class="upload-btn" title="Upload image">🖼️<input type="file" accept="image/*" multiple style="display:none" id="fileInput"></label>
+    <label class="upload-btn" title="Upload image">▣<input type="file" accept="image/*" multiple style="display:none" id="fileInput"></label>
     <textarea id="input" rows="1" placeholder="Type a message... (Enter to send, Shift+Enter for new line)"></textarea>
-    <button class="send-btn" id="sendBtn" onclick="send()">▶ Send</button>
+    <button class="send-btn" id="sendBtn" onclick="send()">▸ Send</button>
   </div>
 </div>
 
@@ -328,7 +328,7 @@ async function send() {
     delete messages[idx].streaming;
     render();
   } catch(e) {
-    messages[idx].content = e.name === 'AbortError' ? '⏰ Timeout' : '❌ ' + e.message;
+    messages[idx].content = e.name === 'AbortError' ? 'Timeout' : '✕ ' + e.message;
     messages[idx].isError = true;
     delete messages[idx].streaming;
     render();
@@ -357,12 +357,12 @@ function buildPayload(text, images) {
 function render() {
   const el = document.getElementById('messages');
   if (messages.length === 0) {
-    el.innerHTML = `<div class="empty"><div class="icon">🚀</div><h2>OmniRoute Chat</h2><p>237 providers · auto-fallback · free routing<br>Paste images with Ctrl+V or click 🖼️ to upload</p></div>`;
+    el.innerHTML = `<div class="empty"><div class="icon"></div><h2>OmniRoute Chat</h2><p>237 providers · auto-fallback · free routing<br>Paste images with Ctrl+V or click ▣ to upload</p></div>`;
     return;
   }
   el.innerHTML = messages.map((m, i) => {
     const isUser = m.role === 'user';
-    const avatar = isUser ? '👤' : '🤖';
+    const avatar = isUser ? '▸' : '◆';
     const cls = m.isError ? 'msg assistant' : `msg ${m.role}`;
     const bubbleStyle = m.isError ? 'style="background:#2a0a0a;border-color:var(--red);color:#fca5a5"' : '';
 

@@ -4,7 +4,7 @@ async function renderEmailTemplates() {
   content.innerHTML = `
     <div class="page-header">
       <div>
-        <h2 class="page-section-title">📋 Email Templates</h2>
+        <h2 class="page-section-title">Email Templates</h2>
         <p class="text-muted">Pre-built email templates for quick sending — use with "Send the {template name} to {contact}"</p>
       </div>
       <button class="btn btn-primary" onclick="showCreateTemplateModal()">
@@ -87,13 +87,13 @@ async function renderEmailTemplates() {
             <textarea class="form-input form-textarea" id="sendBody" rows="10"></textarea>
           </div>
           <div class="flex gap-2">
-            <button class="btn btn-secondary" onclick="previewSendTemplate()">👁 Preview</button>
+            <button class="btn btn-secondary" onclick="previewSendTemplate()">Preview</button>
             <span class="text-muted" style="font-size:13px;align-self:center">Preview replaces {firstName}, {lastName}, {date} with contact data</span>
           </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closeSendModal()">Cancel</button>
-          <button class="btn btn-primary" id="sendBtn" onclick="executeSend()">✉ Send Email</button>
+          <button class="btn btn-primary" id="sendBtn" onclick="executeSend()">Send Email</button>
         </div>
       </div>
     </div>
@@ -172,7 +172,7 @@ async function loadTemplates() {
     const templates = data.templates || [];
 
     if (templates.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">No templates yet</div><div class="empty-state-desc">Create your first template to get started</div></div>`;
+      grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No templates yet</div><div class="empty-state-desc">Create your first template to get started</div></div>`;
       return;
     }
 
@@ -184,19 +184,19 @@ async function loadTemplates() {
             <span class="tmpl-name">${escapeHtml(t.title)}</span>
             <span class="tmpl-tone" style="border-left:3px solid ${toneColor};padding-left:8px">${escapeHtml(t.tone)}</span>
           </div>
-          <div class="tmpl-subject">📧 ${escapeHtml(t.subject)}</div>
+          <div class="tmpl-subject">${escapeHtml(t.subject)}</div>
           <div class="tmpl-body">${escapeHtml(t.body)}</div>
           <div class="tmpl-actions">
-            <button class="btn btn-primary btn-sm" onclick="openSendModal('${escapeHtml(t.name)}')">✉ Send to...</button>
-            <button class="btn btn-secondary btn-sm" onclick="editTemplate('${escapeHtml(t.name)}')">✏ Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${escapeHtml(t.name)}')">🗑 Delete</button>
+            <button class="btn btn-primary btn-sm" onclick="openSendModal('${escapeHtml(t.name)}')">Send to...</button>
+            <button class="btn btn-secondary btn-sm" onclick="editTemplate('${escapeHtml(t.name)}')">✎ Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${escapeHtml(t.name)}')">✕ Delete</button>
           </div>
         </div>
       `;
     }).join('');
   } catch (err) {
     document.getElementById('templatesGrid').innerHTML =
-      `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+      `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -391,7 +391,7 @@ async function executeSend() {
 
   const btn = document.getElementById('sendBtn');
   btn.disabled = true;
-  btn.textContent = '⏳ Sending...';
+  btn.textContent = 'Sending...';
 
   try {
     const result = await api.sendEmail({
@@ -410,6 +410,6 @@ async function executeSend() {
     showToast('Failed to send: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '✉ Send Email';
+    btn.textContent = 'Send Email';
   }
 }

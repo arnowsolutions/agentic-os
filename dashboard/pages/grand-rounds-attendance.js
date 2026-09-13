@@ -15,7 +15,7 @@ async function renderGrandRoundsAttendance(target) {
     attendanceData = await resp.json();
   } catch {
     content.innerHTML = `<div class="card" style="padding:30px;text-align:center;color:var(--muted)">
-      <div style="font-size:40px;margin-bottom:12px">📊</div>
+      <div style="font-size:40px;margin-bottom:12px"></div>
       <h3>No Attendance Data Yet</h3>
       <p style="color:var(--muted);font-size:13px">Run the data builder first.</p>
     </div>`;
@@ -51,12 +51,12 @@ function renderTable() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📊 Grand Rounds Attendance</h1>
+        <h1 class="page-title">Grand Rounds Attendance</h1>
         <p class="page-subtitle">Academic Year 2025-2026 — Attend ≥1 of 2 Friday meetings = compliant</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="exportAttendanceCSV()">📥 Export CSV</button>
-        <button class="btn" onclick="renderGrandRoundsAttendance()">🔄 Refresh</button>
+        <button class="btn" onclick="exportAttendanceCSV()">Export CSV</button>
+        <button class="btn" onclick="renderGrandRoundsAttendance()">↻ Refresh</button>
       </div>
     </div>
 
@@ -102,17 +102,17 @@ function renderTable() {
 
     <!-- Legend -->
     <div style="display:flex;gap:16px;font-size:11px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap">
-      <span>🟢 <b>Both</b> = signed in for both meetings</span>
-      <span>🟡 <b>7AM</b> = signed in for Grand Rounds only</span>
-      <span>🔵 <b>8AM</b> = signed in for Conference only</span>
-      <span>🎯 <b>Compliance = Any 1</b> (separate sign-in codes per meeting)</span>
+      <span>● <b>Both</b> = signed in for both meetings</span>
+      <span>● <b>7AM</b> = signed in for Grand Rounds only</span>
+      <span>● <b>8AM</b> = signed in for Conference only</span>
+      <span><b>Compliance = Any 1</b> (separate sign-in codes per meeting)</span>
       <span>Target: <b>70%</b></span>
     </div>
 
     <!-- Main Table -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title">📋 Faculty Compliance</span>
+        <span class="card-title">Faculty Compliance</span>
         <div style="margin-left:auto;font-size:11px;color:var(--muted)">
           Need ≥${needAny} weeks for any-1 pass
         </div>
@@ -123,9 +123,9 @@ function renderTable() {
             <tr style="background:var(--bg);border-bottom:1px solid var(--line)">
               <th style="padding:7px 10px;text-align:left">Faculty</th>
               <th style="padding:7px 10px;text-align:left">EZ ID</th>
-              <th style="padding:7px 10px;text-align:center" colspan="2">🟢 Both</th>
-              <th style="padding:7px 10px;text-align:center">🟡 7AM</th>
-              <th style="padding:7px 10px;text-align:center">🔵 8AM</th>
+              <th style="padding:7px 10px;text-align:center" colspan="2">● Both</th>
+              <th style="padding:7px 10px;text-align:center">● 7AM</th>
+              <th style="padding:7px 10px;text-align:center">● 8AM</th>
               <th style="padding:7px 10px;text-align:center" colspan="2">Attend Any 1</th>
               <th style="padding:7px 10px;text-align:center">Bar</th>
               <th style="padding:7px 10px;text-align:center">Status</th>
@@ -138,8 +138,8 @@ function renderTable() {
               const barBoth = Math.min(s.pctBoth, 100);
               const anyColor = s.passAny ? 'var(--green)' : (s.pctAny >= 60 ? 'var(--yellow)' : 'var(--red)');
               const bothColor = s.passBoth ? 'var(--green)' : (s.pctBoth >= 60 ? 'var(--yellow)' : 'var(--red)');
-              const statusAny = s.passAny ? '✅' : (s.pctAny >= 60 ? '⚠️' : '🔴');
-              const statusBoth = s.passBoth ? '✅' : (s.pctBoth >= 60 ? '⚠️' : '🔴');
+              const statusAny = s.passAny ? '✓' : (s.pctAny >= 60 ? '!' : '●');
+              const statusBoth = s.passBoth ? '✓' : (s.pctBoth >= 60 ? '!' : '●');
               return `
                 <tr style="border-bottom:1px solid var(--line-soft)">
                   <td style="padding:6px 10px"><strong>${escapeHtml(p.first)} ${escapeHtml(p.last)}</strong></td>
@@ -201,5 +201,5 @@ function exportAttendanceCSV() {
   a.download = 'Grand_Rounds_Compliance_2025-2026.csv';
   a.click();
   URL.revokeObjectURL(url);
-  showToast('📥 CSV exported', 'success');
+  showToast('CSV exported', 'success');
 }

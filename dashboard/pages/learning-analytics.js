@@ -7,7 +7,7 @@ async function renderLearningAnalytics() {
         <div class="page-subtitle">Skill evaluation scores and performance trends</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderLearningAnalytics()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderLearningAnalytics()">↻ Refresh</button>
       </div>
     </div>
     <div class="section-title">Skill Scores</div>
@@ -28,7 +28,7 @@ async function renderLearningAnalytics() {
     const grid = document.getElementById('skillScoresGrid');
     if (grid) {
       if (skills.length === 0) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">📊</div><div class="empty-state-title">No skill data yet</div><div class="empty-state-desc">Skill evaluations will appear here as they accumulate</div></div>`;
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon"></div><div class="empty-state-title">No skill data yet</div><div class="empty-state-desc">Skill evaluations will appear here as they accumulate</div></div>`;
       } else {
         const topSkills = skills.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6);
         grid.innerHTML = topSkills.map(s => {
@@ -52,7 +52,7 @@ async function renderLearningAnalytics() {
     if (trendSection) {
       const trendEntries = Object.entries(trends).slice(0, 4);
       if (trendEntries.length === 0) {
-        trendSection.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">📈</div><div class="empty-state-title">No trend data</div><div class="empty-state-desc">Trends will appear after multiple evaluations</div></div>`;
+        trendSection.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon"></div><div class="empty-state-title">No trend data</div><div class="empty-state-desc">Trends will appear after multiple evaluations</div></div>`;
       } else {
         trendSection.innerHTML = trendEntries.map(([name, history]) => {
           const vals = (history || []).slice(-10);

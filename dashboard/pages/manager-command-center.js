@@ -1,6 +1,6 @@
 /* Montefiore Urology — Manager Command Center (Tier 2: Jessie/Winnie/Kelly) */
-async function renderManagerCommandCenter() {
-  const content = document.getElementById('pageContent');
+async function renderManagerCommandCenter(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="pages-manager-cc">
       <style>

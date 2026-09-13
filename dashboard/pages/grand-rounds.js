@@ -25,7 +25,7 @@ async function ensureGRData() {
   } catch (err) {
     console.error('GR schedule load failed:', err);
     const c = document.getElementById('suitePane') || document.getElementById('pageContent');
-    if (c) c.innerHTML = '<div class="card" style="padding:24px;color:var(--red)">⚠️ Could not load schedule from the database: ' + escapeHtml(String(err && err.message || err)) + '</div>';
+    if (c) c.innerHTML = '<div class="card" style="padding:24px;color:var(--red)">! Could not load schedule from the database: ' + escapeHtml(String(err && err.message || err)) + '</div>';
     return false;
   }
 }
@@ -45,19 +45,19 @@ async function renderGrandRounds(target) {
 content.innerHTML = `
   <div class="page-header">
     <div class="page-header-left">
-      <h1 class="page-title">📋 Grand Rounds Schedule Manager</h1>
+      <h1 class="page-title">Grand Rounds Schedule Manager</h1>
       <p class="page-subtitle">Urology Academic Schedule 2026-2027 — Edit CME codes & send invites</p>
     </div>
     <div class="btn-group">
-      <button class="btn" onclick="renderGrandRounds()">🔄 Refresh</button>
-      <button class="btn" onclick="viewMonday()">📋 View Monday SASP</button>
+      <button class="btn" onclick="renderGrandRounds()">↻ Refresh</button>
+      <button class="btn" onclick="viewMonday()">View Monday SASP</button>
     </div>
   </div>
 
     <div style="display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start">
       <!-- Sidebar Controls -->
       <div class="card" style="position:sticky;top:70px">
-        <div class="card-header"><span class="card-title">⚙ Controls</span></div>
+        <div class="card-header"><span class="card-title">Controls</span></div>
         <div class="card-body" style="font-size:13px">
           
           <div style="margin-bottom:10px">
@@ -70,7 +70,7 @@ content.innerHTML = `
             <div style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-muted)">
               <span id="grListCount">0 recipients</span>
               <button class="btn btn-sm" style="margin-left:auto;font-size:11px" onclick="loadGrEmailGroups()">↻ Refresh</button>
-              <button class="btn btn-sm" style="font-size:11px" onclick="navigate('distribution')" title="Open full Distribution Lists tab">👥 Manage</button>
+              <button class="btn btn-sm" style="font-size:11px" onclick="navigate('distribution')" title="Open full Distribution Lists tab">Manage</button>
             </div>
           </div>
 
@@ -106,9 +106,9 @@ content.innerHTML = `
           </div>
 
           <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
-            <button class="btn btn-sm" style="font-size:11px" onclick="openAllOutlook()">📧 Open All in Outlook</button>
-            <button class="btn btn-sm" style="font-size:11px" onclick="downloadAllIcs()">📥 Download All .ics</button>
-            <button class="btn btn-sm" style="font-size:11px" onclick="saveCodesLocally()">💾 Save Codes</button>
+            <button class="btn btn-sm" style="font-size:11px" onclick="openAllOutlook()">Open All in Outlook</button>
+            <button class="btn btn-sm" style="font-size:11px" onclick="downloadAllIcs()">Download All .ics</button>
+            <button class="btn btn-sm" style="font-size:11px" onclick="saveCodesLocally()">Save Codes</button>
           </div>
         </div>
       </div>
@@ -226,8 +226,8 @@ function renderTableRows(meetings) {
           ${m.title2 !== '—' ? `<input type="text" value="${code2}" data-date="${m.date}" data-slot="hour2" class="gr-code-input" style="width:80px;var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:12px;font-family:monospace" onchange="updateCode('${m.date}','hour2',this.value)" />` : '<span style="color:var(--text-muted)">—</span>'}
         </td>
         <td style="padding:8px 10px;text-align:center;white-space:nowrap">
-          <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openOutlookForDate('${m.date}','${m.title1}','${m.title2}')" title="Open in Outlook">📧</button>
-          <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadIcsForDate('${m.date}','${m.title1}','${m.title2}')" title="Download .ics">📥</button>
+          <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openOutlookForDate('${m.date}','${m.title1}','${m.title2}')" title="Open in Outlook"></button>
+          <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadIcsForDate('${m.date}','${m.title1}','${m.title2}')" title="Download .ics"></button>
         </td>
       </tr>
     `;
@@ -255,7 +255,7 @@ function icsSentBadge(date) {
   if (!monIcsProgress) return '<span style="color:var(--text-muted);font-size:11px">⋯</span>';
   const sent = monIcsProgress.monday_sasp?.ics_sent_dates || [];
   return sent.includes(date)
-    ? '<span style="color:var(--green);font-weight:600;font-size:13px">✅ Sent</span>'
+    ? '<span style="color:var(--green);font-weight:600;font-size:13px">✓ Sent</span>'
     : '<span style="color:var(--text-muted);font-size:11px">—</span>';
 }
 
@@ -319,8 +319,8 @@ tbody.innerHTML = rows.map(r => `
     <td style="padding:8px 10px;vertical-align:top">${escapeHtml(r.attending)}</td>
     <td style="padding:8px 10px;text-align:center;vertical-align:top">${icsSentBadge(r.date)}</td>
     <td style="padding:8px 10px;text-align:center;white-space:nowrap">
-      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMondayOutlook('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Open in Outlook">📧</button>
-      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadMondayIcs('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Download .ics">📥</button>
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMondayOutlook('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Open in Outlook"></button>
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadMondayIcs('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Download .ics"></button>
     </td>
   </tr>
 `).join('');
@@ -334,11 +334,11 @@ async function viewMonday() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📋 Monday SASP Conferences</h1>
+        <h1 class="page-title">Monday SASP Conferences</h1>
         <p class="page-subtitle">Urology Resident Monday Morning Conferences 2026-2027</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderGrandRounds()">📋 View Grand Rounds</button>
+        <button class="btn" onclick="renderGrandRounds()">View Grand Rounds</button>
       </div>
     </div>
 
@@ -440,7 +440,7 @@ function loadCodes() {
 function saveCodesLocally() {
   try {
     localStorage.setItem('grCmeCodes', JSON.stringify(grCmeCodes));
-    showToast('💾 Codes saved locally', 'success');
+    showToast('Codes saved locally', 'success');
   } catch {}
 }
 
@@ -463,7 +463,7 @@ function applyBulkCodes() {
   
   saveCodesLocally();
   renderGrandRounds();
-  showToast(`✅ Applied ${count} code entries`, 'success');
+  showToast(`✓ Applied ${count} code entries`, 'success');
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -600,7 +600,7 @@ async function downloadAllIcs() {
   a.href = url; a.download = 'all-grand-rounds-2026-2027.ics';
   a.click();
   URL.revokeObjectURL(url);
-  showToast(`✅ Downloaded ${meetings.length} meetings as .ics`, 'success');
+  showToast(`✓ Downloaded ${meetings.length} meetings as .ics`, 'success');
 }
 
 

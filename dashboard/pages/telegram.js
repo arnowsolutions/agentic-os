@@ -3,11 +3,11 @@ async function renderTelegram() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">💬 Telegram Sessions</h1>
+        <h1 class="page-title">Telegram Sessions</h1>
         <p class="page-subtitle">Messaging conversations from Hermes state.db</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderTelegram()">🔄 Refresh</button>
+        <button class="btn" onclick="renderTelegram()">↻ Refresh</button>
       </div>
     </div>
 
@@ -25,24 +25,24 @@ async function renderTelegram() {
 
     document.getElementById('telegramStats').innerHTML = `
       <div class="card stat-card">
-        <div class="stat-icon blue">💬</div>
+        <div class="stat-icon blue"></div>
         <div class="stat-value">${total}</div>
         <div class="stat-label">Total Sessions</div>
         <div class="stat-change up">${active} active</div>
       </div>
       <div class="card stat-card">
-        <div class="stat-icon green">✉</div>
+        <div class="stat-icon green"></div>
         <div class="stat-value">${totalMsgs}</div>
         <div class="stat-label">Total Messages</div>
       </div>
       <div class="card stat-card">
-        <div class="stat-icon purple">📱</div>
+        <div class="stat-icon purple"></div>
         <div class="stat-value">${sources.length}</div>
         <div class="stat-label">Platforms</div>
         <div class="stat-change up">${sources.join(', ')}</div>
       </div>
       <div class="card stat-card">
-        <div class="stat-icon yellow">🔄</div>
+        <div class="stat-icon yellow">↻</div>
         <div class="stat-value">${sessions.filter(s => s.source === 'telegram').length}</div>
         <div class="stat-label">Telegram</div>
       </div>
@@ -50,7 +50,7 @@ async function renderTelegram() {
 
     if (data.error) {
       document.getElementById('telegramList').innerHTML = `
-        <div class="card"><div class="empty-state"><div class="empty-state-icon">⚠</div>
+        <div class="card"><div class="empty-state"><div class="empty-state-icon">!</div>
         <div class="empty-state-title">Error Loading Sessions</div>
         <div class="empty-state-desc">${escapeHtml(data.error)}</div></div></div>`;
       return;
@@ -58,7 +58,7 @@ async function renderTelegram() {
 
     if (sessions.length === 0) {
       document.getElementById('telegramList').innerHTML = `
-        <div class="card"><div class="empty-state"><div class="empty-state-icon">📭</div>
+        <div class="card"><div class="empty-state"><div class="empty-state-icon"></div>
         <div class="empty-state-title">No messaging sessions found</div>
         <div class="empty-state-desc">Chat on Telegram and they'll appear here</div></div></div>`;
       return;
@@ -66,7 +66,7 @@ async function renderTelegram() {
 
     document.getElementById('telegramList').innerHTML = `
       <div class="card">
-        <div class="card-header"><span class="card-title">📋 Session History</span></div>
+        <div class="card-header"><span class="card-title">Session History</span></div>
         <div style="overflow-x:auto">
           <table class="data-table" style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
@@ -82,9 +82,9 @@ async function renderTelegram() {
             </thead>
             <tbody>
               ${sessions.map(s => {
-                const platformEmoji = { telegram: '✈️', discord: '💬', slack: '🔌', email: '📧' }[s.source] || '💬';
+                const platformEmoji = { telegram: '', discord: '', slack: '', email: '' }[s.source] || '';
                 const started = s.started ? new Date(s.started * 1000).toLocaleDateString() : '—';
-                const status = s.ended ? '<span style="color:var(--text-muted)">⬤ Ended</span>' : '<span style="color:var(--green)">⬤ Active</span>';
+                const status = s.ended ? '<span style="color:var(--text-muted)">● Ended</span>' : '<span style="color:var(--green)">● Active</span>';
                 const totalTokens = (s.input_tokens || 0) + (s.output_tokens || 0);
                 return `<tr style="border-bottom:1px solid var(--border)">
                   <td style="padding:8px 12px">${platformEmoji} ${s.source}</td>
@@ -108,7 +108,7 @@ async function renderTelegram() {
     `;
   } catch (err) {
     document.getElementById('telegramList').innerHTML = `
-      <div class="card"><div class="empty-state"><div class="empty-state-icon">⚠</div>
+      <div class="card"><div class="empty-state"><div class="empty-state-icon">!</div>
       <div class="empty-state-title">Connection Error</div>
       <div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div>`;
   }

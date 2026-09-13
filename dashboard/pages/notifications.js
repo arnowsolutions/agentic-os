@@ -3,21 +3,21 @@ async function renderNotifications() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">🔔 Notification Feed</div>
+        <div class="page-title">Notification Feed</div>
         <div class="page-subtitle">Cron completions, eval reminders, system events — all in one place</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderNotifications()">🔄 Refresh</button>
-        <button class="btn btn-primary" onclick="clearNotifications()">🗑 Clear All</button>
+        <button class="btn btn-ghost" onclick="renderNotifications()">↻ Refresh</button>
+        <button class="btn btn-primary" onclick="clearNotifications()">✕ Clear All</button>
       </div>
     </div>
     <div class="nt-controls">
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="nt-filter active" data-filter="all" onclick="filterNotif('all',this)">All</button>
-        <button class="nt-filter" data-filter="cron" onclick="filterNotif('cron',this)">⏱ Cron</button>
-        <button class="nt-filter" data-filter="eval" onclick="filterNotif('eval',this)">📝 Evals</button>
-        <button class="nt-filter" data-filter="system" onclick="filterNotif('system',this)">⚙️ System</button>
-        <button class="nt-filter" data-filter="telegram" onclick="filterNotif('telegram',this)">✈️ Telegram</button>
+        <button class="nt-filter" data-filter="cron" onclick="filterNotif('cron',this)">Cron</button>
+        <button class="nt-filter" data-filter="eval" onclick="filterNotif('eval',this)">Evals</button>
+        <button class="nt-filter" data-filter="system" onclick="filterNotif('system',this)">System</button>
+        <button class="nt-filter" data-filter="telegram" onclick="filterNotif('telegram',this)">Telegram</button>
       </div>
     </div>
     <div id="ntFeed" class="nt-feed"><div class="loading"><div class="loading-spinner"></div><span>Loading feed...</span></div></div>
@@ -43,27 +43,12 @@ let _allNotifs = [];
 async function loadNotifications() {
   try {
     const res = await fetch('/api/notifications').then(r => r.json()).catch(() => ({notifications: []}));
+    stampPage(res);
     const notifs = res.notifications || [];
-
-    // Generate demo notifications if API returns empty
-    if (notifs.length === 0) {
-      const demoNotifs = [
-        {id:1, type:'cron', icon:'⏱', title:'Call Schedule PDF Generated', desc:'Q3-Q4 2026 schedule PDF was generated and saved', time:'12 min ago'},
-        {id:2, type:'eval', icon:'📝', title:'Eval Reminder Sent', desc:'Reminder sent to 3 faculty for pending evaluations', time:'1 hour ago'},
-        {id:3, type:'system', icon:'⚙️', title:'System Health Check', desc:'All services online — Hermes, Telegram, Vapi', time:'2 hours ago'},
-        {id:4, type:'telegram', icon:'✈️', title:'New Telegram Message', desc:'Dr. Chen: "Can you send the call schedule?"', time:'3 hours ago'},
-        {id:5, type:'cron', icon:'⏱', title:'GME Report Scheduled', desc:'Weekly GME report will run Monday 7 AM', time:'5 hours ago'},
-        {id:6, type:'eval', icon:'📝', title:'Kelli Aibel Eval Due', desc:'PGY-3 evaluation form needs completion by Friday', time:'1 day ago'},
-        {id:7, type:'system', icon:'⚙️', title:'Backup Completed', desc:'Agentic OS configuration backed up successfully', time:'1 day ago'},
-        {id:8, type:'cron', icon:'⏱', title:'Grand Rounds Attendance', desc:'Weekly attendance report ready for review', time:'2 days ago'},
-      ];
-      _allNotifs = demoNotifs;
-    } else {
-      _allNotifs = notifs;
-    }
+    _allNotifs = notifs;
     renderNotifFeed('all');
   } catch(e) {
-    document.getElementById('ntFeed').innerHTML = `<div class="nt-empty">⚠️ ${escapeHtml(e.message)}</div>`;
+    document.getElementById('ntFeed').innerHTML = `<div class="nt-empty">! ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -71,7 +56,7 @@ function renderNotifFeed(filter) {
   const feed = document.getElementById('ntFeed');
   const filtered = filter === 'all' ? _allNotifs : _allNotifs.filter(n => n.type === filter);
   if (filtered.length === 0) {
-    feed.innerHTML = '<div class="nt-empty">📭 No notifications</div>';
+    feed.innerHTML = '<div class="nt-empty">No notifications</div>';
     return;
   }
   feed.innerHTML = filtered.map(n => `

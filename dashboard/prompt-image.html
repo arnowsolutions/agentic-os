@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎨 Prompt Builder Pro</title>
+<title>Prompt Builder Pro</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { 
@@ -105,18 +105,18 @@
 <body>
 
 <div class="header">
-  <h1>🎨 Prompt Builder Pro</h1>
+  <h1>Prompt Builder Pro</h1>
   <span>Click to build → then paste the prompt here</span>
 </div>
 
 <div class="section">
-  <div class="section-title">📷 What are we making?</div>
+  <div class="section-title">What are we making?</div>
   <input class="subject-input" id="subject" placeholder="Describe the subject..." value="a product or scene">
 </div>
 
 <!-- MODEL -->
 <div class="section">
-  <div class="section-title">🧠 Model</div>
+  <div class="section-title">Model</div>
   <div class="model-select" id="modelSelect">
     <div class="model-btn selected" data-value="Nano Banana 2 (~$0.03)">Nano Banana 2</div>
     <div class="model-btn" data-value="Nano Banana Pro (~$0.13-0.24)">Nano Banana Pro</div>
@@ -126,40 +126,40 @@
 
 <!-- THEMES - NEW -->
 <div class="section" style="background: linear-gradient(135deg, #0f0f1a, #1a0f2a);">
-  <div class="section-title">🎯 Quick Themes</div>
+  <div class="section-title">Quick Themes</div>
   <div class="section-desc">Pick a pre-built style for your use case — auto-selects everything</div>
   <div class="grid" id="themeGrid"></div>
 </div>
 
 <!-- LENS -->
 <div class="section">
-  <div class="section-title">🔭 Lens</div>
+  <div class="section-title">Lens</div>
   <div class="grid" id="lensGrid"></div>
 </div>
 
 <!-- ANGLE -->
 <div class="section">
-  <div class="section-title">📐 Camera Angle</div>
+  <div class="section-title">Camera Angle</div>
   <div class="grid" id="angleGrid"></div>
 </div>
 
 <!-- LIGHTING -->
 <div class="section">
-  <div class="section-title">💡 Lighting</div>
+  <div class="section-title">Lighting</div>
   <div class="grid" id="lightGrid"></div>
 </div>
 
 <!-- STYLE -->
 <div class="section">
-  <div class="section-title">🎨 Style & Film</div>
+  <div class="section-title">Style & Film</div>
   <div class="grid" id="styleGrid"></div>
 </div>
 
 <div class="prompt-area">
   <div class="prompt-box" id="promptDisplay">Select options above to build your prompt...</div>
   <div class="btn-row">
-    <button class="btn btn-primary" onclick="copyPrompt()">📋 Copy Prompt</button>
-    <button class="btn btn-success" onclick="generateNow()">⚡ Generate Now</button>
+    <button class="btn btn-primary" onclick="copyPrompt()">Copy Prompt</button>
+    <button class="btn btn-success" onclick="generateNow()">Generate Now</button>
     <button class="btn btn-secondary" onclick="resetAll()">↺ Reset</button>
   </div>
 </div>
@@ -226,38 +226,38 @@ const styleOptions = [
 // ===== THEMES =====
 const themes = [
   // MARKETING
-  { id:'product-launch', emoji:'📦', name:'Product Launch', desc:'Clean, dramatic product hero shot for website', lens:'85mm', angle:'eye', light:'studio', style:'product', kw:'professional product photography commercial hero shot, pure white background, studio softbox lighting, sharp focus, 8k detail, clean reflection'},
-  { id:'team-photo', emoji:'👔', name:'Corporate Team', desc:'Professional team portrait for website/LinkedIn', lens:'50mm', angle:'eye', light:'soft', style:'clinical', kw:'professional corporate team portrait, natural expressions, soft diffused lighting, clean background, business attire, polished professional look'},
-  { id:'office-env', emoji:'🏢', name:'Office Environment', desc:'Modern office interior, clean and professional', lens:'24mm', angle:'eye', light:'soft', style:'clinical', kw:'modern office interior photography, bright clean space, natural lighting through windows, professional atmosphere, architectural interior'},
-  { id:'brand-hero', emoji:'⭐', name:'Brand Hero Image', desc:'Dramatic brand statement image for homepage', lens:'24mm', angle:'low', light:'golden', style:'cinematic', kw:'cinematic brand hero image, dramatic lighting, wide angle epic view, warm golden tones, inspirational atmosphere, premium brand photography'},
+  { id:'product-launch', emoji:'▸', name:'Product Launch', desc:'Clean, dramatic product hero shot for website', lens:'85mm', angle:'eye', light:'studio', style:'product', kw:'professional product photography commercial hero shot, pure white background, studio softbox lighting, sharp focus, 8k detail, clean reflection'},
+  { id:'team-photo', emoji:'▸', name:'Corporate Team', desc:'Professional team portrait for website/LinkedIn', lens:'50mm', angle:'eye', light:'soft', style:'clinical', kw:'professional corporate team portrait, natural expressions, soft diffused lighting, clean background, business attire, polished professional look'},
+  { id:'office-env', emoji:'▸', name:'Office Environment', desc:'Modern office interior, clean and professional', lens:'24mm', angle:'eye', light:'soft', style:'clinical', kw:'modern office interior photography, bright clean space, natural lighting through windows, professional atmosphere, architectural interior'},
+  { id:'brand-hero', emoji:'▸', name:'Brand Hero Image', desc:'Dramatic brand statement image for homepage', lens:'24mm', angle:'low', light:'golden', style:'cinematic', kw:'cinematic brand hero image, dramatic lighting, wide angle epic view, warm golden tones, inspirational atmosphere, premium brand photography'},
 
   // SOCIAL MEDIA
-  { id:'yt-thumbnail', emoji:'▶️', name:'YouTube Thumbnail', desc:'Bold, high contrast clickable thumbnail', lens:'85mm', angle:'eye', light:'top', style:'gritty-bw', kw:'bold YouTube thumbnail style, extreme close-up, high contrast, dramatic expression, clickable, vibrant colors, sharp detail, 16:9 aspect ratio'},
-  { id:'ig-product', emoji:'📱', name:'Instagram Product', desc:'Clean product flat lay or hero for feed', lens:'35mm', angle:'bird', light:'studio', style:'product', kw:'Instagram product photography, flat lay style from above, clean bright composition, pastel background, soft shadows, aesthetic social media'},
-  { id:'ig-portrait', emoji:'✨', name:'Insta Portrait', desc:'Aesthetic portrait for personal brand', lens:'85mm', angle:'threeq', light:'golden', style:'editorial', kw:'Instagram aesthetic portrait, golden hour warm light, flattering angle, fashion editorial style, warm skin tones, dreamy bokeh background'},
-  { id:'tiktok-set', emoji:'🎬', name:'TikTok / Shorts', desc:'Vertical, bright, eye-catching scene', lens:'35mm', angle:'eye', light:'soft', style:'vintage', kw:'TikTok style vertical shot, bright colorful, engaging, relatable, natural lighting, candid feel, 9:16 portrait aspect'},
+  { id:'yt-thumbnail', emoji:'▸', name:'YouTube Thumbnail', desc:'Bold, high contrast clickable thumbnail', lens:'85mm', angle:'eye', light:'top', style:'gritty-bw', kw:'bold YouTube thumbnail style, extreme close-up, high contrast, dramatic expression, clickable, vibrant colors, sharp detail, 16:9 aspect ratio'},
+  { id:'ig-product', emoji:'▸', name:'Instagram Product', desc:'Clean product flat lay or hero for feed', lens:'35mm', angle:'bird', light:'studio', style:'product', kw:'Instagram product photography, flat lay style from above, clean bright composition, pastel background, soft shadows, aesthetic social media'},
+  { id:'ig-portrait', emoji:'▸', name:'Insta Portrait', desc:'Aesthetic portrait for personal brand', lens:'85mm', angle:'threeq', light:'golden', style:'editorial', kw:'Instagram aesthetic portrait, golden hour warm light, flattering angle, fashion editorial style, warm skin tones, dreamy bokeh background'},
+  { id:'tiktok-set', emoji:'▸', name:'TikTok / Shorts', desc:'Vertical, bright, eye-catching scene', lens:'35mm', angle:'eye', light:'soft', style:'vintage', kw:'TikTok style vertical shot, bright colorful, engaging, relatable, natural lighting, candid feel, 9:16 portrait aspect'},
 
   // PHOTOSHOOT
-  { id:'fashion-lookbook', emoji:'👗', name:'Fashion Lookbook', desc:'High fashion editorial for collection', lens:'85mm', angle:'threeq', light:'studio', style:'editorial', kw:'fashion lookbook editorial photography, high fashion pose, studio strobe lighting, clean background, dramatic silhouette, magazine quality'},
-  { id:'headshot-pro', emoji:'📸', name:'Pro Headshot', desc:'Professional headshot for LinkedIn/resume', lens:'85mm', angle:'eye', light:'soft', style:'clinical', kw:'professional headshot portrait, soft diffused lighting, neutral background, confident natural expression, corporate professional, clean retouched'},
-  { id:'lifestyle', emoji:'🌿', name:'Lifestyle Shoot', desc:'Candid lifestyle, natural setting', lens:'35mm', angle:'eye', light:'golden', style:'vintage', kw:'lifestyle photography candid moment, natural environment, golden hour outdoor light, relaxed authentic, warm filmic tones'},
-  { id:'editorial-spread', emoji:'📰', name:'Editorial Spread', desc:'Magazine quality editorial', lens:'50mm', angle:'threeq', light:'chiaro', style:'editorial', kw:'magazine editorial photography, dramatic chiaroscuro lighting, avant-garde, high contrast, dark background, art direction'},
+  { id:'fashion-lookbook', emoji:'▸', name:'Fashion Lookbook', desc:'High fashion editorial for collection', lens:'85mm', angle:'threeq', light:'studio', style:'editorial', kw:'fashion lookbook editorial photography, high fashion pose, studio strobe lighting, clean background, dramatic silhouette, magazine quality'},
+  { id:'headshot-pro', emoji:'▸', name:'Pro Headshot', desc:'Professional headshot for LinkedIn/resume', lens:'85mm', angle:'eye', light:'soft', style:'clinical', kw:'professional headshot portrait, soft diffused lighting, neutral background, confident natural expression, corporate professional, clean retouched'},
+  { id:'lifestyle', emoji:'▸', name:'Lifestyle Shoot', desc:'Candid lifestyle, natural setting', lens:'35mm', angle:'eye', light:'golden', style:'vintage', kw:'lifestyle photography candid moment, natural environment, golden hour outdoor light, relaxed authentic, warm filmic tones'},
+  { id:'editorial-spread', emoji:'▸', name:'Editorial Spread', desc:'Magazine quality editorial', lens:'50mm', angle:'threeq', light:'chiaro', style:'editorial', kw:'magazine editorial photography, dramatic chiaroscuro lighting, avant-garde, high contrast, dark background, art direction'},
 
   // VIDEO / CONTENT
-  { id:'talking-head', emoji:'🎙️', name:'Talking Head', desc:'Clean presenter shot for video', lens:'85mm', angle:'eye', light:'soft', style:'clinical', kw:'talking head video presenter shot, professional, soft key light, clean background, medium close-up, engaging, broadcast quality'},
-  { id:'b-roll', emoji:'🎥', name:'Cinematic B-Roll', desc:'Dramatic b-roll footage look', lens:'35mm', angle:'dutch', light:'backlight', style:'cinematic', kw:'cinematic b-roll footage, shallow depth of field, dramatic backlight, lens flare, anamorphic style, motion blur, widescreen cinematic'},
-  { id:'unboxing', emoji:'📦', name:'Unboxing / Review', desc:'Product unboxing or review thumbnail', lens:'35mm', angle:'shoulder', light:'studio', style:'hyperreal', kw:'unboxing photography, product reveal, bright clean lighting, hands holding product, detailed texture, review style, professional'},
+  { id:'talking-head', emoji:'▸', name:'Talking Head', desc:'Clean presenter shot for video', lens:'85mm', angle:'eye', light:'soft', style:'clinical', kw:'talking head video presenter shot, professional, soft key light, clean background, medium close-up, engaging, broadcast quality'},
+  { id:'b-roll', emoji:'▸', name:'Cinematic B-Roll', desc:'Dramatic b-roll footage look', lens:'35mm', angle:'dutch', light:'backlight', style:'cinematic', kw:'cinematic b-roll footage, shallow depth of field, dramatic backlight, lens flare, anamorphic style, motion blur, widescreen cinematic'},
+  { id:'unboxing', emoji:'▸', name:'Unboxing / Review', desc:'Product unboxing or review thumbnail', lens:'35mm', angle:'shoulder', light:'studio', style:'hyperreal', kw:'unboxing photography, product reveal, bright clean lighting, hands holding product, detailed texture, review style, professional'},
 
   // MOOD / ATMOSPHERE
-  { id:'dark-dramatic', emoji:'🌑', name:'Dark & Dramatic', desc:'Moody, shadow-heavy atmosphere', lens:'50mm', angle:'low', light:'chiaro', style:'moody', kw:'dark moody atmosphere, extreme shadows, single light source, dramatic contrast, film noir mood, tense atmosphere'},
-  { id:'dreamy-soft', emoji:'🌅', name:'Dreamy & Soft', desc:'Soft, romantic, ethereal look', lens:'85mm', angle:'threeq', light:'golden', style:'vintage', kw:'dreamy soft ethereal photography, backlit golden hour, soft focus, warm glow, romantic atmosphere, lens flare, pastel tones'},
-  { id:'edgy-urban', emoji:'🏙️', name:'Edgy Urban', desc:'Street, gritty, city atmosphere', lens:'35mm', angle:'dutch', light:'neon', style:'gritty-bw', kw:'edgy urban street photography, gritty city atmosphere, neon lights, hard shadows, candid, raw urban energy, high contrast'},
-  { id:'luxury-premium', emoji:'💎', name:'Luxury Premium', desc:'High-end, elegant, expensive look', lens:'85mm', angle:'threeq', light:'golden', style:'cinematic', kw:'luxury premium photography, elegant composition, warm golden light, rich colors, sophisticated atmosphere, high end branded, polished'},
+  { id:'dark-dramatic', emoji:'▸', name:'Dark & Dramatic', desc:'Moody, shadow-heavy atmosphere', lens:'50mm', angle:'low', light:'chiaro', style:'moody', kw:'dark moody atmosphere, extreme shadows, single light source, dramatic contrast, film noir mood, tense atmosphere'},
+  { id:'dreamy-soft', emoji:'▸', name:'Dreamy & Soft', desc:'Soft, romantic, ethereal look', lens:'85mm', angle:'threeq', light:'golden', style:'vintage', kw:'dreamy soft ethereal photography, backlit golden hour, soft focus, warm glow, romantic atmosphere, lens flare, pastel tones'},
+  { id:'edgy-urban', emoji:'▸', name:'Edgy Urban', desc:'Street, gritty, city atmosphere', lens:'35mm', angle:'dutch', light:'neon', style:'gritty-bw', kw:'edgy urban street photography, gritty city atmosphere, neon lights, hard shadows, candid, raw urban energy, high contrast'},
+  { id:'luxury-premium', emoji:'▸', name:'Luxury Premium', desc:'High-end, elegant, expensive look', lens:'85mm', angle:'threeq', light:'golden', style:'cinematic', kw:'luxury premium photography, elegant composition, warm golden light, rich colors, sophisticated atmosphere, high end branded, polished'},
 
   // DESIGN PRESETS — Reverse-engineered from reference images using JSON Image Profiler
-  { id:'gorilla-glue', emoji:'🦍', name:'Gorilla Glue', desc:'Street-art packaging, hyper-real subject, neon contrast, bold & loud', lens:'85mm', angle:'eye', light:'rim', style:'hyperreal', kw:'hyper-realistic product packaging photography, photorealistic main subject with museum-grade texture fidelity, aggressive street-art graphic design aesthetic, deep solid black background with subtle grunge spray-paint texture overlay, bright yellow-green dramatic rim lighting with neon-pop contrast, deep saturated shadows, straight-on eye-level perspective looking directly at viewer, centered symmetrical vertical composition, wet glossy highlight detail, paint-spatter and distressed texture overlay on graphic elements, premium retail packaging quality, 8K'},
-  { id:'blue-sushi', emoji:'🍣', name:'Blue Sushi', desc:'Japanese ukiyo-e fusion, neon-noir, premium nightlife', lens:'50mm', angle:'threeq', light:'neon', style:'cinematic', kw:'hyper-realistic packaging photography, photorealistic main subject with museum-grade texture fidelity, electric blue and midnight black neon-noir aesthetic, dramatic backlighting with internal luminescence on elements, three-quarter high-angle perspective, Japanese woodblock print motifs in background, spray-paint grunge texture overlay, wet glossy highlights on surfaces, premium retail packaging quality, 8K'},
-  { id:'toad-venom', emoji:'🐸', name:'Toad Venom', desc:'Dark psychedelic, vintage apothecary, toxic fantasy', lens:'100mm', angle:'eye', light:'chiaro', style:'moody', kw:'hyper-realistic dark fantasy packaging photography, photorealistic main subject with museum-grade texture fidelity, warm desaturated parchment background, dramatic chiaroscuro lighting with localized bioluminescent glow effects, heavy saturated shadows, straight-on eye-level perspective, distressed paper and vintage texture overlay, sumi-e ink wash background motifs, spray-paint splatter effects on graphic elements, premium retail packaging quality, 8K'},
+  { id:'gorilla-glue', emoji:'▸', name:'Gorilla Glue', desc:'Street-art packaging, hyper-real subject, neon contrast, bold & loud', lens:'85mm', angle:'eye', light:'rim', style:'hyperreal', kw:'hyper-realistic product packaging photography, photorealistic main subject with museum-grade texture fidelity, aggressive street-art graphic design aesthetic, deep solid black background with subtle grunge spray-paint texture overlay, bright yellow-green dramatic rim lighting with neon-pop contrast, deep saturated shadows, straight-on eye-level perspective looking directly at viewer, centered symmetrical vertical composition, wet glossy highlight detail, paint-spatter and distressed texture overlay on graphic elements, premium retail packaging quality, 8K'},
+  { id:'blue-sushi', emoji:'▸', name:'Blue Sushi', desc:'Japanese ukiyo-e fusion, neon-noir, premium nightlife', lens:'50mm', angle:'threeq', light:'neon', style:'cinematic', kw:'hyper-realistic packaging photography, photorealistic main subject with museum-grade texture fidelity, electric blue and midnight black neon-noir aesthetic, dramatic backlighting with internal luminescence on elements, three-quarter high-angle perspective, Japanese woodblock print motifs in background, spray-paint grunge texture overlay, wet glossy highlights on surfaces, premium retail packaging quality, 8K'},
+  { id:'toad-venom', emoji:'▸', name:'Toad Venom', desc:'Dark psychedelic, vintage apothecary, toxic fantasy', lens:'100mm', angle:'eye', light:'chiaro', style:'moody', kw:'hyper-realistic dark fantasy packaging photography, photorealistic main subject with museum-grade texture fidelity, warm desaturated parchment background, dramatic chiaroscuro lighting with localized bioluminescent glow effects, heavy saturated shadows, straight-on eye-level perspective, distressed paper and vintage texture overlay, sumi-e ink wash background motifs, spray-paint splatter effects on graphic elements, premium retail packaging quality, 8K'},
 ];
 
 const selections = { lens: null, angle: null, light: null, style: null, model: 'Nano Banana 2 (~$0.03)', subject: 'a product or scene' };
@@ -397,8 +397,8 @@ function copyPrompt() {
   const text = el.dataset.plaintext || el.textContent;
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.querySelector('.btn-primary');
-    btn.textContent = '✅ Copied!';
-    setTimeout(() => btn.textContent = '📋 Copy Prompt', 2000);
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = 'Copy Prompt', 2000);
   });
 }
 
@@ -409,8 +409,8 @@ function generateNow() {
   const model = selections.model;
   navigator.clipboard.writeText(`Generate image with ${model}: ${text}`).then(() => {
     const btn = document.querySelector('.btn-success');
-    btn.textContent = '✅ Copied — paste here!';
-    setTimeout(() => btn.textContent = '⚡ Generate Now', 2000);
+    btn.textContent = '✓ Copied — paste here!';
+    setTimeout(() => btn.textContent = 'Generate Now', 2000);
   });
 }
 

@@ -8,7 +8,7 @@ async function renderCalendarInvites() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📧 Calendar Invites</h1>
+        <h1 class="page-title">Calendar Invites</h1>
         <p class="page-breadcrumb">One-click Outlook calendar invites with editable schedule</p>
       </div>
     </div>

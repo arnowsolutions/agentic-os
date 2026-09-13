@@ -11,7 +11,7 @@ async function renderSubiExitInterviews() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">🎓 Sub-I Exit Interviews</h1>
+        <h1 class="page-title">Sub-I Exit Interviews</h1>
         <p class="page-breadcrumb">One-click Outlook compose — interviewee and time per row</p>
       </div>
     </div>

@@ -47,7 +47,7 @@ async function refreshDriveTable() {
 
     if (files.length === 0) {
       container.innerHTML = `<div class="empty-state">
-        <div class="empty-state-icon">📁</div>
+        <div class="empty-state-icon"></div>
         <div class="empty-state-title">No files synced yet</div>
         <div class="empty-state-desc">Click "Sync Now" to pull roster files from Drive</div>
       </div>`;

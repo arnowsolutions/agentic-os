@@ -8,11 +8,11 @@ async function renderEmailGroups() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📧 Email Groups</h1>
+        <h1 class="page-title">Email Groups</h1>
         <p class="page-subtitle">Manage Grand Rounds & Resident Conference recipients — pulls from CRM</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderEmailGroups()">🔄 Refresh</button>
+        <button class="btn" onclick="renderEmailGroups()">↻ Refresh</button>
       </div>
     </div>
     <div id="emailGroupsContent" style="display:flex;flex-wrap:wrap;gap:24px">Loading CRM contacts...</div>
@@ -34,7 +34,7 @@ async function loadEmailGroups() {
     renderAllGroups();
   } catch (err) {
     document.getElementById('emailGroupsContent').innerHTML =
-      `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+      `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -53,7 +53,7 @@ function renderAllGroups() {
   for (const [key, group] of Object.entries(savedGroups)) {
     const savedEmails = new Set((group.emails || []).map(e => e.toLowerCase()));
     const modeColor = group.test_mode ? '#f59e0b' : '#10b981';
-    const modeLabel = group.test_mode ? '🧪 TEST MODE' : '🚀 LIVE';
+    const modeLabel = group.test_mode ? 'TEST MODE' : 'LIVE';
 
     html += `
       <div style="flex:1;min-width:420px;max-width:600px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
@@ -118,13 +118,13 @@ function renderAllGroups() {
 
         <div style="margin-bottom:12px">
           <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">
-            📋 Attendance tracking link (included in invites)
+            Attendance tracking link (included in invites)
           </label>
           <input type="url" id="attendance-${key}" value="${escapeHtml(group.attendance_link || '')}"
                  placeholder="https://forms.gle/..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">
         </div>
 
-        <button class="btn" style="width:100%" onclick="saveGroup('${key}')">💾 Save Group</button>
+        <button class="btn" style="width:100%" onclick="saveGroup('${key}')">Save Group</button>
         <div id="status-${key}" style="margin-top:8px;font-size:12px"></div>
       </div>`;
   }
@@ -198,7 +198,7 @@ async function saveGroup(key) {
       }
     }
     if (newEmails.length) {
-      status.innerHTML = `<span style="color:var(--accent)">✅ Added ${newEmails.length} new contact(s) to CRM. Saving group...</span>`;
+      status.innerHTML = `<span style="color:var(--accent)">✓ Added ${newEmails.length} new contact(s) to CRM. Saving group...</span>`;
     }
 
     await api.put('/api/crm/email-groups/' + key, {
@@ -208,10 +208,10 @@ async function saveGroup(key) {
       attendance_link: attendanceLink || null
     });
 
-    status.innerHTML = '<span style="color:#10b981">✅ Saved</span>';
+    status.innerHTML = '<span style="color:#10b981">✓ Saved</span>';
     setTimeout(() => { status.innerHTML = ''; }, 3000);
   } catch (err) {
-    status.innerHTML = `<span style="color:#ef4444">❌ ${escapeHtml(err.message)}</span>`;
+    status.innerHTML = `<span style="color:#ef4444">✕ ${escapeHtml(err.message)}</span>`;
   }
 }
 

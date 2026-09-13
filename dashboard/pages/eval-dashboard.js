@@ -4,11 +4,11 @@ async function renderEvalDashboard(target) {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">📊 Eval Dashboard</div>
+        <div class="page-title">Eval Dashboard</div>
         <div class="page-subtitle">Evaluation completion tracking — auto-triggered from OR schedule</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderEvalDashboard()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderEvalDashboard()">↻ Refresh</button>
       </div>
     </div>
     <div id="edContent"><div class="loading"><div class="loading-spinner"></div><span>Loading eval data...</span></div></div>
@@ -23,7 +23,7 @@ async function renderEvalDashboard(target) {
   } catch (err) {
     document.getElementById('edContent').innerHTML = `
       <div class="card" style="text-align:center;padding:40px">
-        <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+        <div style="font-size:32px;margin-bottom:12px">!</div>
         <div style="color:var(--text-muted)">Could not load eval data: ${escapeHtml(err.message)}</div>
       </div>
     `;
@@ -48,24 +48,24 @@ function renderEvalContent(data) {
     .ed-section h3 { font-size:14px;font-weight:600;margin:0 0 12px 0;display:flex;align-items:center;gap:6px; }
     .ed-table { width:100%;border-collapse:collapse;font-size:12px; }
     .ed-table th { text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600;font-size:11px;text-transform:uppercase;color:var(--text-muted); }
-    .ed-table td { padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.04); }
-    .ed-table tr:hover td { background:rgba(255,255,255,0.03); }
+    .ed-table td { padding:8px 10px;border-bottom:1px solid var(--border-soft); }
+    .ed-table tr:hover td { background:var(--hover-bg); }
     .ed-badge { display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600; }
     .ed-badge.green { background:rgba(0,184,148,0.15);color:#00b894; }
     .ed-badge.yellow { background:rgba(253,203,110,0.15);color:#fdcb6e; }
     .ed-badge.red { background:rgba(214,48,49,0.15);color:#d63031; }
-    .ed-bar { height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;min-width:80px; }
+    .ed-bar { height:6px;border-radius:3px;background:var(--fill-muted);overflow:hidden;min-width:80px; }
     .ed-bar-fill { height:100%;border-radius:3px;transition:width 0.6s ease; }
     .ed-proc-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px; }
-    .ed-proc-card { padding:12px;background:rgba(255,255,255,0.02);border-radius:var(--radius-sm);border:1px solid rgba(255,255,255,0.04); }
+    .ed-proc-card { padding:12px;background:var(--hover-bg);border-radius:var(--radius-sm);border:1px solid var(--border-soft); }
     .ed-proc-card .proc-name { font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text); }
     .ed-proc-card .proc-row { display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted); }
     .ed-activity { max-height:400px;overflow-y:auto; }
-    .ed-activity-item { padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;line-height:1.5; }
+    .ed-activity-item { padding:8px 0;border-bottom:1px solid var(--border-soft);font-size:12px;line-height:1.5; }
     .ed-activity-item:last-child { border:none; }
     .ed-tabs { display:flex;gap:4px;margin-bottom:12px; }
-    .ed-tab { padding:6px 16px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;cursor:pointer;background:rgba(255,255,255,0.04);border:1px solid transparent; }
-    .ed-tab:hover { background:rgba(255,255,255,0.08); }
+    .ed-tab { padding:6px 16px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;cursor:pointer;background:var(--hover-bg-strong);border:1px solid transparent; }
+    .ed-tab:hover { background:var(--fill-muted); }
     .ed-tab.active { background:rgba(106,176,243,0.15);border-color:rgba(106,176,243,0.3);color:#6ab0f3; }
     .ed-tab-content { display:none; }
     .ed-tab-content.active { display:block; }
@@ -89,10 +89,10 @@ function renderEvalContent(data) {
   // ─── Tabs ───
   const tabsHtml = `
     <div class="ed-tabs">
-      <div class="ed-tab active" onclick="switchEdTab('residents')">👨‍⚕️ Residents</div>
-      <div class="ed-tab" onclick="switchEdTab('faculty')">👩‍⚕️ Faculty</div>
-      <div class="ed-tab" onclick="switchEdTab('procedures')">🔬 Procedures</div>
-      <div class="ed-tab" onclick="switchEdTab('activity')">🕐 Recent</div>
+      <div class="ed-tab active" onclick="switchEdTab('residents')">Residents</div>
+      <div class="ed-tab" onclick="switchEdTab('faculty')">Faculty</div>
+      <div class="ed-tab" onclick="switchEdTab('procedures')">Procedures</div>
+      <div class="ed-tab" onclick="switchEdTab('activity')">Recent</div>
     </div>
     <div class="ed-tab-content active" id="edTabResidents">${renderResidentTable(resident_stats)}</div>
     <div class="ed-tab-content" id="edTabFaculty">${renderFacultyTable(faculty_stats)}</div>
@@ -103,7 +103,7 @@ function renderEvalContent(data) {
   // ─── Footer ───
   const footerHtml = `
     <div class="ed-section">
-      <h3>ℹ️ About This Dashboard</h3>
+      <h3>ℹ About This Dashboard</h3>
       <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
         <p style="margin:0 0 4px 0">Data sourced from the <strong>eval spreadsheet</strong> (all 20 FAC/RES sheets) and the <strong>eval_tracking</strong> PostgreSQL table.</p>
         <p style="margin:0;font-size:11px">Auto-triggered evals from the OR schedule write identity rows to the spreadsheet — the same as if someone used the eval portal. When a Google Form is submitted, the Apps Script fills in the evaluation data. Dashboard reflects both manual and auto-triggered flows.</p>
@@ -132,7 +132,7 @@ function renderResidentTable(stats) {
 
   return `
     <div class="ed-section">
-      <h3>👨‍⚕️ Resident Completion <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(sorted by rate ↑)</span></h3>
+      <h3>Resident Completion <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(sorted by rate ↑)</span></h3>
       <table class="ed-table">
         <thead><tr><th>Resident</th><th>Total</th><th>Done</th><th>Pending</th><th>Bar</th><th>Rate</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">No data</td></tr>'}</tbody>
@@ -156,7 +156,7 @@ function renderFacultyTable(stats) {
 
   return `
     <div class="ed-section">
-      <h3>👩‍⚕️ Faculty Completion</h3>
+      <h3>Faculty Completion</h3>
       <table class="ed-table">
         <thead><tr><th>Faculty</th><th>Total</th><th>Done</th><th>Pending</th><th>Rate</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">No data</td></tr>'}</tbody>
@@ -182,7 +182,7 @@ function renderProcedureGrid(stats) {
 
   return `
     <div class="ed-section">
-      <h3>🔬 Procedure Breakdown</h3>
+      <h3>Procedure Breakdown</h3>
       <div class="ed-proc-grid">${cards || '<div style="color:var(--text-muted)">No data</div>'}</div>
     </div>
   `;
@@ -190,7 +190,7 @@ function renderProcedureGrid(stats) {
 
 function renderActivityFeed(activity) {
   if (!activity || activity.length === 0) {
-    return `<div class="ed-section"><h3>🕐 Recent Activity</h3><div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No completed evaluations yet</div></div>`;
+    return `<div class="ed-section"><h3>Recent Activity</h3><div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">No completed evaluations yet</div></div>`;
   }
   const items = activity.map(e => {
     const ts = e.timestamp ? e.timestamp.slice(0, 10) : '?';
@@ -209,7 +209,7 @@ function renderActivityFeed(activity) {
 
   return `
     <div class="ed-section">
-      <h3>🕐 Recent Completed Evaluations</h3>
+      <h3>Recent Completed Evaluations</h3>
       <div class="ed-activity">${items}</div>
     </div>
   `;

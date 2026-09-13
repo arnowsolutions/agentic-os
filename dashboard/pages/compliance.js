@@ -3,11 +3,11 @@ async function renderCompliance(target) {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">📊 Compliance Dashboard</div>
+        <div class="page-title">Compliance Dashboard</div>
         <div class="page-subtitle">Grand Rounds attendance, eval completion & GME fund usage — color-coded at a glance</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderCompliance()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderCompliance()">↻ Refresh</button>
       </div>
     </div>
     <div class="cmp-grid" id="cmpGrid">
@@ -19,7 +19,7 @@ async function renderCompliance(target) {
       .cmp-card h3 { font-size:13px; font-weight:600; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
       .cmp-bar { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
       .cmp-bar .name { font-size:11px; width:100px; text-align:right; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-      .cmp-bar .track { flex:1; height:14px; background:rgba(255,255,255,0.06); border-radius:7px; overflow:hidden; }
+      .cmp-bar .track { flex:1; height:14px; background:var(--fill-muted); border-radius:7px; overflow:hidden; }
       .cmp-bar .fill { height:100%; border-radius:7px; transition:width 0.6s ease; }
       .cmp-bar .pct { font-size:10px; width:32px; text-align:right; flex-shrink:0; font-weight:600; }
       .cmp-summary { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
@@ -30,12 +30,16 @@ async function renderCompliance(target) {
   `;
   try {
     const res = await fetch('/api/compliance/overview').then(r => r.json()).catch(() => ({}));
-    const attendance = res.grand_rounds_attendance || [
-      {name:'Dr. Smith', pct:92}, {name:'Dr. Johnson', pct:78}, {name:'Dr. Williams', pct:100},
-      {name:'Dr. Brown', pct:45}, {name:'Dr. Davis', pct:88}, {name:'Dr. Miller', pct:60},
-    ];
-    const evals = res.eval_completion || {done:12, pending:8, overdue:3};
-    const gme = res.gme_usage || {used:280, available:1250, residents:10};
+    stampPage(res.eval_completion || res);
+    const attendance = res.grand_rounds_attendance || [];
+    const _ev = res.eval_completion || {};
+    const evals = {done: _ev.done || 0, pending: _ev.pending || 0, overdue: _ev.overdue || 0};
+    const gme = res.gme_usage || {used:0, available:0, residents:0};
+    if (!attendance.length) {
+      document.getElementById('cmpGrid').innerHTML =
+        '<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">No attendance data</div><div class="empty-state-desc">attendance-data.json (GR roster export) has not been synced recently. Refresh it from Drive, then Sync now.</div></div>';
+      return;
+    }
 
     const avgAtt = Math.round(attendance.reduce((s,p)=>s+p.pct,0)/attendance.length);
     const total = evals.done+evals.pending+evals.overdue;
@@ -46,7 +50,7 @@ async function renderCompliance(target) {
 
     document.getElementById('cmpGrid').innerHTML = `
       <div class="cmp-card">
-        <h3>📋 Grand Rounds Attendance</h3>
+        <h3>Grand Rounds Attendance</h3>
         <div class="cmp-summary">
           <div class="cmp-stat" style="background:rgba(0,184,148,0.1)"><div class="num" style="color:#00b894">${avgAtt}%</div><div class="label">Average</div></div>
           <div class="cmp-stat" style="background:rgba(253,203,110,0.1)"><div class="num" style="color:#fdcb6e">${attendance.filter(p=>p.pct<80).length}</div><div class="label">Below 80%</div></div>
@@ -60,7 +64,7 @@ async function renderCompliance(target) {
         `).join('')}
       </div>
       <div class="cmp-card">
-        <h3>📝 Evaluation Completion</h3>
+        <h3>Evaluation Completion</h3>
         <div class="cmp-summary">
           <div class="cmp-stat" style="background:rgba(0,184,148,0.1)"><div class="num" style="color:#00b894">${evals.done}</div><div class="label">Done</div></div>
           <div class="cmp-stat" style="background:rgba(253,203,110,0.1)"><div class="num" style="color:#fdcb6e">${evals.pending}</div><div class="label">Pending</div></div>
@@ -74,7 +78,7 @@ async function renderCompliance(target) {
         </div>
       </div>
       <div class="cmp-card">
-        <h3>💰 GME Fund Usage</h3>
+        <h3>GME Fund Usage</h3>
         <div class="cmp-summary">
           <div class="cmp-stat" style="background:rgba(9,132,227,0.1)"><div class="num" style="color:#0984e3">$${gme.used.toLocaleString()}</div><div class="label">Used</div></div>
           <div class="cmp-stat" style="background:rgba(0,184,148,0.1)"><div class="num" style="color:#00b894">$${(gme.available*gme.residents - gme.used).toLocaleString()}</div><div class="label">Remaining</div></div>
@@ -88,6 +92,6 @@ async function renderCompliance(target) {
       </div>
     `;
   } catch(e) {
-    document.getElementById('cmpGrid').innerHTML = `<div class="cmp-card" style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-muted)">⚠️ ${escapeHtml(e.message)}</div>`;
+    document.getElementById('cmpGrid').innerHTML = `<div class="cmp-card" style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-muted)">! ${escapeHtml(e.message)}</div>`;
   }
 }

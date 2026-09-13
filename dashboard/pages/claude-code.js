@@ -5,11 +5,11 @@ async function renderClaudeCode() {
   content.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div>
-        <div class="page-title" style="font-size:20px;font-weight:700">🤖 Claude Code</div>
+        <div class="page-title" style="font-size:20px;font-weight:700">◆ Claude Code</div>
         <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Free LLM terminal · OmniRoute · $0.00 · 4 free models</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderClaudeCode()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderClaudeCode()">↻ Refresh</button>
         <a href="${TERMINAL_URL}" target="_blank" class="btn btn-primary">↗ Open in new tab</a>
       </div>
     </div>

@@ -3,8 +3,8 @@
 
 let unifiedCache = {};
 
-async function renderUnifiedDashboard() {
-  const content = document.getElementById('pageContent');
+async function renderUnifiedDashboard(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   
@@ -43,7 +43,7 @@ async function renderUnifiedDashboard() {
     </style>
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title" style="font-size:22px">🏥 Montefiore Urology</div>
+        <div class="page-title" style="font-size:22px">Montefiore Urology</div>
         <div class="page-subtitle">Admin Dashboard — ${dateStr}</div>
       </div>
     </div>
@@ -60,7 +60,7 @@ async function renderUnifiedDashboard() {
     <div class="u-grid-2">
       <!-- Left: GME Overview -->
       <div class="u-card">
-        <div class="u-card-header">💰 GME Reimbursement Overview</div>
+        <div class="u-card-header">GME Reimbursement Overview</div>
         <div class="u-section-sub">Annual cap: $1,250/resident · Fiscal year Jul–Jun</div>
         <div id="gmeSummaryCards" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
           <div class="skeleton" style="height:50px;flex:1;border-radius:8px"></div>
@@ -75,13 +75,13 @@ async function renderUnifiedDashboard() {
       <!-- Right: Coverage & Call-Outs -->
       <div>
         <div class="u-card" style="margin-bottom:16px">
-          <div class="u-card-header">📅 Today's Coverage</div>
+          <div class="u-card-header">Today's Coverage</div>
           <div id="todayCoverage">
             <div class="skeleton" style="height:100px;border-radius:8px"></div>
           </div>
         </div>
         <div class="u-card">
-          <div class="u-card-header">🤒 Recent Call-Outs</div>
+          <div class="u-card-header">Recent Call-Outs</div>
           <div id="calloutList">
             <div class="skeleton" style="height:100px;border-radius:8px"></div>
           </div>
@@ -91,32 +91,32 @@ async function renderUnifiedDashboard() {
 
     <!-- Quick Actions -->
     <div class="u-card" style="margin-bottom:20px">
-      <div class="u-card-header">⚡ Quick Actions</div>
+      <div class="u-card-header">Quick Actions</div>
       <div class="u-quick-actions">
         <button class="u-action-btn" style="background:var(--bg-card-alt);color:var(--text)" onclick="showToast('Coming soon — opens GME add form','info')">
-          💰 Add Reimbursement
+          Add Reimbursement
         </button>
         <button class="u-action-btn" style="background:var(--bg-card-alt);color:var(--text)" onclick="navigate('manager')">
-          📋 Manager Command Center
+          Manager Command Center
         </button>
         <button class="u-action-btn" style="background:var(--bg-card-alt);color:var(--text)" onclick="navigate('oncall')">
-          📅 View Full Schedule
+          View Full Schedule
         </button>
         <button class="u-action-btn" style="background:var(--bg-card-alt);color:var(--text)" onclick="showToast('Coming soon — opens swap request form','info')">
-          🔄 Request Swap
+          ↻ Request Swap
         </button>
         <button class="u-action-btn" style="background:var(--bg-card-alt);color:var(--text)" onclick="showToast('Coming soon — opens call-out form','info')">
-          🏥 Report Unavailable
+          Report Unavailable
         </button>
         <button class="u-action-btn" style="background:var(--bg-card-alt);color:var(--text)" onclick="showToast('Coming soon — generates PDF report','info')">
-          📄 Generate Report
+          Generate Report
         </button>
       </div>
     </div>
 
     <!-- Schedule Range Info -->
     <div class="u-card" id="scheduleInfo">
-      <div class="u-card-header">📋 Faculty Call Schedule</div>
+      <div class="u-card-header">Faculty Call Schedule</div>
       <div id="scheduleInfoContent">
         <div class="skeleton" style="height:60px;border-radius:8px"></div>
       </div>
@@ -189,7 +189,7 @@ async function loadGmeData() {
     tableEl.innerHTML = html;
     
   } catch (err) {
-    document.getElementById('gmeSummaryCards').innerHTML = `<div class="u-empty">⚠ Couldn't load GME data: ${escapeHtml(err.message)}</div>`;
+    document.getElementById('gmeSummaryCards').innerHTML = `<div class="u-empty">! Couldn't load GME data: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -227,7 +227,7 @@ async function loadCoverageData() {
       el.innerHTML = html;
     } else {
       let msg = now.message || 'No call data for today';
-      html = `<div class="u-empty">📅 ${escapeHtml(msg)}</div>`;
+      html = `<div class="u-empty">${escapeHtml(msg)}</div>`;
       
       // Show schedule range
       if (schedule && schedule.hospitals) {
@@ -237,7 +237,7 @@ async function loadCoverageData() {
       el.innerHTML = html;
     }
   } catch (err) {
-    el.innerHTML = `<div class="u-empty">⚠ ${escapeHtml(err.message)}</div>`;
+    el.innerHTML = `<div class="u-empty">! ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -258,21 +258,21 @@ async function loadCalloutData() {
       }
       html = `
         <div class="u-stat" style="border:none;padding:8px 0">
-          <div class="u-stat-icon" style="background:rgba(0,122,255,.1)">🏥</div>
+          <div class="u-stat-icon" style="background:rgba(0,122,255,.1)"></div>
           <div>
             <div class="u-stat-value" style="font-size:18px">${schedule.hospitals.length}</div>
             <div class="u-stat-label">Hospitals tracked</div>
           </div>
         </div>
         <div class="u-stat" style="border:none;padding:8px 0">
-          <div class="u-stat-icon" style="background:rgba(255,204,0,.1)">👨‍⚕️</div>
+          <div class="u-stat-icon" style="background:rgba(255,204,0,.1)"></div>
           <div>
             <div class="u-stat-value" style="font-size:18px">${allDocs.size}</div>
             <div class="u-stat-label">Attending physicians</div>
           </div>
         </div>
         <div class="u-stat" style="border:none;padding:8px 0">
-          <div class="u-stat-icon" style="background:rgba(52,199,89,.1)">📅</div>
+          <div class="u-stat-icon" style="background:rgba(52,199,89,.1)"></div>
           <div>
             <div class="u-stat-value" style="font-size:18px">${totalDocs}</div>
             <div class="u-stat-label">Total scheduled dates</div>
@@ -283,7 +283,7 @@ async function loadCalloutData() {
     }
     el.innerHTML = html;
   } catch (err) {
-    el.innerHTML = `<div class="u-empty">⚠ ${escapeHtml(err.message)}</div>`;
+    el.innerHTML = `<div class="u-empty">! ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -309,6 +309,6 @@ async function loadScheduleInfo() {
       el.innerHTML = `<div class="u-empty">No schedule loaded</div>`;
     }
   } catch (err) {
-    el.innerHTML = `<div class="u-empty">⚠ ${escapeHtml(err.message)}</div>`;
+    el.innerHTML = `<div class="u-empty">! ${escapeHtml(err.message)}</div>`;
   }
 }

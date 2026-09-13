@@ -1,4 +1,6 @@
-let _hermesIframeInstance = null;
+var _hermesIframeInstance = null;
+// Canonical Hermes WebUI origin — the "Open in new tab" target (named tab: reused).
+var HERMES_WEBUI_URL = 'https://hermes-webui-gsga.srv1738752.hstgr.cloud/';
 
 async function renderChat() {
   const content = document.getElementById('pageContent');
@@ -47,15 +49,32 @@ async function renderChat() {
           </div>
         </div>
         <div class="chat-input-area">
+          <div class="chat-context-row" id="chatContextRow" style="margin-bottom:4px;font-size:11px;color:var(--text-muted);display:none;align-items:center;gap:6px">
+            <span>Context:</span>
+            <select id="chatPageContext" style="background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:11px;padding:2px 6px" onchange="chatContextChanged()">
+              <option value="">none</option>
+            </select>
+            <span id="chatPageContextNote" style="color:var(--text-muted)"></span>
+          </div>
           <div class="chat-agent-indicator" id="chatAgentIndicator">opencode</div>
           <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message..." onkeydown="handleChatKey(event)"></textarea>
           <button class="btn btn-primary btn-icon" onclick="sendChatMessage()" id="chatSendBtn" title="Send">&rarr;</button>
         </div>
       </div>
-      <div class="chat-iframe-container" id="hermesIframeContainer" style="display:none;flex:1;position:relative;background:var(--bg-primary);border-radius:var(--radius-lg);overflow:hidden;">
-        <div class="chat-iframe-loading" id="hermesIframeLoading">
-          <div class="loading-spinner"></div>
-          <span>Loading Hermes WebUI...</span>
+      <div class="chat-iframe-container" id="hermesIframeContainer" style="display:none">
+        <div class="chat-embed-bar">
+          <span class="chat-embed-label">Hermes WebUI</span>
+          <span class="chat-embed-note">live in this pane — same sign-in as the dashboard</span>
+          <div class="btn-group" style="margin-left:auto">
+            <button class="btn btn-sm" onclick="reloadHermesIframe()">↻ Reload</button>
+            <button class="btn btn-sm btn-primary" onclick="openHermesWebUITab()">↗ Open in new tab</button>
+          </div>
+        </div>
+        <div class="chat-embed-frame" id="hermesIframeWrap">
+          <div class="chat-iframe-loading" id="hermesIframeLoading">
+            <div class="loading-spinner"></div>
+            <span>Loading Hermes WebUI...</span>
+          </div>
         </div>
       </div>
     </div>
@@ -63,7 +82,9 @@ async function renderChat() {
 
   window._currentAgent = 'opencode';
   window._chatHistory = [];
+  _hermesIframeInstance = null; // rebuild the embed fresh on each page visit
   document.getElementById('chatInput').focus();
+  initChatContext();  // AI-generalist: page-aware chat (non-blocking)
 
   // Update agent status indicators
   try {
@@ -82,6 +103,43 @@ async function renderChat() {
   await refreshChat();
 }
 
+// ─── Page-aware chat context (AI-generalist layer, 2026-09 Stage 5b) ──
+var CHAT_CTX = { pages: {}, auto: '' };
+
+async function initChatContext() {
+  const row = document.getElementById('chatContextRow');
+  const sel = document.getElementById('chatPageContext');
+  if (!row || !sel) return;
+  try {
+    const r = await api.fetchSafe('/api/skill-manifest', {}, 8000);
+    const pages = (r.data && r.data.pages) || {};
+    CHAT_CTX.pages = pages;
+    const keys = Object.keys(pages).sort();
+    if (!keys.length) return;
+    sel.innerHTML = '<option value="">none</option>' + keys.map(k =>
+      `<option value="${k}">${escapeHtml(pages[k].title || k)}</option>`).join('');
+    // Default to the page the user was on before opening chat.
+    const auto = window._lastDataPage && pages[window._lastDataPage] ? window._lastDataPage : '';
+    sel.value = auto;
+    CHAT_CTX.auto = auto;
+    row.style.display = 'flex';
+    chatContextChanged();
+  } catch (e) { /* manifest endpoint unavailable — chat works without context */ }
+}
+
+function chatContextChanged() {
+  const sel = document.getElementById('chatPageContext');
+  const note = document.getElementById('chatPageContextNote');
+  if (!sel || !note) return;
+  const p = CHAT_CTX.pages[sel.value];
+  note.textContent = p ? `${(p.endpoints || []).length} live endpoints attached` : '';
+}
+
+function currentChatContext() {
+  const sel = document.getElementById('chatPageContext');
+  return sel ? sel.value : '';
+}
+
 function selectAgent(agent) {
   window._currentAgent = agent;
   document.querySelectorAll('.chat-agent').forEach(el => el.classList.remove('active'));
@@ -93,11 +151,12 @@ function selectAgent(agent) {
   const iframeContainer = document.getElementById('hermesIframeContainer');
 
   if (agent === 'hermes') {
-    // Hide chat main, show Hermes WebUI iframe
+    // Hide chat main, show the Hermes WebUI embed. The iframe loads the real
+    // WebUI through the same-origin /hermes-webui/ proxy (the proxied app
+    // mounts itself under that path), so it renders in place right here.
     chatMain.style.display = 'none';
     iframeContainer.style.display = 'flex';
 
-    // Only create iframe once — reuse on subsequent selections
     if (!_hermesIframeInstance) {
       _hermesIframeInstance = document.createElement('iframe');
       _hermesIframeInstance.src = '/hermes-webui/';
@@ -105,19 +164,37 @@ function selectAgent(agent) {
       _hermesIframeInstance.title = 'Hermes WebUI';
       _hermesIframeInstance.allow = 'clipboard-read; clipboard-write';
 
-      // Remove loading spinner once iframe loads
+      // Hide the loading overlay once the WebUI document has loaded
       _hermesIframeInstance.addEventListener('load', () => {
         const loading = document.getElementById('hermesIframeLoading');
         if (loading) loading.style.display = 'none';
       });
 
-      iframeContainer.appendChild(_hermesIframeInstance);
+      document.getElementById('hermesIframeWrap').appendChild(_hermesIframeInstance);
     }
   } else {
     // Show chat main, hide iframe
     chatMain.style.display = 'flex';
     iframeContainer.style.display = 'none';
     document.getElementById('chatInput').focus();
+  }
+}
+
+/** Open the canonical Hermes WebUI in a named tab (first click opens it,
+ *  later clicks reuse that tab instead of spawning duplicates). */
+function openHermesWebUITab() {
+  window.open(HERMES_WEBUI_URL, 'hermes-webui');
+}
+
+/** Reload the embedded WebUI pane, keeping the loading overlay visible. */
+function reloadHermesIframe() {
+  if (!_hermesIframeInstance) return;
+  const loading = document.getElementById('hermesIframeLoading');
+  if (loading) loading.style.display = 'flex';
+  try {
+    _hermesIframeInstance.contentWindow.location.reload();
+  } catch (e) {
+    _hermesIframeInstance.src = '/hermes-webui/';
   }
 }
 
@@ -162,13 +239,11 @@ async function sendChatMessage() {
   input.value = '';
   input.style.height = 'auto';
 
-  // If Hermes is selected, redirect to the Hermes iframe instead
+  // If Hermes is selected, the WebUI embed owns its own input box —
+  // focus it so the user keeps typing there directly.
   if (agent === 'hermes') {
-    // Send the message to the Hermes WebUI via the iframe
-    // Since we're cross-origin (different port), we can't postMessage
-    // Instead, just focus the iframe and let the user type there directly
     if (_hermesIframeInstance) {
-      _hermesIframeInstance.contentWindow.focus();
+      try { _hermesIframeInstance.contentWindow.focus(); } catch (e) { /* ignore */ }
     }
     return;
   }
@@ -183,7 +258,7 @@ async function sendChatMessage() {
     // Client-side timeout: 200s (slightly more than Hermes' 180s backend timeout)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 200000);
-    const r = await api.chat(agent, message, controller);
+    const r = await api.chat(agent, message, controller, currentChatContext());
     clearTimeout(timeoutId);
     removeTypingIndicator(typingId);
     addChatMessage('assistant', r.response.content, agent);
@@ -194,7 +269,7 @@ async function sendChatMessage() {
   } catch (err) {
     removeTypingIndicator(typingId);
     const msg = err.name === 'AbortError' ? 'Request timed out after 200s' : err.message;
-    addChatMessage('assistant', `⚠ Error: ${msg}`, agent);
+    addChatMessage('assistant', `! Error: ${msg}`, agent);
   }
 }
 
@@ -206,7 +281,7 @@ function addChatMessage(role, content, agent) {
   const msg = document.createElement('div');
   msg.className = `chat-message ${role}`;
   msg.innerHTML = `
-    <div class="chat-message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+    <div class="chat-message-avatar">${role === 'user' ? '▸' : '◆'}</div>
     <div class="chat-message-body">
       <div class="chat-message-header">
         <span class="chat-message-agent">${role === 'user' ? 'You' : agent}</span>
@@ -226,7 +301,7 @@ function showTypingIndicator(agent) {
   div.className = 'chat-message assistant';
   div.id = id;
   div.innerHTML = `
-    <div class="chat-message-avatar">🤖</div>
+    <div class="chat-message-avatar">◆</div>
     <div class="chat-message-body">
       <div class="chat-message-header">
         <span class="chat-message-agent">${agent}</span>
@@ -271,7 +346,7 @@ function renderChatHistory(messages) {
     const div = document.createElement('div');
     div.className = `chat-message ${msg.role}`;
     div.innerHTML = `
-      <div class="chat-message-avatar">${msg.role === 'user' ? '👤' : '🤖'}</div>
+      <div class="chat-message-avatar">${msg.role === 'user' ? '▸' : '◆'}</div>
       <div class="chat-message-body">
         <div class="chat-message-header">
           <span class="chat-message-agent">${msg.role === 'user' ? 'You' : msg.agent}</span>

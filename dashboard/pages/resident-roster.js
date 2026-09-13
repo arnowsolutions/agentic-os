@@ -4,12 +4,12 @@ async function renderResidentRoster(target) {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">🩺 Resident Roster</div>
+        <div class="page-title">Resident Roster</div>
         <div class="page-subtitle">All urology residents — contact info, PGY level, rotation status</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderResidentRoster()">🔄 Refresh</button>
-        <button class="btn btn-primary" onclick="exportRosterCSV()">📥 Export CSV</button>
+        <button class="btn btn-ghost" onclick="renderResidentRoster()">↻ Refresh</button>
+        <button class="btn btn-primary" onclick="exportRosterCSV()">Export CSV</button>
       </div>
     </div>
     <div class="rr-controls">
@@ -34,16 +34,16 @@ async function renderResidentRoster(target) {
       .rr-filter { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: #1a1a2e; color: #eee; font-size: 13px; cursor: pointer; }
       .rr-table-wrap { background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border); overflow: hidden; }
       .rr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      .rr-table th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-muted); background: rgba(255,255,255,0.02); }
+      .rr-table th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-muted); background: var(--hover-bg); }
       .rr-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
-      .rr-table tr:hover td { background: rgba(255,255,255,0.03); }
+      .rr-table tr:hover td { background: var(--hover-bg); }
       .rr-pgy { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
       .rr-pgy.pgy1 { background: rgba(0,184,148,0.15); color: #00b894; }
       .rr-pgy.pgy2 { background: rgba(9,132,227,0.15); color: #0984e3; }
       .rr-pgy.pgy3 { background: rgba(253,203,110,0.15); color: #fdcb6e; }
       .rr-pgy.pgy4 { background: rgba(214,48,49,0.15); color: #d63031; }
-      .rr-pgy.pgy5 { background: rgba(108,92,231,0.15); color: #6c5ce7; }
-      .rr-pgy.faculty { background: rgba(162,155,254,0.15); color: #a29bfe; }
+      .rr-pgy.pgy5 { background: rgba(20,184,166,0.15); color: #14b8a6; }
+      .rr-pgy.faculty { background: rgba(20,184,166,0.10); color: #0d9488; }
       .rr-stats { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
       .rr-stat { padding: 6px 14px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); font-size: 12px; }
       .rr-stat strong { font-size: 16px; }
@@ -53,23 +53,14 @@ async function renderResidentRoster(target) {
   await loadRoster();
 }
 
-const ROSTER_DATA = [
-  { name: 'Kelli Aibel', pgy: 'PGY-3', email: 'kaibel@montefiore.org', phone: '(917) 555-0101', program: 'Urology', status: 'Active', evalStatus: 'Pending' },
-  { name: 'J. Chen', pgy: 'PGY-2', email: 'jchen@montefiore.org', phone: '(917) 555-0102', program: 'Urology', status: 'Active', evalStatus: 'Complete' },
-  { name: 'M. Patel', pgy: 'PGY-4', email: 'mpatel@montefiore.org', phone: '(917) 555-0103', program: 'Urology', status: 'Active', evalStatus: 'Pending' },
-  { name: 'R. Garcia', pgy: 'PGY-1', email: 'rgarcia@montefiore.org', phone: '(917) 555-0104', program: 'Urology', status: 'Active', evalStatus: 'Complete' },
-  { name: 'S. Kim', pgy: 'PGY-3', email: 'skim@montefiore.org', phone: '(917) 555-0105', program: 'Urology', status: 'Active', evalStatus: 'Overdue' },
-  { name: 'A. Thompson', pgy: 'PGY-5', email: 'athompson@montefiore.org', phone: '(917) 555-0106', program: 'Urology', status: 'Active', evalStatus: 'Complete' },
-  { name: 'L. Martinez', pgy: 'PGY-2', email: 'lmartinez@montefiore.org', phone: '(917) 555-0107', program: 'Urology', status: 'Active', evalStatus: 'Pending' },
-  { name: 'D. Wilson', pgy: 'PGY-4', email: 'dwilson@montefiore.org', phone: '(917) 555-0108', program: 'Urology', status: 'Active', evalStatus: 'Complete' },
-  { name: 'Dr. A. Smith', pgy: 'Faculty', email: 'asmith@montefiore.org', phone: '(718) 555-0201', program: 'Faculty', status: 'Active', evalStatus: '-' },
-  { name: 'Dr. B. Johnson', pgy: 'Faculty', email: 'bjohnson@montefiore.org', phone: '(718) 555-0202', program: 'Faculty', status: 'Active', evalStatus: '-' },
-];
+// Live roster cache (the mock ROSTER_DATA array was removed in the 2026-09 SSOT pass —
+// loadRoster() populates this from /api/crm/contacts?category=resident)
+let ROSTER_DATA = [];
 
 async function loadRoster() {
-  let residents = [...ROSTER_DATA];
+  let residents = [];
 
-  // Try loading from API if available
+  // Live roster from the CRM API (ROSTER_DATA mock list removed 2026-09 SSOT pass)
   try {
     const res = await fetch('/api/crm/contacts?category=resident');
     const data = await res.json();
@@ -86,6 +77,13 @@ async function loadRoster() {
     }
   } catch {}
 
+  ROSTER_DATA = residents;   // shared cache for filterRoster()/exportRosterCSV()
+  if (!residents.length) {
+    renderRoster([]);
+    document.getElementById('rrTable').innerHTML =
+      '<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">No residents loaded</div><div class="empty-state-desc">CRM contacts API returned nothing. Check CRM health, then refresh.</div></div>';
+    return;
+  }
   renderRoster(residents);
 }
 

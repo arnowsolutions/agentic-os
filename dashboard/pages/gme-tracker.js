@@ -3,11 +3,11 @@ async function renderGmeTracker() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">💰 GME Reimbursement Tracker</h1>
+        <h1 class="page-title">GME Reimbursement Tracker</h1>
         <p class="page-subtitle">Track resident education fund usage — $1,250 annual limit per resident</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderGmeTracker()">🔄 Refresh</button>
+        <button class="btn" onclick="renderGmeTracker()">↻ Refresh</button>
       </div>
     </div>
     <div id="gmeSummaryCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px"></div>
@@ -68,17 +68,17 @@ async function loadGmeData() {
     renderResidentTable(gmeResidents);
   } catch (err) {
     document.getElementById('gmeSummaryCards').innerHTML =
-      `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error loading data</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+      `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Error loading data</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
 function renderSummaryCards(summary) {
   const container = document.getElementById('gmeSummaryCards');
   const cards = [
-    { label: 'Total Pool', value: `$${summary.total_pool?.toLocaleString() || '0'}`, icon: '🏦', color: '#6c5ce7' },
-    { label: 'Total Used', value: `$${(summary.total_used || 0).toLocaleString()}`, icon: '💳', color: '#e17055' },
-    { label: 'Total Remaining', value: `$${(summary.total_remaining || 0).toLocaleString()}`, icon: '💰', color: '#00b894' },
-    { label: 'Residents w/ Funds', value: `${summary.residents_with_funds || 0}`, icon: '👤', color: '#0984e3' },
+    { label: 'Total Pool', value: `$${summary.total_pool?.toLocaleString() || '0'}`, icon: '▸', color: '#14b8a6' },
+    { label: 'Total Used', value: `$${(summary.total_used || 0).toLocaleString()}`, icon: '▸', color: '#e17055' },
+    { label: 'Total Remaining', value: `$${(summary.total_remaining || 0).toLocaleString()}`, icon: '▸', color: '#00b894' },
+    { label: 'Residents w/ Funds', value: `${summary.residents_with_funds || 0}`, icon: '▸', color: '#0984e3' },
   ];
   container.innerHTML = cards.map(c => `
     <div class="card" style="text-align:center;padding:14px 10px">
@@ -124,10 +124,10 @@ function renderResidentTable(residents) {
         return `
           <div class="gme-row" style="display:grid;grid-template-columns:1.8fr 0.6fr 1.6fr 0.7fr 0.9fr 0.3fr;gap:0;padding:6px 12px;border-bottom:1px solid var(--border);align-items:center;font-size:13px;transition:background 0.15s;cursor:pointer" onclick="toggleResidentDetail('${escapeHtml(id)}')" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''">
             <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;${isExpanded ? 'transform:rotate(90deg)' : ''}">▶</span>
+              <span style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;${isExpanded ? 'transform:rotate(90deg)' : ''}">▸</span>
               <span style="font-weight:500">${escapeHtml(r.firstName || '')} ${escapeHtml(r.lastName || '')}</span>
             </div>
-            <div><span class="tag" style="font-size:10px;padding:1px 8px;background:${exhausted?'#d6303115':'#6c5ce715'};color:${exhausted?'#d63031':'#6c5ce7'};border:1px solid ${exhausted?'#d6303130':'#6c5ce730'}">${escapeHtml(r.pgy || 'N/A')}</span></div>
+            <div><span class="tag" style="font-size:10px;padding:1px 8px;background:${exhausted?'#d6303115':'#14b8a615'};color:${exhausted?'#d63031':'#14b8a6'};border:1px solid ${exhausted?'#d6303130':'#14b8a630'}">${escapeHtml(r.pgy || 'N/A')}</span></div>
             <div>
               <div style="display:flex;align-items:center;gap:8px">
                 <span style="font-weight:600;font-size:12px;min-width:70px;white-space:nowrap">$${used.toLocaleString()} / $1,250</span>
@@ -202,7 +202,7 @@ function renderResidentDetail(id, resident, reimbursements, currentAy) {
       
       ${activeTxns.length === 0 ? `
         <div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">
-          📭 No transactions for ${activeAy === 'unknown' ? 'this period' : activeAy}
+          No transactions for ${activeAy === 'unknown' ? 'this period' : activeAy}
         </div>
       ` : `
         <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;display:flex;justify-content:space-between">
@@ -228,7 +228,7 @@ function renderResidentDetail(id, resident, reimbursements, currentAy) {
               <div style="color:var(--text-muted)">${t.date || '—'}</div>
               <div style="font-weight:600;color:${(t.amount || 0) >= 500 ? '#e17055' : 'var(--text)'}">$${(t.amount || 0).toLocaleString()}</div>
               <div style="color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(t.description || '')}">${escapeHtml(t.description || '—')}</div>
-              <div><span class="tag" style="font-size:9px;padding:1px 5px;background:${isGme ? '#6c5ce715' : '#0984e315'};color:${isGme ? '#6c5ce7' : '#0984e3'};border:1px solid ${isGme ? '#6c5ce730' : '#0984e330'}" title="${escapeHtml(acct)}">${escapeHtml(acctShort)}</span></div>
+              <div><span class="tag" style="font-size:9px;padding:1px 5px;background:${isGme ? '#14b8a615' : '#0984e315'};color:${isGme ? '#14b8a6' : '#0984e3'};border:1px solid ${isGme ? '#14b8a630' : '#0984e330'}" title="${escapeHtml(acct)}">${escapeHtml(acctShort)}</span></div>
               <div><span class="tag" style="font-size:9px;padding:1px 6px;background:#00b89415;color:#00b894;border:1px solid #00b89430">${t.status || 'approved'}</span></div>
             </div>`;
           }).join('')}
@@ -238,7 +238,7 @@ function renderResidentDetail(id, resident, reimbursements, currentAy) {
       ${resident.total_used < 1250 && activeAy !== 'all' ? `
         <div style="margin-top:8px;text-align:right">
           <button class="btn" style="padding:4px 12px;font-size:11px" onclick="openAddReimbursement('${escapeHtml(resident.id)}', '${escapeHtml((resident.firstName||'') + ' ' + (resident.lastName||''))}', ${1250 - resident.total_used})">
-            ➕ Add Reimbursement
+            + Add Reimbursement
           </button>
         </div>
       ` : ''}
@@ -309,10 +309,10 @@ function openAddReimbursement(residentId, residentName, maxAmount) {
     </div>
   `;
   const footer = `
-    <button class="btn" onclick="saveReimbursement('${escapeHtml(residentId)}', ${maxAmount})">💾 Save</button>
+    <button class="btn" onclick="saveReimbursement('${escapeHtml(residentId)}', ${maxAmount})">Save</button>
     <button class="btn" onclick="closeModal()">Cancel</button>
   `;
-  showModal('➕ Add Reimbursement', body, footer);
+  showModal('+ Add Reimbursement', body, footer);
 }
 
 async function saveReimbursement(residentId, maxAmount) {

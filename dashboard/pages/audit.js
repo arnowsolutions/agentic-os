@@ -41,7 +41,7 @@ async function refreshAudit() {
     _allAuditEntries = r.entries || [];
     applyAuditFilter();
   } catch (err) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -54,7 +54,7 @@ function applyAuditFilter() {
 
   const container = document.getElementById('auditTable');
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-title">No audit entries found</div></div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No audit entries found</div></div>';
     return;
   }
 

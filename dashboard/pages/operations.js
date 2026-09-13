@@ -4,8 +4,8 @@
    Key metrics, agent status, recent activity. No emoji.
    ═══════════════════════════════════════════════════════════════════ */
 
-async function renderOperations() {
-  const content = document.getElementById('pageContent');
+async function renderOperations(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">

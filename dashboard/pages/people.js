@@ -50,7 +50,7 @@ async function renderPeople(target) {
         <div class="page-header-right">
           <div class="btn-group">
             <button class="btn btn-ghost ${peopleState.viewMode === 'grid' ? 'active' : ''}" onclick="setPeopleViewMode('grid')" title="Grid view">⊞</button>
-            <button class="btn btn-ghost ${peopleState.viewMode === 'table' ? 'active' : ''}" onclick="setPeopleViewMode('table')" title="Table view">☰</button>
+            <button class="btn btn-ghost ${peopleState.viewMode === 'table' ? 'active' : ''}" onclick="setPeopleViewMode('table')" title="Table view">▤</button>
           </div>
           <button class="btn btn-primary" onclick="openContactModal()">
             <span>+</span> Add Contact
@@ -60,7 +60,7 @@ async function renderPeople(target) {
 
       <div class="people-toolbar">
         <div class="people-search">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon">⌕</span>
           <input 
             type="text" 
             class="form-input" 
@@ -78,7 +78,7 @@ async function renderPeople(target) {
           </select>
           ${peopleState.categoryFilter === 'Resident' ? `
             <button class="btn btn-ghost" onclick="showGmeSummary()">
-              💰 GME Summary
+              GME Summary
             </button>
           ` : ''}
         </div>
@@ -111,7 +111,7 @@ async function loadContacts() {
   } catch (err) {
     content.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">⚠️</div>
+        <div class="empty-state-icon">!</div>
         <div class="empty-state-title">Failed to load contacts</div>
         <div class="empty-state-desc">${escapeHtml(err.message)}</div>
         <button class="btn btn-primary mt-3" onclick="loadContacts()">Retry</button>
@@ -175,7 +175,7 @@ function renderPeopleContent() {
   if (peopleState.contacts.length === 0) {
     content.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">👥</div>
+        <div class="empty-state-icon"></div>
         <div class="empty-state-title">No contacts yet</div>
         <div class="empty-state-desc">Add your first contact to get started with the directory.</div>
         <button class="btn btn-primary mt-3" onclick="openContactModal()">Add Contact</button>
@@ -187,7 +187,7 @@ function renderPeopleContent() {
   if (peopleState.filteredContacts.length === 0) {
     content.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">🔍</div>
+        <div class="empty-state-icon">⌕</div>
         <div class="empty-state-title">No matches found</div>
         <div class="empty-state-desc">Try adjusting your search or filter criteria.</div>
         <button class="btn btn-ghost mt-3" onclick="clearPeopleFilters()">Clear Filters</button>
@@ -211,8 +211,8 @@ function renderPeopleGrid() {
           <div class="people-card-header">
             <div class="people-avatar">${getContactInitials(contact)}</div>
             <div class="people-card-actions" onclick="event.stopPropagation()">
-              <button class="btn btn-xs btn-ghost" onclick="editContact('${contact.id}')" title="Edit">✏️</button>
-              <button class="btn btn-xs btn-ghost" onclick="deleteContact('${contact.id}')" title="Delete">🗑️</button>
+              <button class="btn btn-xs btn-ghost" onclick="editContact('${contact.id}')" title="Edit">✎</button>
+              <button class="btn btn-xs btn-ghost" onclick="deleteContact('${contact.id}')" title="Delete">✕</button>
             </div>
           </div>
           <div class="people-card-body">
@@ -222,8 +222,8 @@ function renderPeopleGrid() {
               ${contact.pgy ? `<span class="badge badge-accent">${escapeHtml(contact.pgy)}</span>` : ''}
             </div>
             ${contact.role ? `<p class="people-role">${escapeHtml(contact.role)}</p>` : ''}
-            ${contact.email ? `<p class="people-contact">📧 ${escapeHtml(contact.email)}</p>` : ''}
-            ${contact.phone ? `<p class="people-contact">📱 ${escapeHtml(formatPhone(contact.phone))}</p>` : ''}
+            ${contact.email ? `<p class="people-contact">${escapeHtml(contact.email)}</p>` : ''}
+            ${contact.phone ? `<p class="people-contact">${escapeHtml(formatPhone(contact.phone))}</p>` : ''}
             ${contact.category === 'Resident' && contact.reimbursements ? renderGmeMini(contact) : ''}
           </div>
         </div>
@@ -267,8 +267,8 @@ function renderPeopleTable() {
               ${peopleState.categoryFilter === 'Resident' ? `<td>${renderGmeStatusCell(contact)}</td>` : ''}
               <td>
                 <div class="btn-group" onclick="event.stopPropagation()">
-                  <button class="btn btn-xs btn-ghost" onclick="editContact('${contact.id}')" title="Edit">✏️</button>
-                  <button class="btn btn-xs btn-ghost" onclick="deleteContact('${contact.id}')" title="Delete">🗑️</button>
+                  <button class="btn btn-xs btn-ghost" onclick="editContact('${contact.id}')" title="Edit">✎</button>
+                  <button class="btn btn-xs btn-ghost" onclick="deleteContact('${contact.id}')" title="Delete">✕</button>
                 </div>
               </td>
             </tr>
@@ -291,7 +291,7 @@ function renderGmeMini(contact) {
   return `
     <div class="people-gme-mini">
       <div class="people-gme-header">
-        <span>💰 GME</span>
+        <span>GME</span>
         <span class="people-gme-remaining ${remaining < 200 ? 'low' : ''}">$${remaining.toFixed(0)} left</span>
       </div>
       <div class="progress-bar">
@@ -569,7 +569,7 @@ function renderGmeDetail(resident) {
 
   return `
     <div class="people-detail-section">
-      <h4>💰 GME Reimbursement</h4>
+      <h4>GME Reimbursement</h4>
       <div class="people-gme-summary">
         <div class="people-gme-stat">
           <span class="people-gme-stat-value">$${totalUsed.toFixed(2)}</span>
@@ -617,22 +617,22 @@ async function showGmeSummary() {
       <div class="people-gme-full">
         <div class="people-gme-cards">
           <div class="stat-card">
-            <div class="stat-icon green">💰</div>
+            <div class="stat-icon green"></div>
             <div class="stat-value">$${(summary.total_pool || 0).toLocaleString()}</div>
             <div class="stat-label">Total Pool</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon purple">💸</div>
+            <div class="stat-icon purple"></div>
             <div class="stat-value">$${(summary.total_used || 0).toLocaleString()}</div>
             <div class="stat-label">Total Used</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon blue">📊</div>
+            <div class="stat-icon blue"></div>
             <div class="stat-value">$${(summary.total_remaining || 0).toLocaleString()}</div>
             <div class="stat-label">Remaining</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon yellow">👥</div>
+            <div class="stat-icon yellow"></div>
             <div class="stat-value">${summary.residents_with_funds || 0}/${summary.total_residents || 0}</div>
             <div class="stat-label">With Funds</div>
           </div>

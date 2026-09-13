@@ -50,7 +50,7 @@ async function renderWizardStep() {
     case 0:
       wc.innerHTML = `
         <div style="text-align:center;padding:12px 0">
-          <div style="font-size:48px;margin-bottom:16px">⬡</div>
+          <div style="font-size:48px;margin-bottom:16px">○</div>
           <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">Agentic OS coordinates <strong>opencode</strong>, <strong>Hermes Agent</strong>, and <strong>Gemini CLI</strong> into a unified multi-agent orchestration platform. This wizard will help you get everything configured.</p>
         </div>
       `;
@@ -74,7 +74,7 @@ async function renderWizardStep() {
               </div>`;
             }).join('')}
           </div>
-          ${agents.some(a => a.status === 'offline') ? `<div class="card mt-3" style="background:var(--yellow-dim);border-color:transparent;padding:12px"><div class="flex items-center gap-2"><span>⚠</span><span style="font-size:13px">Some agents are offline. Install missing agents to enable full functionality.</span></div></div>` : ''}
+          ${agents.some(a => a.status === 'offline') ? `<div class="card mt-3" style="background:var(--yellow-dim);border-color:transparent;padding:12px"><div class="flex items-center gap-2"><span>!</span><span style="font-size:13px">Some agents are offline. Install missing agents to enable full functionality.</span></div></div>` : ''}
         `;
       } catch (err) {
         wc.innerHTML = `<div class="card" style="background:var(--red-dim);border-color:transparent;padding:12px"><div class="flex items-center gap-2"><span>✕</span><span style="font-size:13px">${escapeHtml(err.message)}</span></div></div>`;

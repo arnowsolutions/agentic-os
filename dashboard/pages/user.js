@@ -8,13 +8,13 @@ async function renderUser() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">👤 Resident Portal</div>
+        <div class="page-title">▸ Resident Portal</div>
         <div class="page-subtitle">Enter your EZ ID to see your schedule, benefits, and more</div>
       </div>
     </div>
     <div id="userLoginSection">
       <div style="max-width:480px;margin:40px auto;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;text-align:center;">
-        <div style="font-size:48px;margin-bottom:16px;">🆔</div>
+        <div style="font-size:48px;margin-bottom:16px;"></div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px;">Resident Dashboard</h2>
         <p style="color:var(--text-secondary);font-size:13px;margin-bottom:24px;">Look up your on-call schedule, reimbursement balance, upcoming evals, sick call record, and commute — all in one place.</p>
         <div style="margin-bottom:16px;text-align:left;">
@@ -25,7 +25,7 @@ async function renderUser() {
           <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">PIN</label>
           <input type="password" id="pinInput" placeholder="4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:10px 14px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:14px;outline:none;">
         </div>
-        <button class="btn btn-primary" onclick="lookupUser()" style="width:100%;padding:10px;font-size:14px;">🔍 Look Up</button>
+        <button class="btn btn-primary" onclick="lookupUser()" style="width:100%;padding:10px;font-size:14px;">⌕ Look Up</button>
         <div id="userLoginError" style="color:var(--red);font-size:12px;margin-top:12px;display:none;"></div>
         <label style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--text-secondary);cursor:pointer;">
           <input type="checkbox" id="rememberEzId" style="accent-color:var(--accent);"> Remember my EZ ID
@@ -50,7 +50,7 @@ async function renderUser() {
       .user-badge.off { background:var(--red-dim); color:var(--red); }
       .user-badge.warn { background:var(--yellow-dim); color:var(--yellow); }
       .user-list { list-style:none; padding:0; }
-      .user-list li { padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:13px; display:flex; justify-content:space-between; }
+      .user-list li { padding:8px 0; border-bottom:1px solid var(--border-soft); font-size:13px; display:flex; justify-content:space-between; }
       .user-list li:last-child { border-bottom:none; }
       .user-list .val { font-weight:600; }
       .user-header-card { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
@@ -94,7 +94,7 @@ async function lookupUser() {
     if (data.error) {
       dashSection.innerHTML = `
         <div style="max-width:480px;margin:40px auto;text-align:center;">
-          <div style="font-size:48px;margin-bottom:16px;">😕</div>
+          <div style="font-size:48px;margin-bottom:16px;"></div>
           <h2 style="font-size:18px;margin-bottom:8px;">Not Found</h2>
           <p style="color:var(--text-secondary);font-size:13px;">${data.error}</p>
           <button class="btn btn-primary mt-3" onclick="renderUser()">Try Again</button>
@@ -112,7 +112,7 @@ async function lookupUser() {
   } catch (e) {
     dashSection.innerHTML = `
       <div style="max-width:480px;margin:40px auto;text-align:center;">
-        <div style="font-size:48px;margin-bottom:16px;">⚠️</div>
+        <div style="font-size:48px;margin-bottom:16px;">!</div>
         <h2 style="font-size:18px;margin-bottom:8px;">Connection Error</h2>
         <p style="color:var(--text-secondary);font-size:13px;">Could not reach the server. The dashboard service may be down.</p>
         <button class="btn btn-primary mt-3" onclick="renderUser()">Try Again</button>
@@ -153,8 +153,8 @@ function renderUserDashboard(data, ezId) {
         </div>
         <div style="text-align:right;">
           ${oncall.length > 0
-            ? `<span class="user-badge on">🟢 On Call Today</span>`
-            : `<span class="user-badge off">⚪ Not On Call</span>`
+            ? `<span class="user-badge on">● On Call Today</span>`
+            : `<span class="user-badge off">○ Not On Call</span>`
           }
         </div>
       </div>
@@ -185,7 +185,7 @@ function renderUserDashboard(data, ezId) {
 
       <!-- On-Call Details -->
       <div class="user-card">
-        <h3>📅 Today's On-Call</h3>
+        <h3>Today's On-Call</h3>
         ${oncall.length > 0
           ? `<ul class="user-list">${oncall.map(o => `
             <li><span>${o.hospital || 'Hospital'}</span><span class="val">${o.name || ''}${o.role ? ` (${o.role})` : ''}</span></li>
@@ -196,7 +196,7 @@ function renderUserDashboard(data, ezId) {
 
       <!-- Reimbursement -->
       <div class="user-card">
-        <h3>💰 Reimbursement</h3>
+        <h3>Reimbursement</h3>
         ${reimbursement
           ? `<div style="display:flex;gap:16px;flex-wrap:wrap;">
               <div>
@@ -218,11 +218,11 @@ function renderUserDashboard(data, ezId) {
 
       <!-- Pending Evals -->
       <div class="user-card">
-        <h3>📝 Evaluation Status</h3>
+        <h3>Evaluation Status</h3>
         ${evals.length > 0
           ? `<ul class="user-list">${evals.slice(0, 8).map(e => `
             <li><span>${e.form_name || e.eval_type || 'Evaluation'}</span>
-            <span class="val" style="color:${e.completed ? 'var(--green)' : 'var(--yellow)'}">${e.completed ? '✅ Done' : '⏳ Pending'}</span></li>
+            <span class="val" style="color:${e.completed ? 'var(--green)' : 'var(--yellow)'}">${e.completed ? '✓ Done' : 'Pending'}</span></li>
           `).join('')}</ul>`
           : `<p style="color:var(--text-muted);font-size:13px;">No evaluation records found for your EZ ID.</p>`
         }
@@ -230,7 +230,7 @@ function renderUserDashboard(data, ezId) {
 
       <!-- Sick Call Record -->
       <div class="user-card">
-        <h3>🏥 Sick Call History</h3>
+        <h3>Sick Call History</h3>
         ${sickCalls.length > 0
           ? `<ul class="user-list">${sickCalls.map(s => `
             <li><span>${s.date || s.reported_at || ''}</span>
@@ -242,7 +242,7 @@ function renderUserDashboard(data, ezId) {
 
       <!-- Commute -->
       <div class="user-card">
-        <h3>🚗 Commute</h3>
+        <h3>Commute</h3>
         ${commute
           ? `<div>
               <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">

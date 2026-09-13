@@ -13,7 +13,7 @@ async function renderTasks() {
       </div>
       <div class="btn-group">
         <button class="btn btn-primary btn-sm" onclick="showAddTaskModal()">+ New Task</button>
-        <button class="btn btn-ghost btn-sm" onclick="renderTasks()">🔄 Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="renderTasks()">↻ Refresh</button>
       </div>
     </div>
     <div class="flex gap-3" style="margin-bottom:16px;flex-wrap:wrap">
@@ -51,22 +51,22 @@ async function loadAndRenderTasks() {
 
     document.getElementById('taskStats').innerHTML = `
       <div class="stat-card">
-        <div class="stat-icon" style="color:var(--accent)">📋</div>
+        <div class="stat-icon" style="color:var(--accent)"></div>
         <div class="stat-value">${total}</div>
         <div class="stat-label">Total Tasks</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="color:var(--yellow)">⏳</div>
+        <div class="stat-icon" style="color:var(--yellow)"></div>
         <div class="stat-value">${pending}</div>
         <div class="stat-label">Pending</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="color:var(--green)">✅</div>
+        <div class="stat-icon" style="color:var(--green)">✓</div>
         <div class="stat-value">${done}</div>
         <div class="stat-label">Completed</div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon" style="color:var(--red)">🔴</div>
+        <div class="stat-icon" style="color:var(--red)">●</div>
         <div class="stat-value">${highUrgent}</div>
         <div class="stat-label">High Priority</div>
       </div>
@@ -76,7 +76,7 @@ async function loadAndRenderTasks() {
   } catch (err) {
     document.getElementById('taskList').innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">⚠</div>
+        <div class="empty-state-icon">!</div>
         <div class="empty-state-title">Failed to load tasks</div>
         <div class="empty-state-desc">${err.message}</div>
       </div>`;
@@ -113,8 +113,8 @@ function renderTaskList(tasks) {
 
   const list = document.getElementById('taskList');
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🎯</div><div class="empty-state-title">${
-      filter === 'completed' ? 'No completed tasks' : filter === 'pending' ? 'Nothing pending! 🎉' : 'No tasks yet'
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">${
+      filter === 'completed' ? 'No completed tasks' : filter === 'pending' ? 'Nothing pending! ' : 'No tasks yet'
     }</div><div class="empty-state-desc">${
       filter === 'all' ? 'Your task list is empty — click "+ New Task" to add one' : 'Try changing the filter'
     }</div></div>`;
@@ -125,18 +125,18 @@ function renderTaskList(tasks) {
     const isDone = t.status === 'completed';
     const priColor = t.priority === 'high' ? 'var(--red)' : t.priority === 'medium' ? 'var(--yellow)' : 'var(--text-muted)';
     const cat = t.category || 'other';
-    const due = t.due_date ? `<span class="task-due ${isOverdue(t.due_date) && !isDone ? 'overdue' : ''}">📅 ${t.due_date}</span>` : '';
+    const due = t.due_date ? `<span class="task-due ${isOverdue(t.due_date) && !isDone ? 'overdue' : ''}">${t.due_date}</span>` : '';
 
     return `
       <div class="task-item ${isDone ? 'task-done' : ''}" data-task-id="${escapeHtml(t.id)}">
         <button class="task-toggle" onclick="toggleTaskStatus('${escapeHtml(t.id)}')" title="${isDone ? 'Mark pending' : 'Mark done'}">
-          ${isDone ? '✅' : '⬜'}
+          ${isDone ? '✓' : '○'}
         </button>
         <div class="task-body">
           <div class="task-content">${escapeHtml(t.content)}</div>
           <div class="task-meta">
             <span class="task-priority" style="color:${priColor}">● ${t.priority}</span>
-            <span class="task-category">🏷 ${cat}</span>
+            <span class="task-category">${cat}</span>
             ${due}
           </div>
         </div>

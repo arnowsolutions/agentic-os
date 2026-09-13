@@ -1,19 +1,19 @@
-async function renderFileBrowser() {
-  const content = document.getElementById('pageContent');
+async function renderFileBrowser(target) {
+  const content = target || document.getElementById('suitePane') || document.getElementById('pageContent');
   let currentPath = '/workspace';
 
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <div class="page-title">🗂 File Browser</div>
+        <div class="page-title">File Browser</div>
         <div class="page-subtitle">Browse and view files in <span id="fbCurrentPath">${currentPath}</span></div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderFileBrowser()">🔄 Reset</button>
+        <button class="btn btn-ghost" onclick="renderFileBrowser()">↻ Reset</button>
       </div>
     </div>
     <div class="fb-bar">
-      <button class="btn btn-ghost btn-sm" onclick="fbGoUp()" id="fbUpBtn" disabled>⬆ Up</button>
+      <button class="btn btn-ghost btn-sm" onclick="fbGoUp()" id="fbUpBtn" disabled>↑ Up</button>
       <input type="text" id="fbPathInput" class="fb-path-input" value="${currentPath}" onkeydown="if(event.key==='Enter')fbGoTo(this.value)">
       <button class="btn btn-sm btn-primary" onclick="fbGoTo(document.getElementById('fbPathInput').value)">Go</button>
     </div>
@@ -29,8 +29,8 @@ async function renderFileBrowser() {
       .fb-bar { display:flex; gap:6px; align-items:center; margin-top:12px; }
       .fb-path-input { flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:12px; font-family:monospace; }
       .fb-content { margin-top:8px; background:var(--bg-card); border-radius:var(--radius-md); border:1px solid var(--border); overflow:hidden; }
-      .fb-item { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:12px; border-bottom:1px solid rgba(255,255,255,0.03); cursor:pointer; }
-      .fb-item:hover { background:rgba(255,255,255,0.04); }
+      .fb-item { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:12px; border-bottom:1px solid var(--border-soft); cursor:pointer; }
+      .fb-item:hover { background:var(--hover-bg-strong); }
       .fb-item .icon { width:18px; text-align:center; }
       .fb-item .name { flex:1; }
       .fb-item .size { color:var(--text-muted); font-size:11px; width:70px; text-align:right; }
@@ -57,13 +57,13 @@ async function fbLoad(path) {
     const container = document.getElementById('fbContent');
 
     if (items.length === 0) {
-      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">📭 Empty directory</div>';
+      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Empty directory</div>';
       return;
     }
 
     container.innerHTML = items.map(item => {
       const isDir = item.type === 'dir' || item.type === 'directory';
-      const icon = isDir ? '📁' : '📄';
+      const icon = isDir ? '▣' : '▸';
       return `<div class="fb-item" onclick="${isDir ? `fbLoad('${escapeHtml(item.path)}')` : `fbPreview('${escapeHtml(item.path)}')`}">
         <span class="icon">${icon}</span>
         <span class="name">${escapeHtml(item.name)}</span>
@@ -72,7 +72,7 @@ async function fbLoad(path) {
       </div>`;
     }).join('');
   } catch(e) {
-    document.getElementById('fbContent').innerHTML = `<div style="padding:24px;text-align:center;color:#d63031;font-size:13px">⚠️ ${escapeHtml(e.message)}</div>`;
+    document.getElementById('fbContent').innerHTML = `<div style="padding:24px;text-align:center;color:#d63031;font-size:13px">! ${escapeHtml(e.message)}</div>`;
   }
 }
 

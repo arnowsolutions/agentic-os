@@ -6,7 +6,7 @@ async function renderStandards() {
         <h1 class="page-title">Standards</h1>
         <p class="page-subtitle">Project conventions and coding standards</p>
       </div>
-      <button class="btn btn-primary" onclick="runDiscovery()">🔍 Discover Patterns</button>
+      <button class="btn btn-primary" onclick="runDiscovery()">⌕ Discover Patterns</button>
     </div>
     <div id="standardsContent"><div class="loading"><div class="loading-spinner"></div></div></div>
   `;
@@ -20,11 +20,11 @@ async function renderStandards() {
     let html = '';
 
     if (index) {
-      html += `<div class="card"><div class="card-header"><span class="card-title">📐 Standards Index</span></div><pre style="font-size:12px">${escapeHtml(index)}</pre></div>`;
+      html += `<div class="card"><div class="card-header"><span class="card-title">Standards Index</span></div><pre style="font-size:12px">${escapeHtml(index)}</pre></div>`;
     }
 
     if (standards.length === 0) {
-      html += '<div class="empty-state"><div class="empty-state-icon">📐</div><div class="empty-state-title">No standards defined</div><div class="empty-state-desc">Run "Discover Patterns" to extract conventions from your codebase</div></div>';
+      html += '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No standards defined</div><div class="empty-state-desc">Run "Discover Patterns" to extract conventions from your codebase</div></div>';
     } else {
       html += `<div class="grid grid-2">${standards.map(s => `
         <div class="card" style="cursor:pointer" onclick="viewStandard('${s.name}')">
@@ -36,7 +36,7 @@ async function renderStandards() {
 
     container.innerHTML = html;
   } catch (err) {
-    document.getElementById('standardsContent').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('standardsContent').innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
   }
 }
 

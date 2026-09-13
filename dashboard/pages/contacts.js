@@ -100,7 +100,7 @@ function renderTable(contacts) {
   contacts.forEach(c => {
     const name = `${escapeHtml(c.firstName||'')} ${escapeHtml(c.lastName||'')}`.trim() || 'Unknown';
     const cat = escapeHtml(c.category || 'Uncategorized');
-    const badgeColor = cat === 'Resident' ? '#6c5ce7' : cat === 'Faculty' ? '#0984e3' : cat === 'Staff' ? '#00b894' : cat === 'Manager' ? '#e17055' : '#636e72';
+    const badgeColor = cat === 'Resident' ? '#14b8a6' : cat === 'Faculty' ? '#0984e3' : cat === 'Staff' ? '#00b894' : cat === 'Manager' ? '#e17055' : '#636e72';
     const isArchived = c.archived;
     html += `
       <div class="card" style="margin-bottom:8px;cursor:pointer;${isArchived ? 'opacity:0.6;border-left:3px solid var(--red)' : ''}" onclick="showContactDetail('${c.id}')">

@@ -9,7 +9,7 @@ const MASSTEMAIL_CATEGORIES = [
   {
     key: 'grand-rounds',
     label: 'Grand Rounds',
-    icon: '🎓',
+    icon: '▸',
     src: '/api/calendar-invites',
     liveParam: 'test=false',
     desc: 'Grand Rounds & Monday conferences — one-click Outlook invites',
@@ -18,7 +18,7 @@ const MASSTEMAIL_CATEGORIES = [
   {
     key: 'subi-exit',
     label: 'Sub-I Exit Interviews',
-    icon: '🎓',
+    icon: '▸',
     src: '/api/subi-exit-invites',
     liveParam: 'test=false',
     desc: 'Sub-I exit interviews — interviewee & time per row',
@@ -28,7 +28,7 @@ const MASSTEMAIL_CATEGORIES = [
   {
     key: 'chief-meetings',
     label: 'Chief Meetings',
-    icon: '👑',
+    icon: '▸',
     src: null,
     desc: "Chief Residents' meetings — 12 PM, Penthouse, 6 fixed dates",
     live: false,
@@ -38,7 +38,7 @@ const MASSTEMAIL_CATEGORIES = [
   {
     key: 'interview-days',
     label: 'Interview Days',
-    icon: '🎤',
+    icon: '▸',
     src: null,
     desc: '2026-2027 Residency Interview Days — invites to faculty + residents',
     live: false,
@@ -47,7 +47,7 @@ const MASSTEMAIL_CATEGORIES = [
   {
     key: 'conference-email',
     label: 'Email Resend',
-    icon: '📧',
+    icon: '▸',
     src: null,
     desc: 'Grand Rounds & Resident Conference invite resend',
     live: false,
@@ -66,15 +66,15 @@ async function renderMassEmail() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">📧 Mass Email & Invites</h1>
+        <h1 class="page-title">Mass Email & Invites</h1>
         <p class="page-breadcrumb">One-click Outlook deeplinks — Grand Rounds, Sub-I, Meetings & more</p>
       </div>
       <div class="btn-group">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;margin-right:4px">
           <input type="checkbox" id="massEmailLiveToggle" ${massEmailLive ? 'checked' : ''} onchange="massEmailLive=this.checked;renderMassEmailFrame()" />
-          ${massEmailLive ? '🚀 LIVE' : '🧪 TEST'}
+          ${massEmailLive ? 'LIVE' : 'TEST'}
         </label>
-        <button class="btn" onclick="renderMassEmail()">🔄 Refresh</button>
+        <button class="btn" onclick="renderMassEmail()">↻ Refresh</button>
       </div>
     </div>
 
@@ -175,7 +175,7 @@ function buildChiefMeetingsInline() {
       <td style="padding:10px 16px">${escapeHtml(label || '—')}</td>
       <td style="padding:10px 16px">${st} – ${et}</td>
       <td style="padding:10px 16px">${escapeHtml(loc)}</td>
-      <td style="padding:10px 16px;text-align:center"><button class="btn btn-sm" onclick="openChiefOutlookHub('${date}')">📧</button></td>
+      <td style="padding:10px 16px;text-align:center"><button class="btn btn-sm" onclick="openChiefOutlookHub('${date}')"></button></td>
     </tr>`;
   }).join('');
   return `
@@ -203,7 +203,7 @@ function buildChiefMeetingsInline() {
 
 // ── Conference Email inline render (compact resend list) ──
 async function renderConferenceEmailInline(container) {
-  container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📧</div><div class="empty-state-title">Email Resend</div><div class="empty-state-desc">Grand Rounds & Resident Conference invite resend tool</div></div>`;
+  container.innerHTML = `<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">Email Resend</div><div class="empty-state-desc">Grand Rounds & Resident Conference invite resend tool</div></div>`;
 }
 
 // ── Chief Meetings outlook opener ──
@@ -298,7 +298,7 @@ async function renderInterviewDaysInline(container) {
       <td style="padding:12px 16px;white-space:nowrap"><strong>${day}</strong><br><span style="font-size:12px;color:var(--muted)">${fm}</span></td>
       <td style="padding:12px 16px"><strong>${escapeHtml(d.label)}</strong></td>
       <td style="padding:12px 16px">8:00 AM – 4:00 PM</td>
-      <td style="padding:12px 16px;text-align:center"><button class="btn btn-sm" onclick="openInterviewDayOutlook('${d.date}')">📧 Open in Outlook</button></td>
+      <td style="padding:12px 16px;text-align:center"><button class="btn btn-sm" onclick="openInterviewDayOutlook('${d.date}')">Open in Outlook</button></td>
     </tr>`;
   }).join('');
 

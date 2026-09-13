@@ -98,7 +98,7 @@ const api = {
   updateSettings: (settings) => api.put('/api/settings', { settings }),
   getStandards: () => api.get('/api/standards'),
   discoverStandards: () => api.post('/api/standards/discover'),
-  chat: (agent, message, controller) => api.post('/api/chat', { agent, message }, controller),
+  chat: (agent, message, controller, page) => api.post('/api/chat', { agent, message, page_context: page || null }, controller),
   getChatHistory: () => api.get('/api/chat/history'),
   // Kanban
   getKanbanBoard: (status) => api.get(status ? `/api/kanban/board?status=${encodeURIComponent(status)}` : '/api/kanban/board'),
@@ -252,3 +252,54 @@ const api = {
   // Images → PDF
   imagesToPdf:    (formData)                  => fetch('/api/pdf/images2pdf', { method: 'POST', body: formData }),
 };
+
+/* ── SSOT staleness badge (2026-09-12 redesign) ─────────────────────────
+   Any rewired endpoint returns { as_of, source, freshness:{age_minutes,
+   level} }. Pages call renderDataStamp(res) after loading and drop the
+   returned HTML under the page subtitle. Fresh=dot green, warn=orange,
+   stale=red FROZEN label + age. Also renders the Sync-now button when the
+   source is the daily sync cache. */
+function _fmtAge(min) {
+  if (min == null) return 'unknown age';
+  if (min < 60) return Math.round(min) + ' min ago';
+  if (min < 60 * 24) return Math.round(min / 60) + ' h ago';
+  return Math.round(min / 1440) + ' d ago';
+}
+
+function renderDataStamp(res, opts) {
+  opts = opts || {};
+  if (!res || !res.freshness) return '';
+  const f = res.freshness;
+  const level = f.level || 'unknown';
+  const cls = 'ds ds-' + level;
+  const label = level === 'stale' ? 'FROZEN — ' : '';
+  const asOf = res.as_of ? new Date(res.as_of).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+  const syncBtn = opts.syncButton !== false && level !== 'fresh' && typeof syncNow === 'function'
+    ? `<button class="ds-sync" onclick="syncNow(this)">↻ Sync now</button>` : '';
+  return `<div class="${cls}" title="source: ${escapeHtml(res.source || '')} · as of ${escapeHtml(res.as_of || '')}">` +
+    `<span class="ds-dot"></span>` +
+    `<span class="ds-text">${label}${escapeHtml(res.source || 'data')} · ${asOf} (${_fmtAge(f.age_minutes)})</span>` +
+    syncBtn + `</div>`;
+}
+
+/** Insert (or replace) the stamp under a page's .page-subtitle. */
+function stampPage(res, opts) {
+  const header = document.querySelector('#pageContent .page-header');
+  if (!header) return;
+  let el = document.getElementById('dataStamp');
+  if (!el) { el = document.createElement('div'); el.id = 'dataStamp'; header.appendChild(el); }
+  el.innerHTML = renderDataStamp(res, opts);
+}
+
+/** Trigger the server-side sync and refresh the current page. */
+async function syncNow(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '↻ syncing…'; }
+  try {
+    const r = await api.post('/api/sync/run?include_calendar=true', {}, null, 200000);
+    const ok = (r.steps || []).every(s => s.ok);
+    if (btn) btn.textContent = ok ? '✓ synced' : '! partial';
+    setTimeout(() => { try { navigate((location.hash.slice(1) || 'dashboard').split('?')[0]); } catch (e) { location.reload(); } }, ok ? 900 : 2200);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '! ' + (e.message || 'sync failed'); }
+  }
+}

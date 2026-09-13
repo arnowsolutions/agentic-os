@@ -4,8 +4,8 @@
 // ──────────────────────────────────────────────────────────────
 
 const LETTER_TYPES = [
-  { id: 'good-standing', label: 'Letter of Good Standing', icon: '📋' },
-  { id: 'income', label: 'Income Verification Letter', icon: '💰' },
+  { id: 'good-standing', label: 'Letter of Good Standing', icon: '▸' },
+  { id: 'income', label: 'Income Verification Letter', icon: '▸' },
 ];
 
 async function renderResidentLetters() {
@@ -13,11 +13,11 @@ async function renderResidentLetters() {
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
-        <h1 class="page-title">✉️ Resident Letters</h1>
+        <h1 class="page-title">Resident Letters</h1>
         <p class="page-subtitle">Generate Good Standing & Income Verification letters from CRM data</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="renderResidentLetters()">🔄 Refresh</button>
+        <button class="btn" onclick="renderResidentLetters()">↻ Refresh</button>
       </div>
     </div>
     <div id="lettersContent" style="display:flex;flex-direction:column;gap:16px">Loading residents...</div>
@@ -35,7 +35,7 @@ async function loadLetterPage() {
   } catch (err) {
     document.getElementById('lettersContent').innerHTML =
       `<div class="card" style="padding:24px;text-align:center;color:var(--red)">
-        ⚠️ Failed to load residents: ${escapeHtml(err.message)}
+        ! Failed to load residents: ${escapeHtml(err.message)}
       </div>`;
   }
 }
@@ -101,10 +101,10 @@ function renderLetterUI(residents) {
   // ── Generate Button ────────────────────────────────────
   html += `<div style="display:flex;gap:12px">
     <button class="btn" onclick="generateLetter()" style="flex:1;padding:14px;font-size:15px;font-weight:600">
-      ✉️ Generate Letter
+      Generate Letter
     </button>
     <button class="btn" onclick="previewLetter()" style="padding:14px 24px;font-size:15px">
-      👁️ Preview
+      Preview
     </button>
   </div>`;
 
@@ -132,16 +132,16 @@ function getSelectedResident() {
 
 async function generateLetter() {
   const resident = getSelectedResident();
-  if (!resident) { showToast('⚠️ Please select a resident', 'error'); return; }
+  if (!resident) { showToast('! Please select a resident', 'error'); return; }
 
   const type = document.querySelector('input[name="letterType"]:checked')?.value;
-  if (!type) { showToast('⚠️ Please select a letter type', 'error'); return; }
+  if (!type) { showToast('! Please select a letter type', 'error'); return; }
 
   let body = { resident_id: resident.id, type };
 
   if (type === 'good-standing') {
     const recipient = document.getElementById('gsRecipient')?.value.trim();
-    if (!recipient) { showToast('⚠️ Recipient name is required', 'error'); return; }
+    if (!recipient) { showToast('! Recipient name is required', 'error'); return; }
     body.recipient = recipient;
     body.recipient_title = document.getElementById('gsTitle')?.value.trim() || 'Dr.';
     body.institution = document.getElementById('gsInstitution')?.value.trim() || '';
@@ -150,19 +150,19 @@ async function generateLetter() {
   try {
     const resp = await api.post('/api/letters/generate', body);
     if (resp.success) {
-      showToast('✅ Letter generated!', 'success');
+      showToast('✓ Letter generated!', 'success');
       showLetterResult(resp);
     } else {
-      showToast('⚠️ ' + (resp.error || 'Generation failed'), 'error');
+      showToast('! ' + (resp.error || 'Generation failed'), 'error');
     }
   } catch (err) {
-    showToast('⚠️ Error: ' + err.message, 'error');
+    showToast('! Error: ' + err.message, 'error');
   }
 }
 
 async function previewLetter() {
   const resident = getSelectedResident();
-  if (!resident) { showToast('⚠️ Please select a resident', 'error'); return; }
+  if (!resident) { showToast('! Please select a resident', 'error'); return; }
 
   const type = document.querySelector('input[name="letterType"]:checked')?.value;
   const params = new URLSearchParams({ resident_id: resident.id, type, preview: 'true' });
@@ -183,13 +183,13 @@ function showLetterResult(resp) {
     <div class="card" style="padding:16px 20px;background:#f0fdf4;border:1px solid #bbf7d0">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
-          <strong style="color:#15803d">✅ Letter Generated</strong><br>
+          <strong style="color:#15803d">✓ Letter Generated</strong><br>
           <span style="font-size:12px;color:var(--text-muted)">${escapeHtml(resp.filename || '')}</span><br>
           <span style="font-size:11px;color:var(--text-muted)">${escapeHtml(resp.resident_name || '')} &bull; ${escapeHtml(resp.pgy || '')}${resp.salary ? ' &bull; ' + resp.salary : ''}</span>
         </div>
         <div style="display:flex;gap:8px">
-          <a href="${resp.download_url || '#'}" class="btn btn-sm" download>⬇ Download</a>
-          <button class="btn btn-sm" onclick="window.open('${resp.download_url || '#'}', '_blank')">📄 Open</button>
+          <a href="${resp.download_url || '#'}" class="btn btn-sm" download>↓ Download</a>
+          <button class="btn btn-sm" onclick="window.open('${resp.download_url || '#'}', '_blank')">Open</button>
         </div>
       </div>
     </div>`;

@@ -8,7 +8,7 @@ async function renderGoals() {
       </div>
       <div class="btn-group">
         <button class="btn btn-primary" onclick="showCreateGoalModal()">+ New Goal</button>
-        <button class="btn btn-ghost" onclick="renderGoals()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderGoals()">↻ Refresh</button>
       </div>
     </div>
     <div class="flex gap-3" style="margin-bottom:16px">
@@ -41,7 +41,7 @@ async function renderGoals() {
     const avgEl = document.getElementById('goalAvgProgress');
     if (!list) return;
     if (goals.length === 0) {
-      list.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">🎯</div><div class="empty-state-title">No goals yet</div><div class="empty-state-desc">Create your first goal to start tracking progress</div></div>`;
+      list.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon"></div><div class="empty-state-title">No goals yet</div><div class="empty-state-desc">Create your first goal to start tracking progress</div></div>`;
       if (totalEl) totalEl.textContent = '0';
       if (activeEl) activeEl.textContent = '0';
       if (completeEl) completeEl.textContent = '0';
@@ -60,7 +60,7 @@ async function renderGoals() {
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <span class="badge badge-${g.status === 'completed' ? 'success' : g.status === 'active' ? 'info' : 'warning'}">${g.status}</span>
           <span class="badge badge-accent">${g.category}</span>
-          ${g.target_date ? `<span class="text-muted text-xs">🎯 ${g.target_date}</span>` : ''}
+          ${g.target_date ? `<span class="text-muted text-xs">${g.target_date}</span>` : ''}
         </div>
         <div class="goal-card-title">${escapeHtml(g.title)}</div>
         ${g.description ? `<div class="text-muted text-sm" style="margin-bottom:8px">${escapeHtml(g.description)}</div>` : ''}
@@ -70,10 +70,10 @@ async function renderGoals() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
           <button class="btn btn-sm ${g.status !== 'completed' ? 'btn-primary' : 'btn-ghost'}" onclick="updateGoalProgress('${g.id}', ${Math.min((g.progress || 0) + 25, 100)})">
-            ${g.status !== 'completed' ? '+25%' : '✅ Done'}
+            ${g.status !== 'completed' ? '+25%' : '✓ Done'}
           </button>
           ${g.status !== 'completed' ? `<button class="btn btn-sm btn-ghost" onclick="completeGoal('${g.id}')">Mark Complete</button>` : ''}
-          <button class="btn btn-sm btn-ghost" onclick="deleteGoal('${g.id}')" style="margin-left:auto;color:var(--red)">🗑</button>
+          <button class="btn btn-sm btn-ghost" onclick="deleteGoal('${g.id}')" style="margin-left:auto;color:var(--red)">✕</button>
         </div>
       </div>
     `).join('');
@@ -157,7 +157,7 @@ async function updateGoalProgress(id, progress) {
 async function completeGoal(id) {
   try {
     await api.updateGoal(id, { progress: 100, status: 'completed' });
-    showToast('Goal completed! 🎉', 'success');
+    showToast('Goal completed! ', 'success');
     renderGoals();
   } catch (err) {
     showToast('Failed to complete goal: ' + err.message, 'error');

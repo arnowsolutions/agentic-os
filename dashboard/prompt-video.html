@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎬 Video Prompt Builder</title>
+<title>Video Prompt Builder</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { 
@@ -103,46 +103,46 @@
 <body>
 
 <div class="header">
-  <h1>🎬 Video Prompt Builder</h1>
+  <h1>Video Prompt Builder</h1>
   <span>Based on Google Veo 3.1 official guide</span>
 </div>
 
 <div class="section">
-  <div class="section-title">🎥 What are we filming?</div>
+  <div class="section-title">What are we filming?</div>
   <input class="subject-input" id="subject" placeholder="Describe the scene..." value="a scene or action">
 </div>
 
 <!-- THEMES -->
 <div class="section" style="background: linear-gradient(135deg, #0f0f1a, #2a0f1a);">
-  <div class="section-title">🎯 Video Themes</div>
+  <div class="section-title">Video Themes</div>
   <div class="section-desc">Pick a video style — auto-selects everything</div>
   <div class="grid" id="themeGrid"></div>
 </div>
 
 <!-- CINEMATOGRAPHY -->
 <div class="section">
-  <div class="section-title">🎬 Camera Movement</div>
+  <div class="section-title">Camera Movement</div>
   <div class="grid" id="camGrid"></div>
 </div>
 
 <div class="section">
-  <div class="section-title">📐 Shot Type</div>
+  <div class="section-title">Shot Type</div>
   <div class="grid" id="shotGrid"></div>
 </div>
 
 <div class="section">
-  <div class="section-title">💡 Lighting</div>
+  <div class="section-title">Lighting</div>
   <div class="grid" id="lightGrid"></div>
 </div>
 
 <div class="section">
-  <div class="section-title">🔊 Audio</div>
+  <div class="section-title">Audio</div>
   <div class="grid" id="audioGrid"></div>
 </div>
 
 <!-- PARAMS -->
 <div class="section">
-  <div class="section-title">⚙️ Video Settings</div>
+  <div class="section-title">Video Settings</div>
   <div class="param-row">
     <div class="param-group">
       <label>Duration</label>
@@ -175,7 +175,7 @@
 <div class="prompt-area">
   <div class="prompt-box" id="promptDisplay">Select options above to build your video prompt...</div>
   <div class="btn-row">
-    <button class="btn btn-primary" onclick="copyPrompt()">📋 Copy Prompt</button>
+    <button class="btn btn-primary" onclick="copyPrompt()">Copy Prompt</button>
     <button class="btn btn-secondary" onclick="resetAll()">↺ Reset</button>
   </div>
 </div>
@@ -238,22 +238,22 @@ const audioOptions = [
 ];
 
 const themes = [
-  {id:'product', emoji:'📦', name:'Product Demo', desc:'Smooth cinematic product showcase', cam:'gimbal', shot:'medium', light:'studio', audio:'music', kw:'smooth cinematic product showcase, slow rotation revealing details, clean studio lighting, premium product photography style'},
-  {id:'short-film', emoji:'🎬', name:'Short Film Scene', desc:'Dramatic narrative scene', cam:'dolly', shot:'wide', light:'chiaro', audio:'dialogue', kw:'cinematic short film scene, dramatic dolly shot, moody chiaroscuro lighting, characters speaking'},
-  {id:'tutorial', emoji:'📺', name:'Tutorial / How-To', desc:'Clean instructional video', cam:'static', shot:'medium', light:'studio', audio:'narration', kw:'clean instructional video, static camera, bright even lighting, voice over narration, professional'},
-  {id:'broll', emoji:'🎥', name:'Cinematic B-Roll', desc:'Atmospheric filler footage', cam:'crane', shot:'extreme-wide', light:'golden', audio:'ambient', kw:'cinematic b-roll footage, crane shot, golden hour, ambient sound, atmospheric slow motion'},
-  {id:'interview', emoji:'🎙️', name:'Interview / Talking Head', desc:'Professional interview setup', cam:'static', shot:'closeup', light:'soft', audio:'dialogue', kw:'professional interview shot, static camera, soft key light, clean background, dialogue'},
-  {id:'travel', emoji:'✈️', name:'Travel / Vlog', desc:'Wanderlust travel footage', cam:'gimbal', shot:'wide', light:'golden', audio:'music', kw:'travel videography, smooth gimbal tracking, golden hour, ambient music, wanderlust'},
-  {id:'action', emoji:'💥', name:'Action / Chase', desc:'Fast-paced dynamic sequence', cam:'handheld', shot:'medium', light:'hard', audio:'tense', kw:'fast paced action sequence, handheld camera, harsh sunlight, tense atmosphere, dynamic'},
-  {id:'drone-scene', emoji:'🚁', name:'Drone / Aerial', desc:'Landscape from above', cam:'drone', shot:'extreme-wide', light:'golden', audio:'ambient', kw:'drone aerial flyover, golden hour landscape, ambient wind, vast sweeping view'},
-  {id:'commercial', emoji:'📺', name:'TV Commercial', desc:'A 30-second ad spot', cam:'crane', shot:'medium', light:'studio', audio:'narration', kw:'television commercial, crane shot revealing product, studio lighting, voice over'},
-  {id:'music-video', emoji:'🎵', name:'Music Video', desc:'Stylized artistic visuals', cam:'whip', shot:'closeup', light:'neon', audio:'music', kw:'music video style, whip pans, neon colorful lighting, fast cuts, artistic'},
-  {id:'timelapse', emoji:'⏱️', name:'Timelapse', desc:'Fast forward scene', cam:'static', shot:'extreme-wide', light:'golden', audio:'ambient', kw:'timelapse, static camera, clouds moving fast, golden hour to night transition'},
-  {id:'slomo', emoji:'🐝', name:'Slow Motion', desc:'Slowed down for drama', cam:'gimbal', shot:'closeup', light:'soft', audio:'ambient', kw:'slow motion, smooth gimbal, soft diffused light, dreamy atmosphere'},
-  {id:'horror', emoji:'👻', name:'Horror / Suspense', desc:'Creepy tense atmosphere', cam:'handheld', shot:'closeup', light:'chiaro', audio:'tense', kw:'horror scene, handheld shaking, chiaroscuro shadows, tense atmospheric sound'},
-  {id:'real-estate', emoji:'🏠', name:'Real Estate Tour', desc:'Property walkthrough', cam:'gimbal', shot:'wide', light:'soft', audio:'music', kw:'real estate walkthrough, smooth wide shot, natural soft light, bright airy, background music'},
-  {id:'event', emoji:'🎉', name:'Event / Wedding', desc:'Live moment capture', cam:'handheld', shot:'medium', light:'golden', audio:'ambient', kw:'event videography, candid handheld, golden hour outdoor, ambient crowd sounds, natural'},
-  {id:'tech-review', emoji:'💻', name:'Tech Review', desc:'Product hands-on review', cam:'dolly', shot:'closeup', light:'studio', audio:'narration', kw:'tech review video, dolly push in on product, clean studio light, voice over review style'},
+  {id:'product', emoji:'▸', name:'Product Demo', desc:'Smooth cinematic product showcase', cam:'gimbal', shot:'medium', light:'studio', audio:'music', kw:'smooth cinematic product showcase, slow rotation revealing details, clean studio lighting, premium product photography style'},
+  {id:'short-film', emoji:'▸', name:'Short Film Scene', desc:'Dramatic narrative scene', cam:'dolly', shot:'wide', light:'chiaro', audio:'dialogue', kw:'cinematic short film scene, dramatic dolly shot, moody chiaroscuro lighting, characters speaking'},
+  {id:'tutorial', emoji:'▸', name:'Tutorial / How-To', desc:'Clean instructional video', cam:'static', shot:'medium', light:'studio', audio:'narration', kw:'clean instructional video, static camera, bright even lighting, voice over narration, professional'},
+  {id:'broll', emoji:'▸', name:'Cinematic B-Roll', desc:'Atmospheric filler footage', cam:'crane', shot:'extreme-wide', light:'golden', audio:'ambient', kw:'cinematic b-roll footage, crane shot, golden hour, ambient sound, atmospheric slow motion'},
+  {id:'interview', emoji:'▸', name:'Interview / Talking Head', desc:'Professional interview setup', cam:'static', shot:'closeup', light:'soft', audio:'dialogue', kw:'professional interview shot, static camera, soft key light, clean background, dialogue'},
+  {id:'travel', emoji:'▸', name:'Travel / Vlog', desc:'Wanderlust travel footage', cam:'gimbal', shot:'wide', light:'golden', audio:'music', kw:'travel videography, smooth gimbal tracking, golden hour, ambient music, wanderlust'},
+  {id:'action', emoji:'▸', name:'Action / Chase', desc:'Fast-paced dynamic sequence', cam:'handheld', shot:'medium', light:'hard', audio:'tense', kw:'fast paced action sequence, handheld camera, harsh sunlight, tense atmosphere, dynamic'},
+  {id:'drone-scene', emoji:'▸', name:'Drone / Aerial', desc:'Landscape from above', cam:'drone', shot:'extreme-wide', light:'golden', audio:'ambient', kw:'drone aerial flyover, golden hour landscape, ambient wind, vast sweeping view'},
+  {id:'commercial', emoji:'▸', name:'TV Commercial', desc:'A 30-second ad spot', cam:'crane', shot:'medium', light:'studio', audio:'narration', kw:'television commercial, crane shot revealing product, studio lighting, voice over'},
+  {id:'music-video', emoji:'▸', name:'Music Video', desc:'Stylized artistic visuals', cam:'whip', shot:'closeup', light:'neon', audio:'music', kw:'music video style, whip pans, neon colorful lighting, fast cuts, artistic'},
+  {id:'timelapse', emoji:'▸', name:'Timelapse', desc:'Fast forward scene', cam:'static', shot:'extreme-wide', light:'golden', audio:'ambient', kw:'timelapse, static camera, clouds moving fast, golden hour to night transition'},
+  {id:'slomo', emoji:'▸', name:'Slow Motion', desc:'Slowed down for drama', cam:'gimbal', shot:'closeup', light:'soft', audio:'ambient', kw:'slow motion, smooth gimbal, soft diffused light, dreamy atmosphere'},
+  {id:'horror', emoji:'▸', name:'Horror / Suspense', desc:'Creepy tense atmosphere', cam:'handheld', shot:'closeup', light:'chiaro', audio:'tense', kw:'horror scene, handheld shaking, chiaroscuro shadows, tense atmospheric sound'},
+  {id:'real-estate', emoji:'▸', name:'Real Estate Tour', desc:'Property walkthrough', cam:'gimbal', shot:'wide', light:'soft', audio:'music', kw:'real estate walkthrough, smooth wide shot, natural soft light, bright airy, background music'},
+  {id:'event', emoji:'▸', name:'Event / Wedding', desc:'Live moment capture', cam:'handheld', shot:'medium', light:'golden', audio:'ambient', kw:'event videography, candid handheld, golden hour outdoor, ambient crowd sounds, natural'},
+  {id:'tech-review', emoji:'▸', name:'Tech Review', desc:'Product hands-on review', cam:'dolly', shot:'closeup', light:'studio', audio:'narration', kw:'tech review video, dolly push in on product, clean studio light, voice over review style'},
 ];
 
 const selections = { cam: null, shot: null, light: null, audio: null };
@@ -376,8 +376,8 @@ function copyPrompt() {
   const text = document.getElementById('promptDisplay').dataset.plaintext || document.getElementById('promptDisplay').textContent;
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.querySelector('.btn-primary');
-    btn.textContent = '✅ Copied!';
-    setTimeout(() => btn.textContent = '📋 Copy Prompt', 2000);
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = 'Copy Prompt', 2000);
   });
 }
 

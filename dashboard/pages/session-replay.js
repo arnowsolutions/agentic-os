@@ -7,7 +7,7 @@ async function renderSessionReplay() {
         <div class="page-subtitle">Browse and replay past opencode sessions</div>
       </div>
       <div class="btn-group">
-        <button class="btn btn-ghost" onclick="renderSessionReplay()">🔄 Refresh</button>
+        <button class="btn btn-ghost" onclick="renderSessionReplay()">↻ Refresh</button>
       </div>
     </div>
     <div id="sessionList">
@@ -20,7 +20,7 @@ async function renderSessionReplay() {
     const sessions = data.sessions || [];
     const list = document.getElementById('sessionList');
     if (sessions.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🎬</div><div class="empty-state-title">No sessions found</div><div class="empty-state-desc">Sessions from opencode will appear here</div></div>`;
+      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No sessions found</div><div class="empty-state-desc">Sessions from opencode will appear here</div></div>`;
       return;
     }
     list.innerHTML = `
@@ -32,7 +32,7 @@ async function renderSessionReplay() {
               <td style="font-family:monospace;font-size:12px">${escapeHtml(s.id)}</td>
               <td class="text-sm">${new Date(s.date).toLocaleString()}</td>
               <td class="text-sm text-muted">${formatSize(s.size || 0)}</td>
-              <td><button class="btn btn-sm btn-ghost" onclick="replaySession('${s.id}')">▶ Replay</button></td>
+              <td><button class="btn btn-sm btn-ghost" onclick="replaySession('${s.id}')">▸ Replay</button></td>
             </tr>
           `).join('')}
         </table>
@@ -40,7 +40,7 @@ async function renderSessionReplay() {
       </div>
     `;
   } catch (err) {
-    document.getElementById('sessionList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load sessions</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('sessionList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">Failed to load sessions</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -66,7 +66,7 @@ async function replaySession(id) {
           const isUser = m.role === 'user' || m.role === 'human';
           return `
             <div class="session-message ${isUser ? 'session-message-user' : 'session-message-assistant'}">
-              <div class="session-message-role">${isUser ? '👤 You' : '🤖 Assistant'}</div>
+              <div class="session-message-role">${isUser ? '▸ You' : '◆ Assistant'}</div>
               <div class="session-message-content">${escapeHtml((m.content || '').substring(0, 500))}${(m.content || '').length > 500 ? '...' : ''}</div>
               <div class="session-message-meta">${new Date(m.timestamp || Date.now()).toLocaleTimeString()}</div>
             </div>
@@ -76,7 +76,7 @@ async function replaySession(id) {
       </div>
     `;
   } catch (err) {
-    detail.innerHTML = `<div class="card" style="border-color:var(--red)"><div class="text-sm" style="color:var(--red)">⚠ Failed to replay session: ${escapeHtml(err.message)}</div></div>`;
+    detail.innerHTML = `<div class="card" style="border-color:var(--red)"><div class="text-sm" style="color:var(--red)">! Failed to replay session: ${escapeHtml(err.message)}</div></div>`;
   }
 }
 

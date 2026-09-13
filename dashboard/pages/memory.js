@@ -16,7 +16,7 @@ async function renderMemory() {
     const container = document.getElementById('memoryList');
 
     if (files.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🧠</div><div class="empty-state-title">No memory files</div></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">No memory files</div></div>';
       return;
     }
 
@@ -31,7 +31,7 @@ async function renderMemory() {
       </div>`;
     }).join('')}</div>`;
   } catch (err) {
-    document.getElementById('memoryList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('memoryList').innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-title">${escapeHtml(err.message)}</div></div>`;
   }
 }
 
@@ -50,7 +50,7 @@ async function editMemory(name) {
     </div>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="saveMemory('${name}')">💾 Save</button>
+    <button class="btn btn-primary" onclick="saveMemory('${name}')">Save</button>
   `);
 }
 
