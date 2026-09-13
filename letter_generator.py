@@ -180,6 +180,11 @@ def build_good_standing_letter(resident, recipient_name, recipient_title="Dr.", 
 
     today = date.today().strftime("%B %d, %Y")
 
+    closing = (f"Please let me know if any further information is needed to complete "
+               f"credentialing for {institution}." if institution else
+               "Please let me know if any further information is needed to complete "
+               "the credentialing process.")
+
     body = f"""
 <div class="date">{today}</div>
 <div class="re">RE: {first} {last}, MD</div>
@@ -189,16 +194,10 @@ def build_good_standing_letter(resident, recipient_name, recipient_title="Dr.", 
 Residency Training Program at Montefiore Medical Center. He was credentialed by
 the Montefiore House Staff office prior to joining residency on {start_date}. {last}'s
 anticipated graduation date from the program is {grad_date}.</p>
-<p>Please let me know if any further information is needed to complete credentialing for
-{institution}.</p>
+<p>{closing}</p>
 <p>Thank you,</p>
 </div>
 """
-
-    if institution:
-        body = body.replace("{institution}", institution)
-    else:
-        body = body.replace("to complete credentialing for\n{institution}.", "to complete the credentialing process.")
 
     sig = """
 <div class="signature">

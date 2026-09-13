@@ -5,17 +5,19 @@ Multi-agent orchestration server for opencode, Hermes, Gemini CLI
 """
 import argparse
 import asyncio
+import csv
 import json
 import logging
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import zoneinfo
 TZ = zoneinfo.ZoneInfo("America/New_York")
 from pathlib import Path
@@ -42,8 +44,10 @@ from modules.metrics import metrics_endpoint, metrics_middleware
 from modules import brain_routes
 from modules import skills_routes
 from modules import scheduler_routes
+from modules import ssot
 from modules import chat_routes
-from modules.agent_executor import _resolve_hermes_bin
+from modules import generalist_routes
+from modules.agent_executor import _resolve_hermes_bin, _resolve_opencode_bin
 
 setup_logging()
 logger = logging.getLogger("agentic_os.server")
@@ -89,7 +93,13 @@ async def session_enforcement(request: Request, call_next):
         return await call_next(request)
     if path.startswith("/api/conference/"):
         return await call_next(request)
+    if path.startswith("/api/send-tracker"):
+        return await call_next(request)
+    if path.startswith("/api/email/send-log"):
+        return await call_next(request)
     if path == "/api/calendar-invites":
+        return await call_next(request)
+    if path.startswith("/api/subi-exit"):
         return await call_next(request)
     if path.startswith("/api/crm-data-gaps"):
         return await call_next(request)
@@ -110,6 +120,8 @@ async def session_enforcement(request: Request, call_next):
     if path.startswith("/api/crm/tasks"):
         return await call_next(request)
     if path.startswith("/api/crm/workflows"):
+        return await call_next(request)
+    if path.startswith("/api/crm/launchpad"):
         return await call_next(request)
     if path.startswith("/api/user/"):
         return await call_next(request)
@@ -139,8 +151,25 @@ if AGENTIC_ENV.exists():
             k, v = line.split("=", 1)
             os.environ[k.strip()] = v.strip()
 
+def _hermes_home() -> Path:
+    """Resolve the real Hermes home.
+
+    This container runs as root, so Path.home() is /root — but the actual Hermes
+    home is volume-mounted at /home/hermeswebui/.hermes. Anything resolving
+    Path.home()/'.hermes' silently misses state.db, gateway_state.json, tokens
+    and caches, and the page then shows empty data instead of an error.
+    """
+    env = os.environ.get("HERMES_HOME")
+    if env and Path(env).exists():
+        return Path(env)
+    mounted = Path("/home/hermeswebui/.hermes")
+    if mounted.exists():
+        return mounted
+    return Path.home() / ".hermes"
+
+
 # Also load OpenRouter API key from Hermes .env (backwards compat)
-HERMES_ENV = Path.home() / ".hermes" / ".env"
+HERMES_ENV = _hermes_home() / ".env"
 if HERMES_ENV.exists():
     for line in HERMES_ENV.read_text().splitlines():
         line = line.strip()
@@ -195,6 +224,7 @@ app.include_router(brain_routes.router)
 app.include_router(skills_routes.router)
 app.include_router(scheduler_routes.router)
 app.include_router(chat_routes.router)
+app.include_router(generalist_routes.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -431,7 +461,7 @@ def check_agent(name: str) -> dict:
     """Instant filesystem-based check. No subprocess needed."""
     try:
         if name == "opencode":
-            exists = shutil.which("opencode") is not None
+            exists = _resolve_opencode_bin() is not None
             status = "online" if exists else "offline"
         elif name == "hermes":
             # Check common Hermes install locations (venv in /app or ~/.hermes)
@@ -511,7 +541,9 @@ def get_cron_jobs():
             return {"jobs": [], "error": "jobs.json not found"}
         payload = json.loads(jobs_file.read_text())
         jobs = payload.get("jobs", [])
-        return {"jobs": jobs, "count": len(jobs)}
+        out = {"jobs": jobs, "count": len(jobs)}
+        out.update(ssot.stamp("cron/jobs.json (live config)", ssot._file_mtime_dt(jobs_file)))
+        return out
     except Exception as e:
         return {"jobs": [], "error": str(e)}
 
@@ -521,12 +553,14 @@ def get_cron_jobs():
 def get_status():
     agents = [check_agent(a) for a in ["opencode", "hermes", "gemini"]]
     skills = list_dir(BASE_DIR / "skills")
-    return {
+    out = {
         "status": "healthy",
         "agents": agents,
         "skills_count": len(skills),
         "uptime": time.time(),
     }
+    out.update(ssot.stamp("server status check", datetime.now(timezone.utc)))
+    return out
 
 
 @app.get("/api/selftest")
@@ -643,9 +677,12 @@ def full_health():
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "services": {
-            "dashboard": check_url("http://127.0.0.1:8081/api/status"),
-            "data_service": check_url("http://127.0.0.1:8086/health"),
-            "vapi_bridge": check_url("http://127.0.0.1:8090/vapi/status"),
+            # These probes execute INSIDE the AOS container: 127.0.0.1 reaches only
+            # services in this container. Ours binds 8082; siblings go by compose
+            # name, host services by the docker gateway (172.16.3.1).
+            "dashboard": check_url(os.environ.get("AOS_SELF_URL", "http://127.0.0.1:8082/api/status")),
+            "data_service": check_url(os.environ.get("DATA_SERVICE_BASE", "http://hermes-webui-gsga-data-service-1:8086").rstrip("/") + "/health"),
+            "vapi_bridge": check_url(os.environ.get("VAPI_BRIDGE_BASE", "http://172.16.3.1:8090").rstrip("/") + "/vapi/status"),
         },
         "cron": {
             "ok": cron_data.get("ok", False),
@@ -725,6 +762,45 @@ async def swap_process(dry_run: bool = True):
 
 # ─── Routes: Audit ────────────────────────────────────────────────
 
+@app.get("/api/sync/run")
+def sync_now():
+    """Manually trigger the daily sync script (returns immediately after completion)."""
+    from pathlib import Path
+    import subprocess
+    script = BASE_DIR / "daily_sync.py"
+    if not script.exists():
+        raise HTTPException(status_code=404, detail="daily_sync.py not found")
+    try:
+        # Run the script, capture output, timeout after 120 seconds
+        result = subprocess.run(
+            ["python3", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(BASE_DIR),
+        )
+        if result.returncode == 0:
+            return {
+                "status": "success",
+                "message": "Daily sync completed",
+                "stdout": result.stdout[-500:],  # last 500 chars
+                "stderr": result.stderr[-500:],
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "Daily sync failed",
+                    "returncode": result.returncode,
+                    "stdout": result.stdout[-500:],
+                    "stderr": result.stderr[-500:],
+                },
+            )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Daily sync timed out after 120s")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
 @app.get("/api/audit")
 def get_audit(limit: int = Query(100, le=500)):
     audit_file = BASE_DIR / "audit" / "audit.log"
@@ -732,7 +808,9 @@ def get_audit(limit: int = Query(100, le=500)):
         return {"entries": []}
     lines = audit_file.read_text().strip().split("\n")
     entries = [json.loads(l) for l in lines if l.strip()]
-    return {"entries": entries[-limit:]}
+    out = {"entries": entries[-limit:]}
+    out.update(ssot.stamp("audit/audit.log (live)", ssot._file_mtime_dt(audit_file)))
+    return out
 
 # ─── Routes: Cost Analytics ───────────────────────────────────────
 
@@ -795,8 +873,10 @@ def record_cost(data: dict):
 def list_plugins():
     reg_file = BASE_DIR / "registry" / "plugins.json"
     if not reg_file.exists():
-        return {"plugins": []}
-    return json.loads(reg_file.read_text())
+        return {"plugins": [], **ssot.stamp("registry/plugins.json (missing)", None)}
+    out = json.loads(reg_file.read_text())
+    out.update(ssot.stamp("registry/plugins.json", ssot._file_mtime_dt(reg_file)))
+    return out
 
 @app.post("/api/plugins/install")
 def install_plugin(data: dict):
@@ -1531,13 +1611,37 @@ def router_suggest(data: RouterSuggest):
     try:
         config = load_router_config()
         scores, matched_rules, best, confidence = score_routing_rules(data.task, config)
-        
+
+        # AI-generalist layer: ground the suggestion in the live skill manifest —
+        # surface dashboard pages whose title/description/endpoints match the task.
+        manifest_pages = []
+        try:
+            from modules import skill_manifest
+            m = skill_manifest.load()
+            task_l = data.task.lower()
+            for page, info in (m.get("pages") or {}).items():
+                hay = " ".join([page, str(info.get("title", "")), str(info.get("description", ""))]).lower()
+                words = [w for w in re.findall(r"[a-z]{4,}", hay) if w not in ("page", "with", "from", "this", "that", "your", "into")]
+                hits = sum(1 for w in set(words) if w in task_l)
+                if hits >= 2:
+                    manifest_pages.append({
+                        "page": page,
+                        "title": info.get("title", page),
+                        "endpoints": (info.get("endpoints") or [])[:6],
+                        "match_score": hits,
+                    })
+            manifest_pages.sort(key=lambda p: -p["match_score"])
+            manifest_pages = manifest_pages[:3]
+        except Exception:
+            manifest_pages = []
+
         return {
             "suggested_agent": best,
             "confidence": confidence,
             "scores": scores,
             "matched_rules": matched_rules,
             "capabilities": config.get("agent_capabilities", {}).get(best, []),
+            "related_pages": manifest_pages,
             "task": data.task,
         }
     except Exception as e:
@@ -1625,6 +1729,99 @@ def get_ics_progress():
 
 # ─── Routes: Chief Meetings (.eml generation & download) ────────────────────────────────────
 
+# ─── Routes: Resident Letters (2026-09-13) ──────────────────────────────────
+# The dashboard's "Resident Letters" page POSTs to /api/letters/generate — a
+# route that did not exist in this backend, so the whole page 404'd. These
+# routes implement it on top of the existing letter_generator module and the
+# canonical CRM contact store.
+
+def _letters_dir() -> Path:
+    d = BASE_DIR / "data" / "letters"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _find_letter_resident(resident_id: str = "", email: str = ""):
+    try:
+        from modules.crm_db import get_contacts
+        contacts = get_contacts() or []
+    except Exception:
+        return None
+    if resident_id:
+        for c in contacts:
+            if str(c.get("id")) == str(resident_id):
+                return c
+    if email:
+        for c in contacts:
+            if str(c.get("email", "")).lower() == str(email).lower():
+                return c
+    return None
+
+
+def _build_letter(letter_type: str, resident: dict, recipient: str = "",
+                  recipient_title: str = "Dr.", institution: str = ""):
+    import letter_generator as lg
+    last, first = resident.get("lastName", ""), resident.get("firstName", "")
+    if letter_type in ("income", "income-verification"):
+        return lg.build_income_verification_letter(resident), f"income_verification_{last}_{first}.html"
+    return (lg.build_good_standing_letter(resident, recipient, recipient_title, institution),
+            f"good_standing_{last}_{first}.html")
+
+
+@app.get("/api/letters/generate", response_class=HTMLResponse)
+def preview_resident_letter(resident_id: str = "", type: str = "good-standing", email: str = "",
+                            recipient: str = "", recipient_title: str = "Dr.", institution: str = ""):
+    """Preview a letter as HTML (the page opens this in a new tab)."""
+    resident = _find_letter_resident(resident_id, email)
+    if not resident:
+        return HTMLResponse(
+            f"<html><body><h3>Resident not found</h3>"
+            f"<p>resident_id={resident_id!r} email={email!r}</p></body></html>", status_code=404)
+    html, _ = _build_letter(type, resident, recipient, recipient_title, institution)
+    return HTMLResponse(html)
+
+
+@app.post("/api/letters/generate")
+async def generate_resident_letter(request: Request):
+    """Generate a letter, save it under data/letters/ and return a download link."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    resident = _find_letter_resident(body.get("resident_id", ""), body.get("email", ""))
+    if not resident:
+        return {"success": False, "error": "Resident not found"}
+    html, filename = _build_letter(body.get("type", "good-standing"), resident,
+                                   body.get("recipient", ""), body.get("recipient_title", "Dr."),
+                                   body.get("institution", ""))
+    try:
+        (_letters_dir() / filename).write_text(html)
+    except Exception as e:
+        return {"success": False, "error": f"Could not save letter: {e}"}
+    import letter_generator as lg
+    pgy = resident.get("pgy", "")
+    salary = lg.get_salary(pgy)
+    return {
+        "success": True,
+        "filename": filename,
+        "resident_name": f"{resident.get('firstName', '')} {resident.get('lastName', '')}".strip(),
+        "pgy": pgy,
+        "salary": lg.format_currency(salary) if salary else "",
+        "download_url": f"/api/letters/file?name={filename}",
+    }
+
+
+@app.get("/api/letters/file")
+def download_resident_letter(name: str = Query("", description="generated letter filename")):
+    """Serve a generated letter file for download/open."""
+    safe = os.path.basename(name or "")
+    path = _letters_dir() / safe
+    if not safe or not path.exists():
+        return {"success": False, "error": "Letter not found"}
+    return Response(content=path.read_text(), media_type="text/html",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+
+
 @app.get("/api/chief-meetings/generate-eml")
 def generate_chief_meeting_eml():
     """Generate .eml files for all Chief Residents' Meetings."""
@@ -1665,102 +1862,59 @@ def download_chief_meeting_eml(date: str = ""):
     return FileResponse(filepath, media_type="message/rfc822", filename=os.path.basename(filepath))
 
 
-# ─── Routes: Resident Letters (Good Standing & Income Verification) ────────────────────────────
+# ─── Routes: Sub-I Exit Interviews (.eml generation & download) ─────────────
 
-@app.get("/api/letters/generate")
-@app.post("/api/letters/generate")
-async def generate_resident_letter(
-    request: Request,
-    resident_id: str = "",
-    type: str = "good-standing",
-    recipient: str = "",
-    recipient_title: str = "Dr.",
-    institution: str = "",
-    preview: bool = False,
-):
-    """Generate a Good Standing or Income Verification letter for a resident."""
-    import subprocess, tempfile, os
-    script = BASE_DIR / "letter_generator.py"
+@app.get("/api/subi-exit/eml/generate")
+def generate_subi_exit_eml(id: int = 0):
+    """Generate .eml file(s) for Sub-I Exit Interviews (by id, or all if id=0)."""
+    import subprocess, sys
+    script = BASE_DIR / "send_subi_exit_email.py"
     if not script.exists():
-        return {"success": False, "error": "letter_generator.py not found"}
-    
-    # Get body from POST if available
-    if request.method == "POST":
-        try:
-            body = await request.json()
-            resident_id = body.get("resident_id", resident_id)
-            type = body.get("type", type)
-            recipient = body.get("recipient", recipient)
-            recipient_title = body.get("recipient_title", recipient_title)
-            institution = body.get("institution", institution)
-        except:
-            pass
-    
-    if not resident_id:
-        return {"success": False, "error": "resident_id required"}
-    
-    outdir = BASE_DIR / "data" / "letters"
-    outdir.mkdir(parents=True, exist_ok=True)
-    
-    outfile = tempfile.NamedTemporaryFile(suffix=".html", dir=str(outdir), delete=False)
-    outpath = outfile.name
-    outfile.close()
-    
-    cmd = [sys.executable, str(script), "--type", type, "--resident-id", resident_id, "--output", outpath]
-    if type == "good-standing" and recipient:
-        cmd += ["--recipient", recipient, "--recipient-title", recipient_title]
-        if institution:
-            cmd += ["--institution", institution]
-    
+        return {"success": False, "error": "send_subi_exit_email.py not found"}
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                                env={**os.environ, "PYTHONPATH": str(BASE_DIR)})
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr.strip() or result.stdout.strip()}
-        
-        # Parse output to get resident name/pgy
-        resident_name = ""
-        pgy = ""
-        salary = ""
-        for line in result.stdout.split("\n"):
-            if "Resident:" in line:
-                parts = line.split("Resident:")[-1].strip().split(",")
-                resident_name = parts[0].strip()
-                if len(parts) > 1:
-                    pgy = parts[1].strip()
-            if "Salary:" in line:
-                salary = line.split("Salary:")[-1].strip()
-        
-        filename = os.path.basename(outpath)
+        cmd = [sys.executable, str(script)]
+        if id:
+            cmd += ["--id", str(id)]
+        result = subprocess.run(
+            cmd,
+            capture_output=True, text=True, timeout=60,
+            env={**os.environ, "PYTHONPATH": str(BASE_DIR)}
+        )
+        output = result.stdout.strip()
+        error = result.stderr.strip()
         return {
-            "success": True,
-            "filename": filename,
-            "resident_name": resident_name,
-            "pgy": pgy,
-            "salary": salary,
-            "download_url": f"/api/letters/download/{filename}",
-            "preview_url": f"/api/letters/preview/{filename}",
+            "success": result.returncode == 0,
+            "message": f"Generated {output.count('✓')} .eml file(s)" if result.returncode == 0 else error,
+            "output": output,
+            "error": error if result.returncode != 0 else ""
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/api/letters/download/{filename}")
-async def download_letter(filename: str):
-    """Download a generated letter HTML file."""
-    from fastapi.responses import FileResponse
-    filepath = BASE_DIR / "data" / "letters" / filename
-    if not filepath.exists():
-        return {"success": False, "error": "File not found"}
-    return FileResponse(str(filepath), media_type="text/html", filename=filename)
 
-@app.get("/api/letters/preview/{filename}")
-async def preview_letter(filename: str):
-    """Preview a generated letter in browser."""
-    from fastapi.responses import HTMLResponse
-    filepath = BASE_DIR / "data" / "letters" / filename
-    if not filepath.exists():
-        return HTMLResponse("<h1>File not found</h1>", status_code=404)
-    return HTMLResponse(filepath.read_text())
+@app.get("/api/subi-exit/eml/generate-all")
+def generate_all_subi_exit_eml():
+    """Generate .eml files for ALL Sub-I Exit Interviews."""
+    return generate_subi_exit_eml(id=0)
+
+
+@app.get("/api/subi-exit/eml")
+def download_subi_exit_eml(id: int = 0, date: str = ""):
+    """Download a single .eml file for a specific row id (or date)."""
+    import glob
+    eml_dir = BASE_DIR / "data" / "subi_eml"
+    if id:
+        pattern = str(eml_dir / f"*_{id:02d}.eml")
+    elif date:
+        pattern = str(eml_dir / f"*{date}*.eml")
+    else:
+        return {"success": False, "error": "id or date parameter required"}
+    files = glob.glob(pattern)
+    if not files:
+        return {"success": False, "error": f"No .eml file found (id={id}, date={date}). Generate first."}
+    filepath = files[0]
+    from fastapi.responses import FileResponse
+    return FileResponse(filepath, media_type="message/rfc822", filename=os.path.basename(filepath))
 
 # ─── Routes: Learning Analytics (2 endpoints) ────────────────────────────────────────────────
 
@@ -1836,7 +1990,7 @@ def list_sessions():
                     "date": datetime.fromtimestamp(stat.st_mtime).isoformat(),  # Canonical date field
                     "source": "opencode",
                 })
-        hermes_sessions = Path.home() / ".hermes" / "sessions.json"
+        hermes_sessions = _hermes_home() / "sessions.json"
         if hermes_sessions.exists():
             stat = hermes_sessions.stat()
             sessions.append({
@@ -1931,8 +2085,20 @@ import os as _os
 
 def _run_cmd(cmd, timeout=15):
     try:
+        # /home/hermeswebui/.hermes/home/.local/bin holds the user-installed CLIs
+        # (nlm etc.) that live on the shared Hermes home — without it they are
+        # "not found" even though the binaries are present.
+        _extra_path = "/app/venv/bin:/home/hermeswebui/.hermes/home/.local/bin:"
+        # The user-installed site-packages live on the shared Hermes home; without
+        # PYTHONPATH the CLIs there (nlm) import-error even though they exist.
+        _extra_py = "/home/hermeswebui/.hermes/home/.local/lib/python3.12/site-packages"
         env = {**_os.environ,
-            "PATH": "/app/venv/bin:" + _os.environ.get("PATH", "/usr/bin:/bin"),
+            "PATH": _extra_path + _os.environ.get("PATH", "/usr/bin:/bin"),
+            "PYTHONPATH": _extra_py + (":" + _os.environ["PYTHONPATH"] if _os.environ.get("PYTHONPATH") else ""),
+            # CLIs here read their config/cookies from ~/.<tool> — with HOME=/root
+            # they find nothing ("profile not found"); the user home lives on the
+            # mounted Hermes home.
+            "HOME": "/home/hermeswebui/.hermes/home",
             "LD_LIBRARY_PATH": "/tmp/chromium-libs:" + _os.environ.get("LD_LIBRARY_PATH", "")}
         r = _sp.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout, env=env)
         return r.stdout, r.stderr, r.returncode
@@ -1970,31 +2136,55 @@ def tools_overview():
         "nlm_available": nlm_ok,
     }
 
+def _notebook_cache_dir() -> Path:
+    """Writable cache location for NotebookLM lists.
+
+    The Hermes home is mounted READ-ONLY in this container, so caching there
+    raised OSError inside the same try-block that returned the live result — the
+    bare except then discarded good data and the Tools page showed "no
+    notebooks". Cache under the app's own data dir instead.
+    """
+    d = BASE_DIR / "data" / "notebooklm_cache"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return d
+
+
+def _notebook_cache_read(profile: str):
+    candidates = [_notebook_cache_dir() / f"{profile}_notebooks.json",
+                  _hermes_home() / "notebooklm_cache" / f"{profile}_notebooks.json"]
+    for c in candidates:
+        try:
+            if c.exists():
+                return json.loads(c.read_text())
+        except Exception:
+            continue
+    return None
+
+
 @app.get("/api/tools/notebooks")
 def tools_notebooks(profile: str = "default"):
     # Try live NLM first
     out, err, _ = _run_cmd(f"nlm notebook list --profile {profile}", timeout=20)
+    data = None
     try:
         data = json.loads(out)
-        if isinstance(data, list) and data:
-            # Cache the result for offline fallback
-            cache_dir = Path.home() / ".hermes" / "notebooklm_cache"
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            with open(cache_dir / f"{profile}_notebooks.json", "w") as f:
-                json.dump(data, f, indent=2)
-            return {"profile": profile, "notebooks": data, "source": "live"}
-    except:
-        pass
-
-    # Fallback: serve from local cache
-    cache_file = Path.home() / ".hermes" / "notebooklm_cache" / f"{profile}_notebooks.json"
-    if cache_file.exists():
+    except Exception:
+        data = None
+    if isinstance(data, list) and data:
+        # Caching is best-effort: it must never discard the live result.
         try:
-            with open(cache_file) as f:
-                cached = json.load(f)
-            return {"profile": profile, "notebooks": cached, "source": "cache"}
-        except:
+            with open(_notebook_cache_dir() / f"{profile}_notebooks.json", "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
             pass
+        return {"profile": profile, "notebooks": data, "source": "live"}
+
+    cached = _notebook_cache_read(profile)
+    if cached:
+        return {"profile": profile, "notebooks": cached, "source": "cache"}
 
     return {"profile": profile, "notebooks": [], "error": (err or out)[:200]}
 
@@ -2007,16 +2197,17 @@ def refresh_notebooks_cache():
         out, err, _ = _run_cmd(f"nlm notebook list --profile {profile}", timeout=25)
         try:
             data = json.loads(out)
-            if isinstance(data, list) and data:
-                cache_dir = Path.home() / ".hermes" / "notebooklm_cache"
-                cache_dir.mkdir(parents=True, exist_ok=True)
-                with open(cache_dir / f"{profile}_notebooks.json", "w") as f:
+        except Exception:
+            data = None
+        if isinstance(data, list) and data:
+            try:
+                with open(_notebook_cache_dir() / f"{profile}_notebooks.json", "w") as f:
                     json.dump(data, f, indent=2)
-                results[profile] = {"status": "ok", "count": len(data)}
-            else:
-                results[profile] = {"status": "empty", "error": "no notebooks returned"}
-        except:
-            results[profile] = {"status": "error", "error": (err or out)[:200]}
+            except Exception:
+                pass
+            results[profile] = {"status": "ok", "count": len(data)}
+        else:
+            results[profile] = {"status": "empty", "error": (err or out)[:200] or "no notebooks returned"}
     return {"status": "ok", "results": results}
 
 
@@ -2028,7 +2219,7 @@ def tools_cron():
 @app.get("/api/tools/telegram")
 def tools_telegram():
     """Return Telegram/Discord messaging sessions from Hermes state.db."""
-    hermes_home = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
+    hermes_home = os.environ.get("HERMES_HOME") or str(_hermes_home())
     db_path = Path(hermes_home) / "state.db"
     if not db_path.exists():
         return {"sessions": [], "error": "state.db not found"}
@@ -2120,24 +2311,44 @@ def _supabase_select(path: str) -> list:
             for p in parts[1].split("&"):
                 if "=" in p:
                     k, v = p.split("=", 1)
-                    params[k] = v
-        select_cols = params.get("select", "*")
-        where = ""
+                    params.setdefault(k, []).append(v)
+        select_cols = ", ".join(params.get("select", "*"))
+        conds = []
         order = ""
         limit = ""
-        for k, v in params.items():
+        OPS = {
+            "eq.": "=",
+            "neq.": "!=",
+            "gte.": ">=",
+            "gt.": ">",
+            "lte.": "<=",
+            "lt.": "<",
+            "like.": "LIKE",
+            "ilike.": "ILIKE",
+        }
+        for k, vs in params.items():
             if k == "select":
                 continue
             elif k == "order":
-                order = " ORDER BY " + v.replace(".asc", " ASC").replace(".desc", " DESC")
+                order = " ORDER BY " + vs[0].replace(".asc", " ASC").replace(".desc", " DESC")
             elif k == "limit":
-                limit = " LIMIT " + v
-            elif ".eq." in v:
-                where = f" WHERE {k} = '{v.split('.eq.')[1]}'"
-            elif ".gte." in v:
-                where = f" WHERE {k} >= '{v.split('.gte.')[1]}'"
-            elif ".lte." in v:
-                where = f" WHERE {k} <= '{v.split('.lte.')[1]}'"
+                limit = " LIMIT " + vs[0]
+            else:
+                for v in vs:
+                    matched = False
+                    for prefix, sql_op in OPS.items():
+                        if v.startswith(prefix):
+                            conds.append(f"{k} {sql_op} '{v[len(prefix):]}'")
+                            matched = True
+                            break
+                    if not matched and v.startswith("is."):
+                        val = v[len("is."):]
+                        conds.append(f"{k} IS {'NULL' if val.lower() == 'null' else ('TRUE' if val.lower() == 'true' else 'FALSE')}")
+                        matched = True
+                    if not matched:
+                        # bare value — treat as equality
+                        conds.append(f"{k} = '{v}'")
+        where = (" WHERE " + " AND ".join(conds)) if conds else ""
         sql = f"SELECT {select_cols} FROM {table}{where}{order}{limit}"
         cur.execute(sql)
         cols = [d[0] for d in cur.description]
@@ -2388,89 +2599,130 @@ def api_schedule_email(req: ScheduledEmailRequest):
 
 # ─── Routes: Google Dev Studio (Apps Script) ────────────────────
 
-GOOGLE_TOKEN_PATH = str(Path.home() / ".hermes" / "google_token_letsgetmoney2009.json")
-GOOGLE_SECRET_PATH = str(Path.home() / ".hermes" / "google_client_secret.json")
+GOOGLE_TOKEN_PATH = str(Path("/home/hermeswebui") / ".hermes" / "google_token_letsgetmoney2009.json")
+GOOGLE_SECRET_PATH = str(Path("/home/hermeswebui") / ".hermes" / "google_client_secret.json")
 _google_creds_cache = None
 
 def _get_google_creds():
-    """Get (and cache) Google credentials for letsgetmoney2009."""
-    global _google_creds_cache
-    try:
-        from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
-    except ImportError:
-        return None, "google-api-python-client not installed"
-    
-    if not os.path.isfile(GOOGLE_TOKEN_PATH):
+    """Returns (headers, None) — raw Bearer-token refresh against the
+    urologyresidencyprogram token (Drive-scope refresh grant, sheets/drive
+    reads verified working 2026-09-13). google-auth Credential objects
+    fail with scope-insufficient on this deployment."""
+    TOKEN_FILE = "/home/hermeswebui/.hermes/google_token_urologyresidencyprogram.json"
+    if not os.path.isfile(TOKEN_FILE):
         return None, "No Google token found — run OAuth setup first"
-    
     try:
-        creds = Credentials.from_authorized_user_file(
-            GOOGLE_TOKEN_PATH,
-            ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/script.projects"]
-        )
-        # Auto-refresh if expired
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            # Save refreshed token
-            with open(GOOGLE_TOKEN_PATH, "w") as f:
-                f.write(creds.to_json())
-        _google_creds_cache = creds
-        return creds, None
+        with open(TOKEN_FILE) as f:
+            t = json.load(f)
+        if not t.get("refresh_token"):
+            return None, "Token has no refresh_token"
+
+        def _refresh():
+            body = {"client_id": t["client_id"], "client_secret": t["client_secret"],
+                    "refresh_token": t["refresh_token"], "grant_type": "refresh_token"}
+            req = urllib.request.Request("https://oauth2.googleapis.com/token",
+                                         data=json.dumps(body).encode(), method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=30) as r:
+                fresh = json.loads(r.read())
+            t["token"] = fresh["access_token"]
+            t["expiry"] = time.time() + fresh.get("expires_in", 3600) - 60
+            try:
+                with open(TOKEN_FILE + ".cached-token", "w") as f:
+                    f.write(t["token"])
+            except Exception:
+                pass
+            return t["token"]
+
+        token = t.get("token", "")
+        force = globals().setdefault("_google_force_refresh", False)
+        if force:
+            token = ""
+            globals()["_google_force_refresh"] = False
+        _exp = t.get("expiry")
+        if isinstance(_exp, str):
+            try:
+                from datetime import datetime as _dt
+                _dtv = _dt.fromisoformat(str(_exp).replace("Z", "+00:00"))
+                if _dtv.tzinfo is None:
+                    _dtv = _dtv.replace(tzinfo=_dt.timezone.utc)
+                _exp = _dtv.timestamp()
+            except ValueError:
+                _exp = 0
+        if not token or not isinstance(_exp, (int, float)) or _exp < time.time() + 120:
+            token = _refresh()
+        return {"Authorization": f"Bearer {token}"}, None
     except Exception as e:
         return None, str(e)
+
+
+def _gapi_rest(method: str, url: str, body: dict | None, headers: dict) -> dict:
+    """Google REST JSON call; on 401 refreshes once via _google_force_refresh."""
+    def _call(h):
+        req = urllib.request.Request(url, headers=h, method=method,
+                                     data=json.dumps(body).encode() if body is not None else None)
+        if body is not None:
+            req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read() or b"{}")
+    try:
+        return _call(headers)
+    except urllib.error.HTTPError as e:
+        if e.code != 401:
+            raise
+        globals()["_google_force_refresh"] = True
+        h2, err2 = _get_google_creds()
+        if err2:
+            raise
+        return _call(h2)
 
 @app.get("/api/google/projects")
 def list_google_projects():
     """List all Google Apps Script projects from Drive."""
-    creds, err = _get_google_creds()
+    headers, err = _get_google_creds()
     if err:
         return {"status": "error", "message": err}
     try:
-        from googleapiclient.discovery import build
-        drive = build("drive", "v3", credentials=creds)
-        results = drive.files().list(
-            q="mimeType='application/vnd.google-apps.script'",
-            pageSize=50,
-            fields="files(id, name, modifiedTime, createdTime, webViewLink, description)"
-        ).execute()
-        files = results.get("files", [])
-        return {"status": "ok", "projects": files}
+        q = "mimeType='application/vnd.google-apps.script'"
+        from urllib.parse import urlencode
+        qs = urlencode({"q": q, "pageSize": 50,
+                        "fields": "files(id, name, modifiedTime, createdTime, webViewLink, description)"})
+        results = _gapi_rest("GET",
+            "https://www.googleapis.com/drive/v3/files?" + qs,
+            None, headers)
+        return {"status": "ok", "projects": results.get("files", [])}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/google/projects/{project_id}")
 def get_google_project(project_id: str):
     """Get a Google Apps Script project's files and content."""
-    creds, err = _get_google_creds()
+    headers, err = _get_google_creds()
     if err:
         return {"status": "error", "message": err}
     try:
-        from googleapiclient.discovery import build
-        script = build("script", "v1", credentials=creds)
-        # Get project metadata
-        project = script.projects().get(scriptId=project_id).execute()
+        project = _gapi_rest("GET",
+            f"https://script.googleapis.com/v1/projects/{project_id}", None, headers)
         return {"status": "ok", "project": project}
     except Exception as e:
-        # Fallback: just return Drive metadata
         try:
-            drive = build("drive", "v3", credentials=creds)
-            meta = drive.files().get(fileId=project_id, fields="id,name,modifiedTime,webViewLink").execute()
+            meta = _gapi_rest("GET",
+                f"https://www.googleapis.com/drive/v3/files/{project_id}?fields=id,name,modifiedTime,webViewLink",
+                None, headers)
             return {"status": "ok", "project": {"scriptId": project_id, "title": meta.get("name"), "files": []}}
-        except:
+        except Exception:
             return {"status": "error", "message": str(e)}
 
 @app.post("/api/google/projects")
 def create_google_project(data: dict):
     """Create a new Google Apps Script project."""
     title = data.get("title", "Untitled Project")
-    creds, err = _get_google_creds()
+    headers, err = _get_google_creds()
     if err:
         return {"status": "error", "message": err}
     try:
-        from googleapiclient.discovery import build
-        script = build("script", "v1", credentials=creds)
-        project = script.projects().create(body={"title": title}).execute()
+        project = _gapi_rest("POST", "https://script.googleapis.com/v1/projects",
+                             {"title": title}, headers)
         return {"status": "ok", "project": project}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -2479,92 +2731,118 @@ def create_google_project(data: dict):
 def update_google_project_content(project_id: str, data: dict):
     """Update Google Apps Script project files (push code)."""
     files = data.get("files", [])  # List of {name, type, source}
-    creds, err = _get_google_creds()
+    headers, err = _get_google_creds()
     if err:
         return {"status": "error", "message": err}
     try:
-        from googleapiclient.discovery import build
-        script = build("script", "v1", credentials=creds)
-        body = {
-            "files": [{"name": f["name"], "type": f.get("type", "SERVER_JS"), "source": f["source"]} for f in files]
-        }
-        result = script.projects().updateContent(body=body, scriptId=project_id).execute()
+        payload = {"files": [{"name": f["name"], "type": f.get("type", "SERVER_JS"), "source": f["source"]} for f in files]}
+        result = _gapi_rest("PUT",
+            f"https://script.googleapis.com/v1/projects/{project_id}/content", payload, headers)
         return {"status": "ok", "project": result}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 # ─── Routes: Hermes WebUI Proxy ──────────────────────────────────
-# Proxy /hermes-webui/* to the Hermes WebUI server on port 8787
-# so the iframe is same-origin (no cross-origin auth/cookie issues).
+# Proxy /hermes-webui/* to the Hermes WebUI so the chat iframe is same-origin
+# with the dashboard. Target = the sibling docker container via compose service
+# DNS: inside THIS container 127.0.0.1:8787 does not exist — the old target
+# made the iframe fall through to the AOS /login flow (fixed 2026-09-12).
+# Bodies are relayed RAW (streaming) so SSE + gzip pass through intact.
 
-HERMES_WEBUI_TARGET = "http://127.0.0.1:8787"
+HERMES_WEBUI_TARGET = os.environ.get("HERMES_WEBUI_URL", "http://hermes-webui:8787")
 _hermes_async_client = None
+
+_HOP_BY_HOP_HEADERS = {
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "te", "trailers", "transfer-encoding", "upgrade",
+}
 
 def _get_hermes_client():
     global _hermes_async_client
     if _hermes_async_client is None or _hermes_async_client.is_closed:
-        _hermes_async_client = httpx.AsyncClient(base_url=HERMES_WEBUI_TARGET, timeout=30.0)
+        _hermes_async_client = httpx.AsyncClient(
+            base_url=HERMES_WEBUI_TARGET,
+            # read=None keeps SSE streams open (no artificial 30s disconnect)
+            timeout=httpx.Timeout(connect=15.0, read=None, write=60.0, pool=15.0),
+        )
     return _hermes_async_client
+
+
+def _hermes_webui_down_page() -> HTMLResponse:
+    return HTMLResponse(
+        content=(
+            "<html><body style='background:#0f1115;color:#e6e6e6;font-family:sans-serif;"
+            "display:flex;align-items:center;justify-content:center;height:100vh;"
+            "flex-direction:column;gap:10px;text-align:center;padding:24px'>"
+            "<div style='font-size:34px;opacity:.7'>&#9679;</div>"
+            "<h2 style='margin:0'>Hermes WebUI is not reachable</h2>"
+            "<p style='color:#9aa0a6;max-width:480px'>The dashboard proxy could not reach <code>"
+            + HERMES_WEBUI_TARGET + "</code>. Open the WebUI directly instead: "
+            "<a style='color:#14b8a6' href='https://hermes-webui-gsga.srv1738752.hstgr.cloud/'"
+            " target='_blank' rel='noopener'>hermes-webui-gsga.srv1738752.hstgr.cloud</a></p>"
+            "</body></html>"
+        ),
+        status_code=502,
+    )
+
 
 @app.api_route("/hermes-webui/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
 async def proxy_hermes_webui(path: str, request: Request):
     client = _get_hermes_client()
     target_path = f"/{path}" if path else "/"
-    
-    # Forward query params, headers, and body
+
+    # Forward query params, headers, and body.
     params = dict(request.query_params)
     headers = dict(request.headers)
-    # Drop host header so the upstream server resolves correctly
+    # Reverse-proxy correctness: present the PUBLIC host upstream so the WebUI's
+    # same-origin gate (Origin/Referer vs Host) passes — this IS the "check
+    # reverse proxy headers" its error message asks for. Traefik supplies
+    # X-Forwarded-Host; fall back to the client's own Host header.
+    public_host = (headers.get("x-forwarded-host") or headers.get("host") or "").split(",")[0].strip()
     headers.pop("host", None)
-    
+    if public_host:
+        headers["host"] = public_host
+        headers["x-forwarded-host"] = public_host
+    headers["x-forwarded-proto"] = "https"
     body = await request.body()
-    
+
     try:
-        resp = await client.request(
-            method=request.method,
-            url=target_path,
-            params=params,
-            headers=headers,
-            content=body,
+        req = client.build_request(
+            method=request.method, url=target_path,
+            params=params, headers=headers, content=body,
         )
-        # Build response headers — strip CSP/X-Frame headers that block iframe embedding
-        resp_headers = {}
-        for k, v in resp.headers.items():
-            kl = k.lower()
-            if kl in ("content-security-policy", "content-security-policy-report-only", "x-frame-options"):
-                continue  # Strip frame-blocking headers so the iframe works
-            # Rewrite Location headers for same-origin redirects so the iframe works
-            if kl == "location":
-                loc = v
-                if loc.startswith("/"):
-                    loc = f"/hermes-webui{loc}"
-                # Also fix the next= parameter to point to the proxied path
-                if "next=" in loc and not loc.startswith("/hermes-webui"):
-                    loc = loc.replace("next=/", "next=/hermes-webui/")
-                resp_headers[k] = loc
-                continue
-            resp_headers[k] = v
-        
-        # Read the full body content for the response
-        body_content = resp.content
-        
-        # Use a regular Response for 302/301 redirects, StreamingResponse for others
-        if resp.status_code in (301, 302, 303, 307, 308):
-            return Response(
-                content=body_content,
-                status_code=resp.status_code,
-                headers=resp_headers,
-            )
-        return StreamingResponse(
-            content=resp.iter_bytes(),
-            status_code=resp.status_code,
-            headers=resp_headers,
-        )
-    except httpx.ConnectError:
-        return HTMLResponse(
-            content="<html><body style='background:#1a1a2e;color:#eee;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;'><div style='font-size:48px;'>🔌</div><h2>Hermes WebUI Not Running</h2><p style='color:#888;'>The Hermes WebUI server on port 8787 is not available.</p><p style='color:#666;font-size:13px;'>Start it with: <code>python3 /app/server.py --port 8787</code></p></body></html>",
-            status_code=502,
-        )
+        resp = await client.send(req, stream=True)
+    except httpx.HTTPError:
+        return _hermes_webui_down_page()
+
+    # Response headers: drop frame-blockers (the same-origin iframe must render),
+    # hop-by-hop headers, and rewrite same-origin redirects to the proxied path.
+    resp_headers = {}
+    for k, v in resp.headers.items():
+        kl = k.lower()
+        if kl in ("content-security-policy", "content-security-policy-report-only", "x-frame-options"):
+            continue  # strip frame-blocking headers so the iframe works
+        if kl in _HOP_BY_HOP_HEADERS:
+            continue
+        if kl == "location":
+            loc = v
+            if loc.startswith("/"):
+                loc = f"/hermes-webui{loc}"
+            if "next=" in loc and not loc.startswith("/hermes-webui"):
+                loc = loc.replace("next=/", "next=/hermes-webui/")
+            resp_headers[k] = loc
+            continue
+        resp_headers[k] = v
+
+    async def _relay():
+        try:
+            async for chunk in resp.aiter_raw():
+                yield chunk
+        finally:
+            await resp.aclose()
+
+    return StreamingResponse(_relay(), status_code=resp.status_code, headers=resp_headers)
+
 
 # ─── Routes: Gemini AI Proxy (Antigravity) ──────────────────────
 # Proxy for Google Gemini API — lets the frontend call Gemini
@@ -2669,9 +2947,12 @@ EVAL_FORMS_FILE = BASE_DIR / "data" / "eval_forms.json"
 def eval_forms_list():
     """List evaluation forms with completion status."""
     if EVAL_FORMS_FILE.exists():
-        return json.loads(EVAL_FORMS_FILE.read_text())
+        out = json.loads(EVAL_FORMS_FILE.read_text())
+        out.update(ssot.stamp("data/eval_forms.json (eval sync)", ssot._file_mtime_dt(EVAL_FORMS_FILE)))
+        return out
     # Return empty structure
-    return {"faculty": [], "residents": []}
+    return {"faculty": [], "residents": [],
+            **ssot.stamp("data/eval_forms.json (missing)", None)}
 
 @app.post("/api/eval/send-reminders")
 def eval_send_reminders():
@@ -2741,28 +3022,66 @@ def call_schedule_pdf(data: dict):
 @app.get("/api/telegram/status")
 def telegram_status():
     """Return telegram gateway connection status and recent messages."""
+    # The `hermes` CLI is NOT installed in this container, so the old
+    # `hermes gateway status` shell-out always failed and the page reported the
+    # gateway down (2026-09-13). Read the gateway's own state file instead —
+    # it lives on the shared Hermes home; fall back to the CLI if present.
+    connected = False
+    detail = "Gateway is not running"
+    platforms = {}
     try:
-        r = subprocess.run(["hermes", "gateway", "status"], capture_output=True, text=True, timeout=15)
-        connected = "running" in (r.stdout+r.stderr).lower() or "active" in (r.stdout+r.stderr).lower()
-        recent = []
-        state_db = Path.home() / ".hermes" / "state.db"
-        if state_db.exists():
+        state_file = _hermes_home() / "gateway_state.json"
+        if state_file.exists():
             try:
-                import sqlite3
-                conn = sqlite3.connect(str(state_db))
-                cur = conn.execute("SELECT title, preview, last_active FROM sessions WHERE source='telegram' AND preview IS NOT NULL ORDER BY last_active DESC LIMIT 10")
-                for row in cur.fetchall():
-                    recent.append({"sender": row[0] or "Telegram", "text": (row[1] or "")[:120], "time": str(row[2]) if row[2] else ""})
-                conn.close()
-            except: pass
-        return {"connected": connected, "detail": "Gateway is running" if connected else "Gateway is not running", "platforms": {"telegram": {"connected": connected}}, "recent_messages": recent}
+                gs = json.loads(state_file.read_text())
+                connected = str(gs.get("gateway_state", "")).lower() == "running"
+                tg = (gs.get("platforms") or {}).get("telegram") or {}
+                platforms = {"telegram": {"connected": str(tg.get("state", "")).lower() == "connected"}}
+                age_min = int(time.time() - state_file.stat().st_mtime) // 60
+                detail = (f"Gateway running (state updated {age_min}m ago)" if connected
+                          else f"Gateway state: {gs.get('gateway_state') or 'unknown'}")
+            except Exception as e:
+                detail = f"gateway_state.json unreadable: {e}"
+        else:
+            r = subprocess.run(["hermes", "gateway", "status"], capture_output=True, text=True, timeout=15)
+            blob = (r.stdout + r.stderr).lower()
+            connected = "running" in blob or "active" in blob
+            platforms = {"telegram": {"connected": connected}}
+            detail = "Gateway is running" if connected else "Gateway is not running"
     except Exception as e:
-        return {"connected": False, "detail": str(e), "platforms": {}, "recent_messages": []}
+        detail = str(e)
+
+    recent = []
+    state_db = _hermes_home() / "state.db"
+    if state_db.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(state_db))
+            # `sessions` has NO preview/last_active columns (checked 2026-09-13):
+            # the old SELECT raised OperationalError, the except swallowed it and
+            # the page showed zero messages. Use the columns that exist.
+            cur = conn.execute("""
+                SELECT COALESCE(NULLIF(display_name, ''), NULLIF(title, ''), 'Telegram'),
+                       COALESCE(NULLIF(last_activity_description, ''), NULLIF(title, ''), ''),
+                       COALESCE(last_activity_at, started_at, '')
+                FROM sessions
+                WHERE source = 'telegram'
+                ORDER BY COALESCE(last_activity_at, started_at) DESC
+                LIMIT 10
+            """)
+            for row in cur.fetchall():
+                recent.append({"sender": row[0] or "Telegram", "text": (row[1] or "")[:120], "time": str(row[2]) if row[2] else ""})
+            conn.close()
+        except Exception as e:
+            detail = f"{detail} (recent messages unavailable: {e})"
+    return {"connected": connected, "detail": detail,
+            "platforms": platforms or {"telegram": {"connected": connected}},
+            "recent_messages": recent}
 
 @app.get("/api/telegram/logs")
 def telegram_logs():
     """Return the last 50 lines from gateway.log."""
-    for p in [Path.home() / ".hermes" / "logs" / "gateway.log", Path.home() / ".hermes" / "gateway.log"]:
+    for p in [_hermes_home() / "logs" / "gateway.log", _hermes_home() / "gateway.log"]:
         if p.exists():
             return {"lines": p.read_text().splitlines()[-50:]}
     return {"lines": ["No gateway log found"]}
@@ -2993,7 +3312,8 @@ def fs_read(path: str):
 
 @app.get("/api/morning-briefing")
 def morning_briefing():
-    """Daily briefing data — call, evals, cron status, events, commute."""
+    """Daily briefing data — call, evals, cron status, events, commute.
+    SSOT 2026-09-12: on-call + events now live (were a '—' and hardcoded fake rows)."""
 
     # ─── Commute check ─────────────────────────────────────
     commute_data = []
@@ -3005,29 +3325,36 @@ def morning_briefing():
         commute_data = [{"error": str(e)}]
 
     try:
-        on_call = "—"
         pending = 0
         try:
             import sqlite3
-            db = Path.home() / ".hermes" / "state.db"
+            db = _hermes_home() / "state.db"
             if db.exists():
                 conn = sqlite3.connect(str(db))
                 cur = conn.execute("SELECT COUNT(*) FROM sessions WHERE title LIKE '%eval%' OR title LIKE '%Evaluate%'")
                 pending = cur.fetchone()[0] or 0
                 conn.close()
         except: pass
-        return {
+        oncall = ssot.briefing_oncall()
+        entries = oncall.get("oncall") or []
+        if entries:
+            on_call = ", ".join(f"{e.get('hospital')}: {e.get('primary_attending') or '—'}" for e in entries)
+        else:
+            on_call = oncall.get("message", "—")
+        jobs = _get_cron_jobs_list()
+        cron_status = {"ok": sum(1 for j in jobs if j.get("enabled", True)), "failed": 0}
+        result = {
             "on_call_today": on_call,
+            "oncall_detail": oncall,
             "pending_evals": pending,
-            "cron_status": {"ok": 3, "failed": 0},
+            "cron_status": cron_status,
             "commute": commute_data,
-            "upcoming_events": [
-                {"day": "Mon", "event": "Grand Rounds — 7:00 AM"},
-                {"day": "Wed", "event": "Clinic Meeting — 12:00 PM"},
-                {"day": "Fri", "event": "GME Report Due"},
-            ],
-            "cron_jobs": _get_cron_jobs_list()
+            "upcoming_events": ssot._events_ahead(10),
+            "events_source": "data/calendar_events.json (Google sync)",
+            "cron_jobs": jobs
         }
+        result.update(ssot.calendar_stamp_only())
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -3035,12 +3362,9 @@ def morning_briefing():
 
 @app.get("/api/compliance/overview")
 def compliance_overview():
-    """Compliance metrics across attendance, evals, and GME."""
-    return {
-        "grand_rounds_attendance": [],
-        "eval_completion": {"done": 0, "pending": 0, "overdue": 0},
-        "gme_usage": {"used": 0, "available": 1250, "residents": 0}
-    }
+    """Compliance metrics across attendance, evals, and GME — live sources
+    (SSOT, 2026-09-12; this handler previously returned a hardcoded zeros stub)."""
+    return ssot.compliance_overview()
 
 # ─── Notification Feed ─────────────────────────────────────────
 
@@ -3048,10 +3372,29 @@ NOTIF_FILE = BASE_DIR / "data" / "notifications.json"
 
 @app.get("/api/notifications")
 def notifications_list():
-    """Return recent notifications from the feed."""
+    """Return recent notifications from the feed (stamped — the feed writer
+    has been idle if the badge says FROZEN; see Data Gaps / Today)."""
     if NOTIF_FILE.exists():
-        return json.loads(NOTIF_FILE.read_text())
-    return {"notifications": []}
+        out = json.loads(NOTIF_FILE.read_text())
+    else:
+        out = {"notifications": []}
+    out.update(ssot.stamp("data/notifications.json (feed writer)", ssot._file_mtime_dt(NOTIF_FILE)))
+    return out
+
+# ─── SSOT: Sync runner + Attention queue (2026-09-12 redesign) ──────────────
+
+@app.post("/api/sync/run")
+def sync_run(include_calendar: bool = Query(True)):
+    """Re-run daily_sync.py (+ Google Calendar sync). Idempotent reads only —
+    no outbound email, no writes outside data/. Returns per-step results."""
+    return ssot.run_sync(include_calendar=include_calendar)
+
+@app.get("/api/attention")
+def attention_queue():
+    """Aggregate 'needs the operator' counts for the Today page:
+    pending review-gate emails, open swaps, CRM data gaps, cron state,
+    stale sources. Counts + short labels only — no PHI bodies."""
+    return ssot.attention_queue()
 
 @app.post("/api/notifications/clear")
 def notifications_clear():
@@ -3152,33 +3495,73 @@ EVAL_ABBREVS = ['URS', 'TURP', 'BIOPSY', 'HYDRO', 'IPP', 'SLING', 'PCNL', 'RALP'
 @app.get("/api/eval/dashboard")
 def eval_dashboard():
     """Eval dashboard — completion stats, per-resident detail, trends."""
-    from google.oauth2.credentials import Credentials
-    from google.auth.transport.requests import Request
-    from googleapiclient.discovery import build
-    
+    # Raw OAuth token-refresh approach (grants carry implicit Sheets access via
+    # the Drive read scope on the refresh grant); google-auth Credentials()
+    # enrichment fails with ACCESS_TOKEN_SCOPE_INSUFFICIENT on this deployment
+    # (token file scopes list calendar-only). Proven working 2026-09-13.
+    headers = {}
     try:
-        TOKEN_FILE = os.path.expanduser("/home/hermeswebui/.hermes/google_token.json")
+        TOKEN_FILE = os.path.expanduser("/home/hermeswebui/.hermes/google_token_urologyresidencyprogram.json")
         with open(TOKEN_FILE) as f:
             t = json.load(f)
-        creds = Credentials(
-            token=t['token'],
-            refresh_token=t.get('refresh_token', ''),
-            token_uri=t['token_uri'],
-            client_id=t['client_id'],
-            client_secret=t['client_secret'],
-        )
-        if creds.expired:
-            creds.refresh(Request())
-        
-        sheets = build('sheets', 'v4', credentials=creds)
-        
+
+        def _refresh_eval_token():
+            body = {"client_id": t["client_id"], "client_secret": t["client_secret"],
+                    "refresh_token": t["refresh_token"], "grant_type": "refresh_token"}
+            req = urllib.request.Request("https://oauth2.googleapis.com/token",
+                                         data=json.dumps(body).encode(), method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=30) as r:
+                fresh = json.loads(r.read())
+            t["token"] = fresh["access_token"]
+            t["expiry"] = time.time() + fresh.get("expires_in", 3600) - 60
+            return t["token"]
+
+        token = t.get("token", "")
+        _exp = t.get("expiry")
+        if isinstance(_exp, str):
+            # ISO-formatted expiry from the token file — parse to epoch seconds
+            try:
+                from datetime import datetime as _dt
+                _dtv = _dt.fromisoformat(str(_exp).replace("Z", "+00:00"))
+                if _dtv.tzinfo is None:
+                    _dtv = _dtv.replace(tzinfo=_dt.timezone.utc)
+                _exp = _dtv.timestamp()
+            except ValueError:
+                _exp = 0
+        if not token or not isinstance(_exp, (int, float)) or _exp < time.time() + 120:
+            token = _refresh_eval_token()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        def _sheet_get(range_: str) -> dict:
+            url = (f"https://sheets.googleapis.com/v4/spreadsheets/{EVAL_SPREADSHEET_ID}"
+                   f"/values/{urllib.parse.quote(range_, safe='')}")
+            req = urllib.request.Request(url, headers=headers)
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    return json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                if e.code == 401:  # access token expired mid-run — refresh once and retry
+                    token = _refresh_eval_token()
+                    headers["Authorization"] = f"Bearer {token}"
+                    req = urllib.request.Request(url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=30) as r:
+                        return json.loads(r.read())
+                raise
+
+        sheets_get = _sheet_get
+        # NOTE: google-auth / googleapiclient imports dropped — see header comment.
+        try:
+            from google.oauth2.credentials import Credentials
+            from google.auth.transport.requests import Request
+            from googleapiclient.discovery import build
+        except ModuleNotFoundError:
+            Credentials = None
+
         # 1) Read the Dashboard sheet for roster
-        dash_result = sheets.spreadsheets().values().get(
-            spreadsheetId=EVAL_SPREADSHEET_ID,
-            range="Dashboard!A24:C64"
-        ).execute()
+        dash_result = sheets_get("Dashboard!A24:C64")
         dash_values = dash_result.get('values', [])
-        
+
         residents = []
         faculty = []
         in_faculty = False
@@ -3207,16 +3590,13 @@ def eval_dashboard():
         
         for sheet_name in sheet_names:
             try:
-                result = sheets.spreadsheets().values().get(
-                    spreadsheetId=EVAL_SPREADSHEET_ID,
-                    range=f"'{sheet_name}'!A1:X"
-                ).execute()
+                result = sheets_get(f"'{sheet_name}'!A1:X")
                 values = result.get('values', [])
                 if len(values) < 2:
                     continue
-                
-                headers = values[0]
-                for row in values[1:]:
+
+                rows = values
+                for row in rows[1:]:
                     if len(row) < 2:
                         continue
                     ts = row[0] if len(row) > 0 else ''
@@ -3362,6 +3742,7 @@ def calendar_events(days: int = Query(90, description="Number of days to look ah
     result = {"events": sorted(filtered, key=lambda e: e.get("start", {}).get("date") or e.get("start", {}).get("dateTime", "")), "count": len(filtered), "total": len(events)}
     if include_todos:
         result["todos"] = _get_todos()
+    result.update(ssot.calendar_stamp_only())
     return result
 
 def _get_todos():
@@ -3432,28 +3813,13 @@ def calendar_todos_patch(task_id: str, data: dict):
 
 # ─── Staff Schedule (from canonical on-call source) ─────────────
 
+STAFF_SCHEDULE_FILE = BASE_DIR / "data" / "staff_schedule.json"
+
 @app.get("/api/staff-schedule")
 def staff_schedule(hospital: str = Query("Moses")):
-    """Return attending schedule for a hospital from canonical oncall data."""
-    data = _load_faculty_schedule()
-    sheet = data.get("sheets", {}).get(hospital, {})
-    entries = sheet.get("entries", [])
-
-    seen = set()
-    staff = []
-    for e in entries:
-        for field, role in [("primary", "Attending"), ("backup", "Backup Attending"), ("peds", "PEDS Attending")]:
-            name = e.get(field, "")
-            if name and name not in seen:
-                seen.add(name)
-                staff.append({
-                    "name": name,
-                    "role": role,
-                    "detail": f"On-call rotation — {hospital}",
-                    "schedule": "Q3-Q4 2026 rotation"
-                })
-
-    return {"staff": staff, "hospital": hospital, "total": len(staff)}
+    """Staff schedule for a hospital — live from sync_cache.db (SSOT, 2026-09-12).
+    Frozen data/staff_schedule.json remains only as a labeled fallback."""
+    return ssot.staff_schedule(hospital)
 
 # ─── PDF Archive ────────────────────────────────────────────────
 
@@ -3461,10 +3827,20 @@ PDF_DATA_FILE = BASE_DIR / "data" / "pdf_archive.json"
 
 @app.get("/api/pdf-archive")
 def pdf_archive():
-    """List all generated PDFs."""
-    if PDF_DATA_FILE.exists():
-        return json.loads(PDF_DATA_FILE.read_text())
-    return {"pdfs": []}
+    """Generated PDFs — scanned live from reports/ + data/ (SSOT, 2026-09-12),
+    stamped; data/pdf_archive.json snapshot no longer used."""
+    return ssot.pdf_archive()
+
+# ─── Documents ────────────────────────────────────────────────
+
+DOCUMENTS_FILE = BASE_DIR / "data" / "documents.json"
+
+@app.get("/api/documents")
+def documents():
+    """Categorized document registry — reviews/audits, social media plans, campaign hubs."""
+    if DOCUMENTS_FILE.exists():
+        return json.loads(DOCUMENTS_FILE.read_text())
+    return {"documents": []}
 
 # ─── GME Detail ────────────────────────────────────────────────
 
@@ -3472,10 +3848,9 @@ GME_DETAIL_FILE = BASE_DIR / "data" / "gme_detail.json"
 
 @app.get("/api/gme/detail")
 def gme_detail():
-    """Return per-resident GME fund usage breakdown."""
-    if GME_DETAIL_FILE.exists():
-        return json.loads(GME_DETAIL_FILE.read_text())
-    return {"residents": []}
+    """Per-resident GME fund usage — live: unified DB → sync_cache.db → frozen JSON,
+    in that order, each labeled with source + freshness (SSOT, 2026-09-12)."""
+    return ssot.gme_detail()
 
 # ─── Routes: Dashboard Static Files ──────────────────────────────
 
@@ -3527,24 +3902,28 @@ if prompt_tools_dir.exists():
 # ─── Qgenda API (read-only) ────────────────────────────────
 @app.get("/api/qgenda/users")
 async def get_qgenda_users(limit: int = 10):
-    """Return top N Qgenda users for the platforms dashboard."""
+    """Return top N Qgenda users for the platforms dashboard.
+
+    Source: local SQLite sync cache (sync_cache.db, refreshed daily by the Vapi
+    Daily Data Sync cron from the QGenda CSV export). The legacy urology_qgenda
+    Postgres DB on 127.0.0.1:5432 no longer exists (sub-I era).
+    """
     try:
-        import psycopg2
-        pw = os.environ.get("POSTGRES_PASSWORD", "")
-        if not pw:
-            import subprocess as _sp
-            r = _sp.run(['grep', 'POSTGRES_PASSWORD', '/workspace/projects/unified/app/.env'],
-                capture_output=True, text=True, timeout=5)
-            if r.returncode == 0:
-                pw = r.stdout.strip().split('=', 1)[1].strip()
-        if not pw:
-            return {"error": "No DB password"}
-        conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="urology_qgenda", user="postgres", password=pw, connect_timeout=3)
-        cur = conn.cursor()
-        cur.execute(f'SELECT name, email, role FROM "User" ORDER BY name LIMIT %s', (limit,))
-        users = [{"name": r[0], "email": r[1], "role": r[2]} for r in cur.fetchall()]
-        cur.close()
-        conn.close()
+        import sqlite3
+        db_path = "/workspace/agentic-os/data/sync_cache.db"
+        if not os.path.exists(db_path):
+            return {"error": f"Sync cache not found: {db_path}"}
+        con = sqlite3.connect(db_path, timeout=5)
+        cur = con.cursor()
+        lim = max(1, min(int(limit or 10), 100))
+        cur.execute(
+            "SELECT first_name, last_name, email, count(*) AS rows "
+            "FROM qgenda_schedule WHERE last_name <> '' "
+            "GROUP BY first_name, last_name, email "
+            "ORDER BY last_name, first_name LIMIT " + str(lim))
+        users = [{"name": f"{r[1]}, {r[0]}".strip(", "), "email": r[2] or "", "role": f"{r[3]} rows"}
+                 for r in cur.fetchall()]
+        con.close()
         return users
     except Exception as e:
         return {"error": str(e)}
@@ -3554,89 +3933,10 @@ scl_dir = Path("/workspace/repos/sick-call-line/dist")
 if scl_dir.exists():
     app.mount("/scl", StaticFiles(directory=str(scl_dir), html=True), name="scl")
 
-# Mount Hermes WebUI redirect — the chat.js expects this endpoint
-@app.get("/hermes-webui/", response_class=HTMLResponse)
-@app.get("/hermes-webui", response_class=HTMLResponse)
+# Mount Hermes WebUI redirect — /hermes-webui (no trailing slash) → proxied root
+@app.get("/hermes-webui")
 def hermes_webui_redirect():
-    """Redirect to the actual Hermes WebUI or show embedded interface."""
-    return HTMLResponse(content="""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hermes WebUI</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #e0e0e0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 20px;
-        }
-        .logo {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            color: #6c5ce7;
-        }
-        p {
-            font-size: 14px;
-            color: #a0a0a0;
-            margin-bottom: 24px;
-            max-width: 400px;
-            line-height: 1.5;
-        }
-        .btn {
-            background: linear-gradient(135deg, #6c5ce7 0%, #a855f7 100%);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3);
-        }
-        .note {
-            margin-top: 32px;
-            font-size: 12px;
-            color: #666;
-            padding: 12px 16px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 8px;
-            max-width: 360px;
-        }
-    </style>
-</head>
-<body>
-    <div class="logo">🧙‍♂️</div>
-    <h1>Hermes Agent WebUI</h1>
-    <p>You are accessing Hermes through the Agentic OS dashboard. Use this window to interact with Hermes directly.</p>
-    <a href="/dashboard/#chat" class="btn" onclick="window.parent.postMessage({type: 'hermes-ready'}, '*'); return false;">Back to AI Chat</a>
-    <div class="note">
-        💡 <strong>Note:</strong> The full Hermes WebUI runs separately. This embedded view provides basic Hermes access within Agentic OS.
-    </div>
-    <script>
-        // Notify parent that iframe loaded
-        window.parent.postMessage({type: 'hermes-ready'}, '*');
-    </script>
-</body>
-</html>
-""")
+    return RedirectResponse(url="/hermes-webui/")
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -3655,9 +3955,9 @@ def index(request: Request):
     if html_file.exists():
         content = html_file.read_text()
         content = content.replace('href="styles.css"', 'href="/dashboard/styles.css"')
-        content = content.replace('src="utils.js"', 'src="/dashboard/utils.js"')
-        content = content.replace('src="api.js"', 'src="/dashboard/api.js"')
-        content = content.replace('src="app.js"', 'src="/dashboard/app.js"')
+        content = content.replace('src="utils.js?v="', 'src="/dashboard/utils.js?v="')
+        content = content.replace('src="api.js?v="', 'src="/dashboard/api.js?v="')
+        content = content.replace('src="app.js?v="', 'src="/dashboard/app.js?v="')
         content = content.replace('pages/', '/dashboard/pages/')
         # Inject a top-of-body error reporter so any uncaught JS error / failed
         # asset shows up visibly on the page instead of producing a blank screen.
@@ -3765,7 +4065,7 @@ async def fs_stat(path: str = ""):
 
 # ─── Routes: Unified Data Service Proxy ───────────────────────────
 
-DATA_SERVICE_BASE = "http://localhost:8086"
+DATA_SERVICE_BASE = os.environ.get("DATA_SERVICE_BASE", "http://hermes-webui-gsga-data-service-1:8086")
 
 @app.get("/api/unified/{rest:path}")
 async def unified_proxy_get(rest: str):
@@ -4020,8 +4320,13 @@ def vapi_data_health():
 
     # ── 5. Google OAuth token ──
     home = Path.home()
+    if not (home / ".hermes" / "google_token.json").exists():
+        # In the AOS container Path.home() resolves to /root; tokens live on the
+        # hermes-home volume at /home/hermeswebui/.hermes. Fall back explicitly.
+        home = Path("/home/hermeswebui")
     token_paths = [
         home / ".hermes" / "google_token.json",
+        home / ".hermes" / "google_token_urologyresidencyprogram.json",
         home / ".hermes" / "tokens-disabled" / "google_token.json",
     ]
     token_found = None
@@ -4079,44 +4384,201 @@ def vapi_data_health():
 # ─── Routes: Conference Schedule (DB-backed) ───────────────────
 
 def _get_db_conn():
-    """Get a psycopg2 connection to the urology_qgenda database."""
+    """psycopg2 connection to the canonical postgres DB (unified schema).
+
+    2026-09-13: urology_qgenda (local 127.0.0.1:5432) is retired; Sub-I exit
+    interviews now live in unified.subi_exit_interviews on the Supabase DB —
+    same store gr_schedule.py uses for grand_rounds.
+    """
     import psycopg2
     pw = os.environ.get("POSTGRES_PASSWORD", "")
     if not pw:
-        import subprocess as _sp
-        r = _sp.run(['grep', 'POSTGRES_PASSWORD', '/workspace/projects/unified/app/.env'],
-            capture_output=True, text=True, timeout=5)
-        if r.returncode == 0:
-            pw = r.stdout.strip().split('=', 1)[1].strip()
-    try:
-        kwargs = dict(host="127.0.0.1", port=5432, dbname="urology_qgenda", user="postgres", connect_timeout=3)
-        if pw:
-            kwargs["password"] = pw
-        return psycopg2.connect(**kwargs)
-    except Exception:
-        return None
+        for env_path in ("/workspace/agentic-os/.env",
+                         "/workspace/projects/unified/app/.env"):
+            try:
+                if os.path.exists(env_path):
+                    with open(env_path) as ef:
+                        for line in ef:
+                            line = line.strip()
+                            if line.startswith("POSTGRES_PASSWORD=") and "=" in line:
+                                pw = line.split("=", 1)[1].strip()
+                                break
+            except Exception:
+                continue
+    for host in ("172.16.3.1", "127.0.0.1"):
+        try:
+            kwargs = dict(host=host, port=5432, dbname="postgres", user="postgres", connect_timeout=3)
+            if pw:
+                kwargs["password"] = pw
+            return psycopg2.connect(**kwargs)
+        except Exception:
+            continue
+    return None
 
 
 @app.get("/api/conference/schedule")
 def get_conference_schedule():
-    """Return all grand rounds schedule rows from the database."""
+    """Return ALL schedule rows from the CANONICAL store: unified.grand_rounds
+    (single source of truth — urology_qgenda.grand_rounds_schedule retired 2026-09-09)."""
+    try:
+        from gr_schedule import fetch_dicts
+        rows = []
+        for r in fetch_dicts():
+            rows.append({
+                "id": r["id"], "month": r["month"] or "", "mon_date": r["mon_date"] or "",
+                "mon_topic": r["mon_topic"] or "", "resident": r["mon_resident"] or "",
+                "attending": r["mon_attending"] or "", "fri_date": r["fri_date"] or "",
+                "gr_7_8": r["fri_gr7"] or "", "gr_8_9": r["fri_gr8"] or "",
+                "notes": r["notes"] or "",
+            })
+        return {"rows": rows, "count": len(rows)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.put("/api/conference/schedule/{row_id}")
+async def update_conference_schedule(row_id: int, request: Request):
+    """Update a single schedule row in the CANONICAL unified.grand_rounds table."""
+    try:
+        from gr_schedule import _connect
+        body = await request.json()
+        conn = _connect()
+        if not conn:
+            return {"error": "Cannot reach canonical DB"}
+        cur = conn.cursor()
+
+        # Page field name -> unified.grand_rounds column
+        allowed = {"month": "month", "mon_date": "mon_date", "mon_topic": "mon_topic",
+                   "resident": "mon_resident", "attending": "mon_attending",
+                   "fri_date": "fri_date", "gr_7_8": "fri_gr7", "gr_8_9": "fri_gr8",
+                   "notes": "notes"}
+        updates = []
+        values = []
+        for field, col in allowed.items():
+            if field in body:
+                val = body[field]
+                # Convert empty strings to None for date fields
+                if field in ("mon_date", "fri_date") and (not val or val == ""):
+                    val = None
+                updates.append(f"{col} = %s")
+                values.append(val)
+
+        if not updates:
+            return {"error": "No fields to update"}
+
+        updates.append("updated_at = NOW()")
+        values.append(row_id)
+
+        cur.execute(
+            f"UPDATE unified.grand_rounds SET {', '.join(updates)} WHERE id = %s",
+            values
+        )
+        conn.commit()
+        affected = cur.rowcount
+        cur.close()
+        conn.close()
+
+        if affected == 0:
+            return {"error": f"Row {row_id} not found"}
+        return {"success": True, "id": row_id, "updated_fields": list(body.keys())}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ─── Send tracker (single source: unified.grand_rounds *_sent_at columns) ──
+
+@app.get("/api/send-tracker")
+def get_send_tracker():
+    """Return every date whose invite has been stamped as sent (per side)."""
+    try:
+        from gr_schedule import fetch_dicts
+        monday, friday = [], []
+        for r in fetch_dicts():
+            if r.get("mon_date") and r.get("mon_invite_sent_at"):
+                monday.append(r["mon_date"])
+            if r.get("fri_date") and r.get("fri_invite_sent_at"):
+                friday.append(r["fri_date"])
+        return {"monday": sorted(set(monday)), "grand_rounds": sorted(set(friday))}
+    except Exception as e:
+        return {"error": str(e), "monday": [], "grand_rounds": []}
+
+
+@app.post("/api/send-tracker/mark")
+async def mark_send(request: Request):
+    """Stamp or clear a send timestamp: {date, kind, clear?}
+    kind: mon_invite | mon_reminder | fri_invite | fri_reminder"""
+    try:
+        from gr_schedule import mark_sent
+        body = await request.json()
+        body = body or {}
+        date = body.get("date", "")
+        kind = body.get("kind", "")
+        clear = bool(body.get("clear", False))
+        if not date or kind not in ("mon_invite", "mon_reminder", "fri_invite", "fri_reminder"):
+            return {"error": "date + kind (mon_invite|mon_reminder|fri_invite|fri_reminder) required"}
+        n = mark_sent(date, kind, clear=clear)
+        return {"success": True, "date": date, "kind": kind, "clear": clear, "rows_updated": n}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/email/send-log")
+def email_send_log():
+    """Send history for the Email Send Log page: legacy JSON + canonical DB stamps."""
+    base = BASE_DIR / "data"
+    out = {"realSends": [], "testOnlyDates": [], "dbSent": []}
+    try:
+        log = json.loads((base / "grand_rounds_send_log.json").read_text())
+        for ev in log.get("real_sends", {}).get("sent_events", []):
+            out["realSends"].append({
+                "date": ev.get("date", ""), "title": ev.get("title", ""),
+                "emails": ev.get("emails_sent", 0), "failed": ev.get("failed", 0),
+                "sentAt": (ev.get("sent_at") or "")[:10],
+            })
+        out["testOnlyDates"] = log.get("test_only_sends", {}).get("dates", [])
+    except Exception:
+        pass
+    try:
+        from gr_schedule import fetch_dicts
+        for r in fetch_dicts():
+            if r.get("mon_date") and r.get("mon_invite_sent_at"):
+                out["dbSent"].append({"date": r["mon_date"], "sentAt": str(r["mon_invite_sent_at"])[:10], "side": "monday"})
+            if r.get("fri_date") and r.get("fri_invite_sent_at"):
+                out["dbSent"].append({"date": r["fri_date"], "sentAt": str(r["fri_invite_sent_at"])[:10], "side": "friday"})
+    except Exception:
+        pass
+    newest = None
+    try:
+        newest = ssot._file_mtime_dt(base / "grand_rounds_send_log.json")
+    except Exception:
+        pass
+    out.update(ssot.stamp("send log (JSON + GR DB)", newest))
+    return out
+
+
+# ─── Routes: Sub-I Exit Interviews (DB-backed Outlook deeplinks) ────────────
+
+@app.get("/api/subi-exit-interviews")
+def get_subi_exit_interviews():
+    """Return all Sub-I exit interviews from the database."""
     try:
         conn = _get_db_conn()
         if not conn:
             return {"error": "No DB password"}
         cur = conn.cursor()
         cur.execute('''
-            SELECT id, month, mon_date::text, mon_topic, resident, attending,
-                   fri_date::text, gr_7_8, gr_8_9, notes
-            FROM grand_rounds_schedule
-            ORDER BY COALESCE(mon_date, fri_date)
+            SELECT id, interviewee, recipient_email, interview_date::text, interview_time,
+                   duration_minutes, notes, created_at::text
+            FROM unified.subi_exit_interviews
+            ORDER BY interview_date, interview_time
         ''')
         rows = []
         for r in cur.fetchall():
             rows.append({
-                "id": r[0], "month": r[1], "mon_date": r[2], "mon_topic": r[3],
-                "resident": r[4], "attending": r[5], "fri_date": r[6],
-                "gr_7_8": r[7], "gr_8_9": r[8], "notes": r[9],
+                "id": r[0], "interviewee": r[1] or "", "recipient_email": r[2] or "",
+                "interview_date": r[3] or "", "interview_time": r[4] or "12:00 PM",
+                "duration_minutes": r[5] if r[5] else 30, "notes": r[6] or "",
+                "created_at": r[7] or "",
             })
         cur.close()
         conn.close()
@@ -4125,49 +4587,109 @@ def get_conference_schedule():
         return {"error": str(e)}
 
 
-@app.put("/api/conference/schedule/{row_id}")
-async def update_conference_schedule(row_id: int, request: Request):
-    """Update a single schedule row in the database."""
+@app.post("/api/subi-exit-interviews")
+async def create_subi_exit_interview(request: Request):
+    """Add a new Sub-I exit interview row."""
     try:
         body = await request.json()
         conn = _get_db_conn()
         if not conn:
             return {"error": "No DB password"}
         cur = conn.cursor()
-        
-        # Build dynamic update from provided fields
-        allowed_fields = {"month", "mon_date", "mon_topic", "resident", "attending", "fri_date", "gr_7_8", "gr_8_9", "notes"}
+        cur.execute('''
+            INSERT INTO unified.subi_exit_interviews (interviewee, recipient_email, interview_date, interview_time, duration_minutes, notes)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (
+            body.get("interviewee", ""),
+            body.get("recipient_email", ""),
+            body.get("interview_date") or None,
+            body.get("interview_time") or "12:00 PM",
+            int(body.get("duration_minutes") or 30),
+            body.get("notes", ""),
+        ))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"success": True, "id": new_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.put("/api/subi-exit-interviews/{row_id}")
+async def update_subi_exit_interview(row_id: int, request: Request):
+    """Update a Sub-I exit interview row."""
+    try:
+        body = await request.json()
+        conn = _get_db_conn()
+        if not conn:
+            return {"error": "No DB password"}
+        cur = conn.cursor()
+        allowed_fields = {"interviewee", "recipient_email", "interview_date", "interview_time", "duration_minutes", "notes"}
         updates = []
         values = []
         for field in allowed_fields:
             if field in body:
                 val = body[field]
-                # Convert empty strings to None for date fields
-                if field in ("mon_date", "fri_date") and (not val or val == ""):
+                if field == "interview_date" and (not val or val == ""):
                     val = None
                 updates.append(f"{field} = %s")
                 values.append(val)
-        
         if not updates:
             return {"error": "No fields to update"}
-        
         updates.append("updated_at = NOW()")
         values.append(row_id)
-        
         cur.execute(
-            f"UPDATE grand_rounds_schedule SET {', '.join(updates)} WHERE id = %s",
+            f"UPDATE unified.subi_exit_interviews SET {', '.join(updates)} WHERE id = %s",
             values
         )
         conn.commit()
         affected = cur.rowcount
         cur.close()
         conn.close()
-        
         if affected == 0:
             return {"error": f"Row {row_id} not found"}
         return {"success": True, "id": row_id, "updated_fields": list(body.keys())}
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.delete("/api/subi-exit-interviews/{row_id}")
+async def delete_subi_exit_interview(row_id: int):
+    """Delete a Sub-I exit interview row."""
+    try:
+        conn = _get_db_conn()
+        if not conn:
+            return {"error": "No DB password"}
+        cur = conn.cursor()
+        cur.execute("DELETE FROM unified.subi_exit_interviews WHERE id = %s", (row_id,))
+        conn.commit()
+        affected = cur.rowcount
+        cur.close()
+        conn.close()
+        if affected == 0:
+            return {"error": f"Row {row_id} not found"}
+        return {"success": True, "id": row_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/subi-exit-invites", response_class=HTMLResponse)
+async def subi_exit_invites_page(test: str = Query("true", description="Set to 'false' for live mode")):
+    """Serve the Sub-I Exit Interview invites page — generated on-the-fly from the DB."""
+    import sys
+    sys.path.insert(0, str(BASE_DIR))
+    try:
+        import importlib
+        if "subi_exit_invites_generator" in sys.modules:
+            importlib.reload(sys.modules["subi_exit_invites_generator"])
+        import subi_exit_invites_generator as gen
+        test_mode = test.lower() not in ("false", "0", "no", "off")
+        html = gen.generate_html_page(test_mode=test_mode)
+        return HTMLResponse(content=html)
+    except Exception as e:
+        return HTMLResponse(content=f"<html><body><h2>Error generating Sub-I invites page</h2><pre>{e}</pre></body></html>", status_code=500)
 
 
 @app.get("/api/calendar-invites", response_class=HTMLResponse)
@@ -4195,37 +4717,22 @@ async def calendar_invites_page(test: str = Query("true", description="Set to 'f
 
 @app.get("/api/conference/events")
 def conference_events():
-    """Return all Grand Rounds and Resident Conference events from GR_DATA
-    in the grand-rounds.js page, parsed into JSON for the resend dashboard."""
-    gr_js_path = BASE_DIR / "dashboard" / "pages" / "grand-rounds.js"
-    if not gr_js_path.exists():
-        return {"events": [], "error": "grand-rounds.js not found"}
-    
-    js_text = gr_js_path.read_text()
-    match = re.search(r"const GR_DATA\s*=\s*(\[.*?\]);", js_text, re.DOTALL)
-    if not match:
-        return {"events": [], "error": "GR_DATA not found"}
-    
-    array_str = match.group(1)
-    # Clean JS-specific artifacts
-    array_str = re.sub(r",\s*\]", "]", array_str)
-    array_str = re.sub(r"//.*", "", array_str)
-    
+    """Return all Grand Rounds / related events from the CANONICAL store
+    (unified.grand_rounds) for the one-click resend dashboard."""
     try:
-        gr_data = json.loads(array_str)
-    except json.JSONDecodeError as e:
-        return {"events": [], "error": f"JSON parse error: {e}"}
-    
+        from gr_schedule import fetch_rows
+        gr_data = fetch_rows(include_tb=False)
+    except Exception as e:
+        return {"events": [], "error": f"canonical DB unavailable: {e}"}
+
     events = []
     for row in gr_data:
-        if len(row) < 9:
-            continue
         fri_date = row[7] if len(row) > 7 else ""
         if not fri_date or not str(fri_date).startswith("20"):
             continue
-        gr_7_8 = str(row[8]).strip('" ') if len(row) > 8 else ""
-        gr_8_9 = str(row[9]).strip('" ') if len(row) > 9 else ""
-        
+        gr_7_8 = str(row[8]).strip() if len(row) > 8 else ""
+        gr_8_9 = str(row[9]).strip() if len(row) > 9 else ""
+
         # Determine meeting type
         if "NO GRAND ROUNDS" in gr_7_8 or "NO GRAND ROUNDS" in gr_8_9:
             meeting_type = "no_grand_rounds"
@@ -4235,11 +4742,13 @@ def conference_events():
             meeting_type = "faculty_meeting"
         elif "Journal Club" in gr_7_8 or "Journal Club" in gr_8_9:
             meeting_type = "journal_club"
+        elif "Residency Interview Day" in gr_7_8 or "Residency Interview Day" in gr_8_9:
+            meeting_type = "interview_day"
         elif "Resident Conference" in gr_7_8 or "Resident Conference" in gr_8_9:
             meeting_type = "resident_conference"
         else:
             meeting_type = "grand_rounds"
-        
+
         events.append({
             "date": str(fri_date),
             "type": meeting_type,
@@ -4247,7 +4756,7 @@ def conference_events():
             "topic_8_9": gr_8_9,
             "week": str(row[0]) if len(row) > 0 else "",
         })
-    
+
     # Sort by date, upcoming first
     events.sort(key=lambda e: e["date"])
     return {"events": events, "count": len(events)}
