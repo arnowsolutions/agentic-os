@@ -58,3 +58,6 @@ google_workspace.py
 
 # opcode CLI toolchain (node_modules-heavy; lives in shared volume)
 .tools/
+
+# AOS audit sweep outputs (regenerated each run)
+scripts/aos-audit/*-report.json

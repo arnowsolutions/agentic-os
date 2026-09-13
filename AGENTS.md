@@ -453,6 +453,26 @@ When you (an AI agent) are dropped into this directory for the first time:
 
 ---
 
+## Canonical stores & removals (2026-09-13)
+
+- **Chief Residents' Meetings** — schedule + attendees live in the `unified` schema
+  (`chief_meetings`, `chief_meeting_attendees`) on the postgres DB. Read them via
+  `GET /api/chief-meetings` (the dashboard pages) or the loader in
+  `send_chief_meeting_email.py`. Never re-hardcode the dates/attendees into a page.
+- **Sub-I exit interviews** — `unified.subi_exit_interviews` (postgres). All
+  readers must use that store; `urology_qgenda` no longer exists (renamed
+  `urology_roster`).
+- **Admin audit trail** — `public.audit_log`; exposed as `GET /api/admin/audit-log`
+  (generic `entity_type='api'` middleware rows are filtered out by default).
+- **NotebookLM** — profiles under `<hermes home>/home/.notebooklm-mcp-cli`; a profile
+  with a `chrome-profiles/<name>` dir refreshes itself from the sign-in-once Chrome
+  profile. `GET /api/tools/notebooklm/profiles` lists them; the Tools page renders one
+  panel per profile instead of a hardcoded account list.
+- **Removed pages** — `session-replay` (needs `~/.local/share/opencode`) and
+  `google-studio` / Apps Script tab (needs `~/.gemini`): neither path is mounted into
+  the AOS container. Page modules are parked in `dashboard/pages/_removed/`; restore
+  both the module and its nav entry together.
+
 ## Vapi Voice Assistant — Data Sources
 
 The Vapi voice assistant reads from three local data files and one Drive-synced roster cache:
