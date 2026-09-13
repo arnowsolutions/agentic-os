@@ -1822,6 +1822,229 @@ def download_resident_letter(name: str = Query("", description="generated letter
                     headers={"Content-Disposition": f'attachment; filename="{safe}"'})
 
 
+
+# ─── Routes: Chief Residents' Meetings (canonical DB store, 2026-09-13) ─────
+# The meeting schedule and attendee list used to be hardcoded in TWO dashboard
+# pages (chief-meetings.js, mass-email.js) and again in
+# send_chief_meeting_email.py. unified.chief_meetings /
+# unified.chief_meeting_attendees are now the single source of truth; every
+# consumer reads from here.
+
+def _chief_rows():
+    """Return (meetings, attendees) or (None, error_message)."""
+    conn = _get_db_conn()
+    if not conn:
+        return None, "no DB connection"
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT id, meeting_date::text, label, location, start_time, end_time
+                       FROM unified.chief_meetings ORDER BY meeting_date""")
+        meetings = [{"id": r[0], "date": r[1], "label": r[2] or "", "location": r[3] or "",
+                     "start_time": r[4] or "12:00 PM", "end_time": r[5] or "1:00 PM"}
+                    for r in cur.fetchall()]
+        cur.execute("""SELECT id, name, email, role FROM unified.chief_meeting_attendees
+                       WHERE is_active ORDER BY sort_order, name""")
+        attendees = [{"id": r[0], "name": r[1], "email": r[2], "role": r[3] or "attending",
+                      "display": r[1] if (r[3] or "") != "chief" else f"{r[1]} (Chief)"}
+                     for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return meetings, attendees
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return None, str(e)
+
+
+@app.get("/api/chief-meetings")
+def get_chief_meetings():
+    """Canonical chief-meeting schedule + attendees (single source of truth)."""
+    meetings, attendees = _chief_rows()
+    if meetings is None:
+        return {"error": f"chief meetings unavailable: {attendees}"}
+    return {"meetings": meetings, "attendees": attendees, "count": len(meetings)}
+
+
+@app.post("/api/chief-meetings")
+async def upsert_chief_meeting(request: Request):
+    """Add a meeting, or update it when that date already exists."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not body.get("date"):
+        return {"error": "date required (YYYY-MM-DD)"}
+    conn = _get_db_conn()
+    if not conn:
+        return {"error": "no DB connection"}
+    try:
+        cur = conn.cursor()
+        cur.execute("""INSERT INTO unified.chief_meetings
+                         (meeting_date, label, location, start_time, end_time)
+                       VALUES (%s, %s, %s, %s, %s)
+                       ON CONFLICT (meeting_date) DO UPDATE
+                         SET label = EXCLUDED.label, location = EXCLUDED.location,
+                             start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time,
+                             updated_at = now()
+                       RETURNING id""",
+                    (body["date"], body.get("label", ""), body.get("location", "Penthouse"),
+                     body.get("start_time", "12:00 PM"), body.get("end_time", "1:00 PM")))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"success": True, "id": new_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.delete("/api/chief-meetings/{row_id}")
+def delete_chief_meeting(row_id: int):
+    conn = _get_db_conn()
+    if not conn:
+        return {"error": "no DB connection"}
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM unified.chief_meetings WHERE id = %s", (row_id,))
+        conn.commit()
+        affected = cur.rowcount
+        cur.close()
+        conn.close()
+        return {"success": affected > 0, "id": row_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/chief-meetings/attendees")
+async def upsert_chief_attendee(request: Request):
+    """Add/update a chief-meeting attendee (email is the key)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not body.get("email"):
+        return {"error": "email required"}
+    conn = _get_db_conn()
+    if not conn:
+        return {"error": "no DB connection"}
+    try:
+        cur = conn.cursor()
+        cur.execute("""INSERT INTO unified.chief_meeting_attendees (name, email, role, sort_order, is_active)
+                       VALUES (%s, %s, %s, %s, TRUE)
+                       ON CONFLICT (email) DO UPDATE
+                         SET name = EXCLUDED.name, role = EXCLUDED.role,
+                             sort_order = EXCLUDED.sort_order, is_active = TRUE
+                       RETURNING id""",
+                    (body.get("name", ""), body["email"], body.get("role", "attending"),
+                     int(body.get("sort_order", 99))))
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"success": True, "id": new_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.delete("/api/chief-meetings/attendees/{row_id}")
+def delete_chief_attendee(row_id: int):
+    """Deactivate an attendee (kept for history, excluded from invites)."""
+    conn = _get_db_conn()
+    if not conn:
+        return {"error": "no DB connection"}
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE unified.chief_meeting_attendees SET is_active = FALSE WHERE id = %s", (row_id,))
+        conn.commit()
+        affected = cur.rowcount
+        cur.close()
+        conn.close()
+        return {"success": affected > 0, "id": row_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ─── Route: Admin audit log (canonical public.audit_log, 2026-09-13) ────────
+# The platforms page called /api/admin/audit-log, a route that never existed, so
+# the panel silently fell back to a resident list. The canonical trail lives in
+# public.audit_log on the postgres DB (admin.reimb.review, reimb.submit,
+# coverage.assign, notifications.read, ...).
+
+@app.get("/api/admin/audit-log")
+def admin_audit_log(limit: int = 20, action: str = "", entity_type: str = "",
+                    include_api: bool = False):
+    """Admin activity from the canonical public.audit_log.
+
+    Rows with entity_type='api' are generic request-middleware noise (every
+    api.post.root hit) — excluded by default so the panel shows real business
+    actions: admin.reimb.review, reimb.submit, coverage.assign, scl.absence.*.
+    """
+    conn = _get_db_conn()
+    if not conn:
+        return {"error": "no DB connection"}
+    try:
+        where, params = [], []
+        if not include_api and not entity_type:
+            where.append("a.entity_type <> 'api'")
+        if action:
+            where.append("a.action ILIKE %s")
+            params.append(f"%{action}%")
+        if entity_type:
+            where.append("a.entity_type = %s")
+            params.append(entity_type)
+        # entity_id points at a reimb_submissions row for reimbursement/submission
+        # rows (whose person_id resolves the name) or directly at a reimb_persons id.
+        sql = ("SELECT a.id, a.user_name, a.action, a.entity_type, a.entity_id, "
+               "       COALESCE(NULLIF(a.details->>'onBehalfOf', ''), p.name, a.entity_id, ''), "
+               "       a.created_at::text, "
+               "       COALESCE(s.description, a.details->>'description', ''), "
+               "       COALESCE(s.amount::text, a.details->>'amount', '') "
+               "FROM public.audit_log a "
+               "LEFT JOIN unified.reimb_submissions s ON s.id::text = a.entity_id "
+               "LEFT JOIN unified.reimb_persons p "
+               "       ON (p.id = s.person_id OR p.id::text = a.entity_id) ")
+        if where:
+            sql += "WHERE " + " AND ".join(where) + " "
+        sql += "ORDER BY a.created_at DESC LIMIT %s"
+        params.append(max(1, min(int(limit), 500)))
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        rows = [{"id": r[0], "actor_name": r[1] or "System", "action": r[2] or "",
+                 "entity_type": r[3] or "", "entity_id": r[4] or "",
+                 "person_name": r[5] or "", "created_at": r[6] or "",
+                 "description": r[7] or "", "amount": r[8] or ""} for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return rows
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ─── Route: NotebookLM profiles (replaces the page's hardcoded account list) ─
+@app.get("/api/tools/notebooklm/profiles")
+def notebooklm_profiles():
+    """NotebookLM profiles available on the mounted Hermes home.
+
+    `persistent_profile` marks the profiles behind a saved Chrome login — those
+    are the ones the sign-in-once method keeps refreshing without manual cookie
+    exports. The Tools page renders one panel per profile instead of a hardcoded
+    account list, so a newly added profile shows up on its own.
+    """
+    # `nlm` resolves its storage from HOME (~/.notebooklm-mcp-cli) — and _run_cmd
+    # sets HOME to the mounted Hermes *home*, so that copy is the live one.
+    candidates = [_hermes_home() / "home" / ".notebooklm-mcp-cli",
+                  _hermes_home() / ".notebooklm-mcp-cli"]
+    storage = next((c for c in candidates if (c / "profiles").exists()), candidates[0])
+    prof_dir = storage / "profiles"
+    chrome_dir = storage / "chrome-profiles"
+    names = sorted(p.name for p in prof_dir.iterdir() if p.is_dir()) if prof_dir.exists() else []
+    persistent = {p.name for p in chrome_dir.iterdir() if p.is_dir()} if chrome_dir.exists() else set()
+    return {"profiles": [{"name": n, "persistent_profile": n in persistent} for n in names],
+            "storage": str(storage), "count": len(names)}
+
+
 @app.get("/api/chief-meetings/generate-eml")
 def generate_chief_meeting_eml():
     """Generate .eml files for all Chief Residents' Meetings."""
@@ -2116,13 +2339,20 @@ def tools_overview():
     resources = len(list(kb.glob("resources/*.md"))) if kb.exists() else 0
     total = prompts + tools_kb + resources
 
-    # NLM is bonus — quick check with short timeout, never blocks
+    # NLM is bonus. `nlm login --check` only inspects the DEFAULT profile and
+    # timed out inside this container, which made nlm_available false and hid
+    # every panel. Judge it from the auth material on disk instead: the CLI is
+    # present and at least one profile carries cookies.
     nlm_ok = False
     try:
-        out, _, _ = _run_cmd("nlm login --check", timeout=8)
-        nlm_ok = "valid" in out or "Authenticated" in out
-    except:
-        pass
+        _storage = next((c for c in (_hermes_home() / "home" / ".notebooklm-mcp-cli",
+                                     _hermes_home() / ".notebooklm-mcp-cli")
+                         if (c / "profiles").exists()), None)
+        if _storage and (_storage / "profiles").exists() and \
+                any((p / "cookies.json").exists() for p in (_storage / "profiles").iterdir() if p.is_dir()):
+            nlm_ok = True
+    except Exception:
+        nlm_ok = False
 
     cron_out, _, _ = _run_cmd("hermes cron list", timeout=10)
     cron_count = cron_out.count("[active]") + cron_out.count("[paused]")

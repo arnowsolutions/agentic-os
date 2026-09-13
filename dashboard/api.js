@@ -207,6 +207,9 @@ const api = {
   // Tools Integration
   getToolsOverview: () => api.get('/api/tools/overview'),
   getToolsNotebooks: (profile = 'default') => api.get(`/api/tools/notebooks?profile=${encodeURIComponent(profile)}`),
+  getNotebookProfiles: () => api.get('/api/tools/notebooklm/profiles'),
+  getChiefMeetings: () => api.get('/api/chief-meetings'),
+  getAdminAuditLog: (limit = 10) => api.get(`/api/admin/audit-log?limit=${encodeURIComponent(limit)}`),
   refreshToolsNotebooks: () => api.post('/api/tools/notebooks/refresh', {}),
   getToolsCron: () => api.get('/api/tools/cron'),
   getToolsKB: () => api.get('/api/tools/kb'),

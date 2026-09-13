@@ -100,7 +100,7 @@ async function loadReimbursementTop10() {
     body.innerHTML = data.slice(0, 10).map(e =>
       `<div class="pf-item">
         <span class="pf-item-name">${escapeHtml(e.actor_name||'System')}</span>
-        <span class="pf-item-meta">${escapeHtml(e.action.replace(/_/g,' '))}${e.person_name ? ' — ' + escapeHtml(e.person_name) : ''}</span>
+        <span class="pf-item-meta">${escapeHtml(e.action.replace(/_/g,' '))}${e.person_name && e.person_name !== e.entity_id ? ' — ' + escapeHtml(e.person_name) : ''}${e.description ? ' · ' + escapeHtml(e.description) : ''}${e.amount ? ' ($' + escapeHtml(e.amount) + ')' : ''}</span>
       </div>`
     ).join('');
     return;

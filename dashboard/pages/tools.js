@@ -13,22 +13,11 @@ async function renderTools() {
 
     <div id="toolsStats" class="grid grid-4 mb-4"></div>
 
-    <div class="grid grid-2 mt-3">
-      <div class="card">
-        <div class="card-header"><span class="card-title">NotebookLM - Urology</span></div>
-        <div id="nlmDefault"><div class="skeleton" style="height:80px"></div></div>
-      </div>
-      <div class="card">
-        <div class="card-header"><span class="card-title">NotebookLM - letsgetmoney2009</span></div>
-        <div id="nlmLetsget"><div class="skeleton" style="height:80px"></div></div>
-      </div>
-    </div>
+    <!-- One panel per NotebookLM profile, discovered from the backend — never a
+         hardcoded account list (a list built from the API cannot go stale). -->
+    <div id="nlmProfiles" class="grid grid-2 mt-3"></div>
 
     <div class="grid grid-2 mt-3">
-      <div class="card">
-        <div class="card-header"><span class="card-title">NotebookLM - account2</span></div>
-        <div id="nlmAccount2"><div class="skeleton" style="height:80px"></div></div>
-      </div>
       <div class="card">
         <div class="card-header"><span class="card-title">Hermes Cron Jobs</span></div>
         <div id="cronJobs"><div class="skeleton" style="height:80px"></div></div>
@@ -95,24 +84,52 @@ async function renderTools() {
       </div>
       <div class="card stat-card">
         <div class="stat-icon yellow">◆</div>
-        <div class="stat-value">3</div>
+        <div class="stat-value" id="nlmAccountCount">—</div>
         <div class="stat-label">NLM Accounts</div>
-        <div class="stat-change up">all connected</div>
+        <div class="stat-change up" id="nlmAccountStatus">checking…</div>
       </div>
     `;
 
-    // Load notebooks for all 3 accounts (or local KB if NLM down)
-    const [nlm1, nlm2, nlm3] = await Promise.all([
-      overview.nlm_available
-        ? api.getToolsNotebooks('default')
-        : Promise.resolve({ notebooks: [], use_local_kb: true }),
-      overview.nlm_available
-        ? api.getToolsNotebooks('letsgetmoney2009')
-        : Promise.resolve({ notebooks: [], use_local_kb: true }),
-      overview.nlm_available
-        ? api.getToolsNotebooks('account2')
-        : Promise.resolve({ notebooks: [], use_local_kb: true }),
-    ]);
+    // Every profile reported by the backend gets a panel (no hardcoded accounts)
+    let nlmResults = [];
+    try {
+      const profRes = await api.getNotebookProfiles();
+      const profiles = (profRes && profRes.profiles) || [];
+      // No global "is NLM up" gate: each profile reports its own state, and a
+      // global flag derived from one profile used to hide working panels.
+      nlmResults = await Promise.all(profiles.map(async (p) => {
+        const r = await api.getToolsNotebooks(p.name);
+        return { name: p.name, persistent: p.persistent_profile, notebooks: r.notebooks || [], error: r.error, source: r.source };
+      }));
+    } catch (e) {
+      nlmResults = [{ name: 'notebooklm', notebooks: [], error: String(e && e.message || e) }];
+    }
+    const liveNlm = nlmResults.filter(r => (r.notebooks || []).length > 0);
+    const countEl = document.getElementById('nlmAccountCount');
+    if (countEl) countEl.textContent = String(nlmResults.length);
+    const statusEl = document.getElementById('nlmAccountStatus');
+    if (statusEl) statusEl.textContent = liveNlm.length
+      ? `${liveNlm.length} of ${nlmResults.length} authenticated`
+      : 'need sign-in';
+
+    const nlmGrid = document.getElementById('nlmProfiles');
+    if (nlmResults.length === 0) {
+      nlmGrid.innerHTML = '<div class="card"><div class="card-header"><span class="card-title">NotebookLM</span></div><div class="empty-state" style="padding:12px"><div class="empty-state-title">No profiles found</div></div></div>';
+    } else {
+      nlmResults.forEach((r) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const bodyId = 'nlm-' + String(r.name).replace(/[^A-Za-z0-9_-]/g, '_');
+        const renews = r.persistent ? ' · sign-in-once profile' : '';
+        card.innerHTML = `<div class="card-header"><span class="card-title">NotebookLM — ${escapeHtml(r.name)}${renews}</span></div><div id="${bodyId}"><div class="skeleton" style="height:80px"></div></div>`;
+        nlmGrid.appendChild(card);
+        if (r.error || (r.notebooks || []).length === 0) {
+          document.getElementById(bodyId).innerHTML = `<div class="empty-state" style="padding:12px"><div class="empty-state-title">No notebooks</div><div class="empty-state-desc" style="font-size:11px">${escapeHtml(r.error || 'profile returned no notebooks')}</div></div>`;
+        } else {
+          renderNotebooks({ notebooks: r.notebooks }, bodyId);
+        }
+      });
+    }
 
     function renderNotebooks(data, containerId) {
       const list = data.notebooks || [];
@@ -132,10 +149,6 @@ async function renderTools() {
         ${list.length > 15 ? `<div style="font-size:10px;color:var(--text-muted);padding:4px 0">+ ${list.length - 15} more</div>` : ''}
         </div>`;
     }
-
-    renderNotebooks(nlm1, 'nlmDefault');
-    renderNotebooks(nlm2, 'nlmLetsget');
-    renderNotebooks(nlm3, 'nlmAccount2');
 
     // Load cron jobs
     const cron = await api.getToolsCron();
@@ -172,9 +185,7 @@ async function renderTools() {
     document.getElementById('serviceStatus').innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--green);font-size:12px">Hermes Agent — ✓ Active</div>
-        <div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--green);font-size:12px">NotebookLM (Urology) — ✓ ${(nlm1.notebooks || []).length} notebooks</div>
-        <div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--green);font-size:12px">NotebookLM (letsgetmoney2009) — ✓ ${(nlm2.notebooks || []).length} notebooks</div>
-        <div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--green);font-size:12px">NotebookLM (account2) — ✓ ${(nlm3.notebooks || []).length} notebooks</div>
+        ${nlmResults.map(r => `<div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid ${(r.notebooks || []).length ? 'var(--green)' : 'var(--yellow)'};font-size:12px">NotebookLM (${escapeHtml(r.name)}) — ${(r.notebooks || []).length ? '✓ ' + r.notebooks.length + ' notebooks' : '! needs sign-in'}</div>`).join('')}
         <div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--green);font-size:12px">Composio (Firecrawl) — ✓ Active</div>
         <div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--green);font-size:12px">Composio (Gmail) — ✓ 3 accounts</div>
         <div style="padding:6px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--yellow);font-size:12px">Composio (X/Twitter) — ! Credits needed</div>

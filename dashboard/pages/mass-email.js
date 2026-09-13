@@ -146,25 +146,32 @@ function setMassEmailTab(key) {
   renderMassEmailFrame();
 }
 
-// ── Chief Meetings inline render (self-contained compact table) ──
+// ── Chief Meetings inline render (canonical API — no hardcoded schedule) ──
+// Same source as the standalone Chief Meetings page: GET /api/chief-meetings
+// (unified.chief_meetings + unified.chief_meeting_attendees).
+let chiefHubState = { meetings: [], attendees: [], loaded: false };
+
+async function loadChiefHubData(force) {
+  if (chiefHubState.loaded && !force) return chiefHubState;
+  const data = await api.getChiefMeetings();
+  if (!data || data.error) throw new Error((data && data.error) || 'chief meetings unavailable');
+  chiefHubState = { meetings: data.meetings || [], attendees: data.attendees || [], loaded: true };
+  return chiefHubState;
+}
+
 async function renderChiefMeetingsInline(container) {
+  try {
+    await loadChiefHubData(true);
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-title">Could not load chief meetings</div><div class="empty-state-desc">${escapeHtml(String(err.message || err))}</div></div>`;
+    return;
+  }
   container.innerHTML = buildChiefMeetingsInline();
 }
 
 function buildChiefMeetingsInline() {
-  const CHIEF_DATA = [
-    ["2026-09-04", "Kick Off", "Penthouse", "12:00 PM", "1:00 PM"],
-    ["2026-10-16", "", "Penthouse", "12:00 PM", "1:00 PM"],
-    ["2026-12-04", "", "Penthouse", "12:00 PM", "1:00 PM"],
-    ["2027-01-14", "", "Penthouse", "12:00 PM", "1:00 PM"],
-    ["2027-02-26", "", "Penthouse", "12:00 PM", "1:00 PM"],
-    ["2027-04-09", "", "Penthouse", "12:00 PM", "1:00 PM"],
-    ["2027-06-04", "", "Penthouse", "12:00 PM", "1:00 PM"],
-  ];
-  const CHIEF_ATTENDEES = [
-    "Dr. Schoenberg", "Dr. Sankin", "Dr. Small",
-    "John Hill (Chief)", "John Hordines (Chief)", "So Yeon (Jen) Pak (Chief)",
-  ];
+  const CHIEF_DATA = chiefHubState.meetings.map(m => [m.date, m.label, m.location, m.start_time, m.end_time]);
+  const CHIEF_ATTENDEES = chiefHubState.attendees.map(a => a.display || a.name);
   let rows = CHIEF_DATA.map((row, i) => {
     const [date, label, loc, st, et] = row;
     const dt = new Date(date + 'T12:00:00');
@@ -208,10 +215,8 @@ async function renderConferenceEmailInline(container) {
 
 // ── Chief Meetings outlook opener ──
 function openChiefOutlookHub(date) {
-  const CHIEF_ATTENDEES_EMAILS = [
-    "asankin@montefiore.org", "alesmall@montefiore.org", "mschoenb@montefiore.org",
-    "johill@montefiore.org", "johordines@montefiore.org", "sopak@montefiore.org",
-  ];
+  const CHIEF_ATTENDEES_EMAILS = (chiefHubState.attendees || []).map(a => a.email);
+  const hubMeeting = (chiefHubState.meetings || []).find(m => m.date === date) || {};
   const dt = new Date(date + 'T12:00:00');
   const formatted = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -219,16 +224,11 @@ function openChiefOutlookHub(date) {
   const body = window.buildRsvpBody({
     header: 'Montefiore Urology — Chief Residents\' Meeting',
     date: formatted,
-    time: '12:00 PM - 1:00 PM (Eastern)',
-    location: 'Penthouse — Montefiore Medical Center',
+    time: `${hubMeeting.start_time || '12:00 PM'} - ${hubMeeting.end_time || '1:00 PM'} (Eastern)`,
+    location: `${hubMeeting.location || 'Penthouse'} — Montefiore Medical Center`,
     extra: [
       '<strong>Attendees</strong>',
-      'Dr. Mark Schoenberg',
-      'Dr. Alex Sankin',
-      'Dr. Alex Small',
-      'Dr. John Hill (Chief)',
-      'Dr. John Hordines (Chief)',
-      'Dr. So Yeon (Jen) Pak (Chief)',
+      ...(chiefHubState.attendees || []).map(a => a.display || a.name),
       '',
       'Please Accept or Decline to confirm your attendance.',
     ],
@@ -239,7 +239,7 @@ function openChiefOutlookHub(date) {
     body,
     to: CHIEF_ATTENDEES_EMAILS.join(';'),
     startdt: `${date}T12:00:00`, enddt: `${date}T13:00:00`,
-    location: 'Penthouse', bodyType: 'HTML',
+    location: hubMeeting.location || 'Penthouse', bodyType: 'HTML',
   });
 }
 

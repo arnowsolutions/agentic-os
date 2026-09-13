@@ -16,7 +16,9 @@ var WORKSPACE_SUITE_TABS = [
   { key: 'files',   label: 'Files',       module: 'file-browser.js',  fn: 'renderFileBrowser' },
   { key: 'scripts', label: 'Scripts',     module: 'script-runner.js', fn: 'renderScriptRunner' },
   { key: 'coder',   label: 'VS Coder',    module: 'vs-coder.js',      fn: 'renderVsCoder' },
-  { key: 'apps',    label: 'Apps Script', module: 'google-studio.js', fn: 'renderGoogleStudio' },
+  // 'apps' (Google Studio / Apps Script) removed 2026-09-13: its module needs
+  // ~/.gemini credentials, which are not mounted into the AOS container, so the
+  // tab could never work here. Restore the entry together with the module.
 ];
 
 function workspaceSuiteActiveTab() {
@@ -40,7 +42,13 @@ async function workspaceSuiteSetTab(key) {
 /** Load the tab's source module once; a loaded module keeps its function. */
 async function ensureSuiteModule(moduleFile, fnName) {
   if (typeof window[fnName] === 'function') return;
-  await loadScript('/dashboard/pages/' + moduleFile + '?v=' + Date.now());
+  try {
+    await loadScript('/dashboard/pages/' + moduleFile + '?v=' + Date.now());
+  } catch (e) {
+    // A missing module must not blank the whole suite — the caller renders the
+    // message; a hard throw used to take the tab (and the page) down with it.
+    throw new Error('Module ' + moduleFile + ' is not available in this environment');
+  }
 }
 
 async function renderWorkspaceSuite() {

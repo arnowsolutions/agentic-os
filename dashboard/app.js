@@ -64,6 +64,11 @@ const LEGACY_REDIRECTS = {
   'script-runner':          'workspace-suite?tab=scripts',
   'vs-coder':               'workspace-suite?tab=coder',
   'google-studio':          'workspace-suite?tab=apps',
+  // Removed 2026-09-13: module files no longer exist in this container's mounts
+  // (Google Studio is already folded into Workspace; Session Replay needs
+  // ~/.local/share/opencode, which is not mounted here). Redirects keep stale
+  // bookmarks from erroring.
+  'session-replay':         'today',
   // 2026-09 SSOT stage 3 — overview collapse (Today + Health Suite)
   'unified-dashboard':      'today?tab=overview',
   'manager':                'today?tab=manager',
