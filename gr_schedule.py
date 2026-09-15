@@ -30,6 +30,9 @@ except Exception:  # pragma: no cover
     _HAS_PSYCOPG2 = False
 
 _Hosts = ("172.16.3.1", "127.0.0.1")   # docker bridge gateway first, then localhost
+# NOTE: container-localhost 5432 has no listener; only the docker bridge gateway
+# (172.16.3.1) answers. Keep the gateway FIRST so the 2x3s connect_timeout on the
+# dead fallbacks is never paid (cron jobs inherit a short effective window).
 
 _last_error: str | None = None
 
