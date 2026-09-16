@@ -22,13 +22,119 @@ async function renderDashboard() {
       </div>
     </div>
     <div id="lpServices"><div class="skeleton" style="height:120px"></div></div>
+    <div id="lpTasks" class="lp-due"><div class="skeleton" style="height:90px"></div></div>
     <div id="lpStrip" class="lp-strip"><span class="lp-pill lp-pill-quiet">Loading agents &amp; cron…</span></div>
     <div id="lpActions"></div>
   `;
   lpLoadServices(0);
+  lpLoadTasks();
   lpLoadStrip();
   lpRenderQuickActions();
   lpScheduleRefresh();
+}
+
+/* ── Due summary (compact). Full list lives on the Task List page. ────
+   Shows counts + the most urgent open items only: the dashboard is for
+   "what needs me now", not for reading 28 rows.
+   ──────────────────────────────────────────────────────────────────── */
+
+function lpDueInfo(t) {
+  if (!t.due_date) return { text: '', cls: 'none', days: null };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(t.due_date + 'T00:00:00');
+  const days = Math.round((d - today) / 86400000);
+  const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (days < 0)  return { text: `${Math.abs(days)}d late`, cls: 'overdue', days };
+  if (days === 0) return { text: 'today', cls: 'today', days };
+  if (days === 1) return { text: 'tomorrow', cls: 'soon', days };
+  if (days <= 7) return { text: `${days}d`, cls: 'soon', days };
+  return { text: label, cls: 'future', days };
+}
+
+const lpDaysUntil = t => {
+  if (!t.due_date) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(t.due_date + 'T00:00:00');
+  if (isNaN(d)) return null;
+  return Math.round((d - today) / 86400000);
+};
+
+async function lpLoadTasks() {
+  const host = document.getElementById('lpTasks');
+  if (!host) return;
+  const { data, error } = await api.fetchSafe('/api/brain/tasks-data', {}, 20000);
+  if (!document.getElementById('lpTasks')) return;   // navigated away
+  if (error || !data) {
+    host.innerHTML = `<div class="card"><div class="empty-state">` +
+      `<div class="empty-state-title">Task list unavailable</div>` +
+      `<div class="empty-state-desc">${escapeHtml(error || 'No data returned')}</div>` +
+      `<button class="btn mt-3" onclick="lpLoadTasks()">Retry</button></div></div>`;
+    return;
+  }
+  const all = data.tasks || [];
+  const open = all.filter(t => t.status !== 'completed');
+  const overdue = open.filter(t => { const n = lpDaysUntil(t); return n !== null && n < 0; });
+  const today = open.filter(t => lpDaysUntil(t) === 0);
+  const week = open.filter(t => { const n = lpDaysUntil(t); return n !== null && n > 0 && n <= 7; });
+  const undated = open.filter(t => !t.due_date);
+
+  // Most urgent first: overdue (oldest first), then today, then this week.
+  const urgent = overdue.slice().sort((a, b) => a.due_date.localeCompare(b.due_date))
+    .concat(today, week.slice().sort((a, b) => a.due_date.localeCompare(b.due_date)));
+
+  let html = `<div class="card lp-due-card"><div class="lp-due-head">` +
+      `<div><span class="lp-due-title">Tasks due</span>` +
+      `<span class="lp-due-sub">${open.length} open` +
+      (overdue.length ? ` · <span class="lp-due-bad">${overdue.length} overdue</span>` : '') +
+      `</span></div>` +
+      `<button class="btn btn-sm" onclick="navigate('tasks')">Open Task List</button>` +
+    `</div>`;
+
+  if (!open.length) {
+    html += `<div class="empty-state"><div class="empty-state-title">All caught up</div>` +
+            `<div class="empty-state-desc">Nothing open right now.</div></div>`;
+  } else {
+    html += `<div class="lp-due-grid">` +
+      `<button class="lp-due-cell ${overdue.length ? 'hot' : 'calm'}" onclick="navigate('tasks')">` +
+        `<span class="lp-due-v">${overdue.length}</span><span class="lp-due-l">Overdue</span></button>` +
+      `<button class="lp-due-cell ${today.length ? 'warm' : 'calm'}" onclick="navigate('tasks')">` +
+        `<span class="lp-due-v">${today.length}</span><span class="lp-due-l">Due today</span></button>` +
+      `<button class="lp-due-cell calm" onclick="navigate('tasks')">` +
+        `<span class="lp-due-v">${week.length}</span><span class="lp-due-l">This week</span></button>` +
+      `<button class="lp-due-cell calm" onclick="navigate('tasks')">` +
+        `<span class="lp-due-v">${undated.length}</span><span class="lp-due-l">No date</span></button>` +
+    `</div>`;
+
+    const top = urgent.slice(0, 4);
+    if (top.length) {
+      html += `<ul class="lp-due-list">` + top.map(t => {
+        const info = lpDueInfo(t);
+        return `<li class="lp-due-row">` +
+          `<input type="checkbox" onchange="lpToggleTask('${escapeHtml(String(t.id))}', this.checked)" title="Mark complete">` +
+          `<span class="lp-due-text">${escapeHtml(t.content)}</span>` +
+          `<span class="lp-due-when">${escapeHtml(info.text)}</span>` +
+        `</li>`;
+      }).join('') + `</ul>`;
+    }
+  }
+  html += `</div>`;
+  host.innerHTML = html;
+}
+
+async function lpToggleTask(taskId, checked) {
+  try {
+    const r = await fetch('/api/brain/tasks-data/' + encodeURIComponent(taskId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: checked ? 'completed' : 'pending' }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (typeof showToast === 'function') showToast(checked ? 'Marked complete' : 'Reopened', 'success');
+    await lpLoadTasks();
+  } catch (err) {
+    if (typeof showToast === 'function') showToast('Could not update task', 'error');
+    await lpLoadTasks();
+  }
 }
 
 /* ── Tier 1: service tiles ─────────────────────────────────────────── */

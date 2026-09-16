@@ -49,9 +49,13 @@
       </div>
       <div class="topbar-right">
         <div id="healthWidget" class="health-widget" style="display:flex;align-items:center;gap:10px;margin-right:12px;font-size:12px"></div>
-        <div class="topbar-search">
-          <span>⌕</span>
-          <input type="text" placeholder="Search pages… (Ctrl+K)" id="globalSearch" oninput="handleGlobalSearch(this.value)" onkeydown="handleGlobalSearchKeydown(event)" autocomplete="off">
+        <div class="topbar-search" onclick="document.getElementById('globalSearch').focus()">
+          <svg class="topbar-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/>
+          </svg>
+          <input type="text" placeholder="Search pages…" id="globalSearch" oninput="handleGlobalSearch(this.value)" onkeydown="handleGlobalSearchKeydown(event)" autocomplete="off">
+          <span class="topbar-search-kbd">Ctrl K</span>
           <div id="searchResults" class="search-results"></div>
         </div>
       </div>

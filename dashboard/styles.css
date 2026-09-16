@@ -335,20 +335,55 @@ body {
   display: flex; align-items: center; gap: 4px;
 }
 .topbar-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 0 12px;
+  height: 32px;
+  width: 210px;
   color: var(--text-primary);
-  font-size: 12px;
-  width: 200px;
-  transition: var(--transition);
+  transition: border-color 150ms ease, width 150ms ease, box-shadow 150ms ease;
+  cursor: text;
 }
-.topbar-search:focus {
-  outline: none;
+.topbar-search:hover { border-color: var(--border-hover); }
+.topbar-search:focus-within {
   border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-dim);
   width: 260px;
 }
+/* The input rides inside the wrapper — no border/padding of its own, or the
+   two skins fight and the field looks clipped. */
+.topbar-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: var(--font);
+  letter-spacing: var(--body-tracking);
+}
+.topbar-search input::placeholder { color: var(--text-muted); }
+.topbar-search-icon { flex: 0 0 auto; color: var(--text-muted); display: block; }
+.topbar-search:focus-within .topbar-search-icon { color: var(--accent-light); }
+.topbar-search-kbd {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  font-weight: 550;
+  color: var(--text-muted);
+  background: var(--fill-muted);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.topbar-search:focus-within .topbar-search-kbd { display: none; }
 
 /* ═══════════════════════════════════════════════════════════════════
    MAIN CONTENT
@@ -1525,10 +1560,18 @@ tr:hover td { background: var(--bg-card-hover); }
 }
 
 .search-results {
-  margin-top: 8px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .search-result {
@@ -2254,3 +2297,195 @@ tr:hover td { background: var(--bg-card-hover); }
            padding: 1px 8px; cursor: pointer; }
 .ds-sync:hover { border-color: var(--accent); }
 .ds-sync:disabled { opacity: .6; cursor: default; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TASK LIST + dashboard due summary
+   Built on the platform primitives — uses .card / .btn / .badge / .stat-card
+   and the same rem scale, radii (--radius-sm/--radius/--radius-lg) and
+   tokens as every other page. Only task-specific layout lives here.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Dashboard: compact due summary ──────────────────────────────── */
+.lp-due { margin-bottom: 16px; }
+.lp-due .card { padding: 0; }
+.lp-due-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.lp-due-title { font-size: 0.9rem; font-weight: 600; letter-spacing: var(--heading-tracking); }
+.lp-due-sub { margin-left: 10px; font-size: 0.78rem; color: var(--text-secondary); }
+.lp-due-bad { color: var(--red); font-weight: 600; }
+.lp-due-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 1px; background: var(--border);
+}
+.lp-due-cell {
+  background: var(--bg-card); border: 0; cursor: pointer; text-align: left;
+  padding: 14px 20px; display: flex; flex-direction: column; gap: 2px;
+  font-family: var(--font); transition: background 120ms ease;
+}
+.lp-due-cell:hover { background: var(--bg-card-hover); }
+.lp-due-v { font-size: 1.5rem; font-weight: 600; line-height: 1.1; letter-spacing: var(--heading-tracking); color: var(--text-primary); }
+.lp-due-l { font-size: 0.68rem; font-weight: 550; letter-spacing: 0.01em; color: var(--text-muted); }
+.lp-due-cell.hot .lp-due-v { color: var(--red); }
+.lp-due-cell.warm .lp-due-v { color: var(--yellow); }
+.lp-due-list { list-style: none; margin: 0; padding: 0; }
+.lp-due-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 20px; border-top: 1px solid var(--border-soft);
+}
+.lp-due-row:first-child { border-top: 0; }
+.lp-due-row input[type="checkbox"] { width: 15px; height: 15px; flex: 0 0 auto; cursor: pointer; accent-color: var(--accent); }
+.lp-due-text { flex: 1 1 auto; min-width: 0; font-size: 0.8rem; line-height: 1.45; }
+.lp-due-when { flex: 0 0 auto; font-size: 0.72rem; font-weight: 600; color: var(--red); }
+
+/* ── Task page: summary band (reuses the stat-card look) ─────────── */
+.tl-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px; }
+.tl-stat {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 1px; font-family: var(--font);
+  transition: border-color 120ms ease;
+}
+.tl-stat:hover { border-color: var(--border-hover); }
+.tl-stat.on { border-color: var(--accent); background: var(--accent-dim); }
+.tl-stat.danger .tl-stat-v { color: var(--red); }
+.tl-stat-v { font-size: 1.45rem; font-weight: 600; line-height: 1.1; letter-spacing: var(--heading-tracking); }
+.tl-stat-l { font-size: 0.68rem; font-weight: 550; color: var(--text-muted); letter-spacing: 0.01em; }
+
+/* ── Task page: toolbar ──────────────────────────────────────────── */
+.tl-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.tl-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.tl-chip {
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
+  border-radius: var(--radius-sm); padding: 5px 11px; font-size: 0.75rem; font-weight: 500;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font); letter-spacing: var(--body-tracking);
+  transition: all 120ms ease;
+}
+.tl-chip:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.tl-chip.on { border-color: var(--accent); color: var(--accent-light); background: var(--accent-dim); }
+.tl-chip-n { font-size: 0.68rem; opacity: 0.6; }
+.tl-tools { display: flex; gap: 8px; align-items: center; }
+/* Controls ride on the platform .form-input / .form-select — only sizing here.
+   Do NOT re-declare background/border/radius/padding: that is what made the
+   field look foreign next to .form-input fields elsewhere. */
+.tl-search { width: 200px; flex: 0 0 auto; }
+.tl-select { flex: 0 0 auto; }
+/* .form-select is used across the app but has no rule of its own in this sheet,
+   so selects fall back to native chrome and clash with .form-input. Give it the
+   same skin as .form-input. */
+.form-select {
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font);
+  letter-spacing: var(--body-tracking);
+  transition: border-color 150ms ease;
+  cursor: pointer;
+}
+.form-select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+/* native date pickers/selects in dark theme */
+.tl-select option { background: var(--bg-card); color: var(--text-primary); }
+.tl-scope {
+  font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.tl-scope-x {
+  background: none; border: 0; color: var(--accent-light); font-size: 0.75rem;
+  font-weight: 500; cursor: pointer; text-decoration: underline; padding: 0; font-family: var(--font);
+}
+
+/* ── Task page: group headers ────────────────────────────────────── */
+.tl-group { margin-bottom: 16px; }
+.tl-group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; padding-left: 2px; }
+.tl-group-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: var(--text-muted); }
+.tl-group-dot.overdue { background: var(--red); }
+.tl-group-dot.today   { background: var(--yellow); }
+.tl-group-dot.soon    { background: var(--accent-light); }
+.tl-group-dot.done    { background: var(--green); }
+.tl-group-label { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); letter-spacing: var(--body-tracking); }
+.tl-group-count { font-size: 0.68rem; font-weight: 550; color: var(--text-muted); }
+
+/* ── Task page: rows ─────────────────────────────────────────────── */
+.tl-rows {
+  list-style: none; margin: 0; padding: 0;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.tl-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 16px; border-top: 1px solid var(--border-soft);
+  transition: background 120ms ease;
+}
+.tl-rows .tl-row:first-child { border-top: 0; }
+.tl-row:hover { background: var(--bg-card-hover); }
+.tl-row.is-late { box-shadow: inset 2px 0 0 var(--red); }
+.tl-check { flex: 0 0 auto; position: relative; display: flex; cursor: pointer; padding-top: 2px; }
+.tl-check input {
+  appearance: none; -webkit-appearance: none; width: 16px; height: 16px; margin: 0;
+  border: 1px solid var(--border-hover); border-radius: 4px;
+  background: transparent; cursor: pointer; transition: all 120ms ease;
+}
+.tl-check input:hover { border-color: var(--accent); }
+.tl-check input:checked { background: var(--accent); border-color: var(--accent); }
+.tl-check input:checked::after {
+  content: ''; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.tl-check input:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.tl-main { flex: 1 1 auto; min-width: 0; }
+.tl-text { font-size: 0.8rem; line-height: 1.5; color: var(--text-primary); letter-spacing: var(--body-tracking); }
+.tl-row.is-done .tl-text { color: var(--text-muted); text-decoration: line-through; }
+.tl-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 5px; font-size: 0.68rem;
+}
+.tl-sep { color: var(--text-muted); opacity: 0.45; }
+.tl-cat { color: var(--text-muted); }
+.tl-none { color: var(--text-muted); }
+.tl-pri { color: var(--text-muted); font-weight: 550; }
+.tl-pri-high   { color: var(--red); }
+.tl-pri-medium { color: var(--yellow); }
+.tl-row-actions { flex: 0 0 auto; display: flex; gap: 2px; opacity: 0; transition: opacity 120ms ease; }
+.tl-row:hover .tl-row-actions, .tl-row:focus-within .tl-row-actions { opacity: 1; }
+.tl-icon-btn {
+  background: none; border: 0; color: var(--text-muted); cursor: pointer;
+  padding: 5px; border-radius: 5px; display: flex; transition: all 120ms ease;
+}
+.tl-icon-btn:hover { color: var(--text-primary); background: var(--hover-bg-strong); }
+.tl-icon-btn.danger:hover { color: var(--red); background: var(--red-dim); }
+
+/* ── Task page: modal form ───────────────────────────────────────── */
+.tl-fl {
+  display: block; font-size: 0.72rem; font-weight: 550;
+  color: var(--text-secondary); margin: 14px 0 5px;
+}
+.tl-fl:first-child { margin-top: 0; }
+.tl-ta { width: 100%; min-height: 84px; resize: vertical; padding: 10px 12px; font-family: var(--font); }
+.tl-fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .tl-summary { grid-template-columns: repeat(3, 1fr); }
+  .lp-due-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .tl-summary { grid-template-columns: repeat(2, 1fr); }
+  .tl-toolbar { flex-direction: column; align-items: stretch; }
+  .tl-tools { flex-direction: column; align-items: stretch; }
+  .tl-search { width: 100%; }
+  .tl-fgrid { grid-template-columns: 1fr; }
+  .tl-row-actions { opacity: 1; }
+}

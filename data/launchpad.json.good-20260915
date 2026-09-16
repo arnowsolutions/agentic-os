@@ -1,0 +1,448 @@
+{
+ "$comment": "Agentic OS Launchpad service registry. Consumed by GET /api/crm/launchpad (modules/crm.py) and rendered on #dashboard. probe.type: tcp (host:port reachable) or https (any HTTP <500 response = up). Verified 2026-09-12.",
+ "version": 1,
+ "groups": [
+  {
+   "id": "hosting",
+   "label": "Hosting"
+  },
+  {
+   "id": "tooling",
+   "label": "Tooling & Guardrails"
+  },
+  {
+   "id": "ai",
+   "label": "AI"
+  },
+  {
+   "id": "data",
+   "label": "Data"
+  },
+  {
+   "id": "comms",
+   "label": "Comms"
+  },
+  {
+   "id": "media",
+   "label": "Media"
+  }
+ ],
+ "services": [
+  {
+   "id": "unified",
+   "label": "Unified Platform",
+   "desc": "Urology operations \u2014 schedules, Qgenda, coverage, SCL",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8098",
+   "url": "https://unified.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.2",
+    "port": 8097
+   }
+  },
+  {
+   "id": "reimbursement",
+   "label": "Reimbursement Portal",
+   "desc": "GME fund submissions & approvals",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8000",
+   "url": "https://reimbursement.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://reimbursement.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "interview",
+   "label": "Interview Portal",
+   "desc": "Residency interview season \u2014 candidates & invites",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8106",
+   "url": "https://interview.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8106
+   }
+  },
+  {
+   "id": "consultant",
+   "label": "Arnow Solutions",
+   "desc": "The Consultant \u2014 client site",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8093",
+   "url": "https://consultant.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8093
+   }
+  },
+  {
+   "id": "jeopardy",
+   "label": "Jeopardy",
+   "desc": "Resident quiz game",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8102",
+   "url": "https://jeopardy.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8102
+   }
+  },
+  {
+   "id": "omniroute",
+   "label": "OmniRoute Gateway",
+   "desc": "Free-model LLM gateway \u2014 200+ providers",
+   "kind": "web",
+   "group": "ai",
+   "host": "127.0.0.1:8005",
+   "url": "https://omniroute.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8005
+   }
+  },
+  {
+   "id": "notebook",
+   "label": "NotebookLM",
+   "desc": "Research notebooks & sources",
+   "kind": "web",
+   "group": "ai",
+   "host": "127.0.0.1:8502",
+   "url": "https://notebook.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://notebook.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "claude-code",
+   "label": "Claude Code Terminal",
+   "desc": "Free LLM coding terminal (OmniRoute-backed)",
+   "kind": "web",
+   "group": "ai",
+   "host": "127.0.0.1:7681",
+   "url": "https://claude.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://claude.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "code-server",
+   "label": "Code Server",
+   "desc": "VS Code in the browser \u2014 workspace editor",
+   "kind": "web",
+   "group": "ai",
+   "host": "127.0.0.1:8081",
+   "url": "https://code.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8081
+   }
+  },
+  {
+   "id": "workflow",
+   "label": "Workflow Field Manual",
+   "desc": "Skill & workflow reference \u2014 how every pipeline runs",
+   "kind": "web",
+   "group": "tooling",
+   "host": "127.0.0.1:8139",
+   "url": "https://workflow.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://workflow.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "status",
+   "label": "System Status",
+   "desc": "Guardrails, services, cron health \u2014 both environments",
+   "kind": "web",
+   "group": "tooling",
+   "host": "127.0.0.1:8795",
+   "url": "https://status.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://status.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "toolchain",
+   "label": "Toolchain Report",
+   "desc": "Vendored skills, Reckoner, Context Mode \u2014 deploy report",
+   "kind": "web",
+   "group": "tooling",
+   "host": "127.0.0.1:8795",
+   "url": "https://toolchain.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://toolchain.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "reckoner",
+   "label": "Reckoner",
+   "desc": "AI credit balances across providers",
+   "kind": "web",
+   "group": "tooling",
+   "host": "127.0.0.1:8792",
+   "url": "https://reckoner.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.4",
+    "port": 8791
+   }
+  },
+  {
+   "id": "supabase-studio",
+   "label": "Supabase Studio",
+   "desc": "Postgres admin & table browser",
+   "kind": "web",
+   "group": "data",
+   "host": "127.0.0.1:8002",
+   "url": "https://supabase-studio.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8002
+   }
+  },
+  {
+   "id": "supabase-api",
+   "label": "Supabase API",
+   "desc": "Project REST/Auth endpoint (kong)",
+   "kind": "api",
+   "group": "data",
+   "host": "127.0.0.1:8001",
+   "url": "https://supabase.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8001
+   }
+  },
+  {
+   "id": "vault",
+   "label": "Vault",
+   "desc": "Credentials & secrets vault",
+   "kind": "web",
+   "group": "data",
+   "host": "127.0.0.1:8103",
+   "url": "https://vault.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://vault.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "hermes-webui",
+   "label": "Hermes WebUI",
+   "desc": "Hermes agent \u2014 chats, cron, channels",
+   "kind": "web",
+   "group": "comms",
+   "host": "127.0.0.1:8787",
+   "url": "https://hermes-webui-gsga.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.4",
+    "port": 8787
+   }
+  },
+  {
+   "id": "vapi",
+   "label": "Vapi Voice",
+   "desc": "Phone assistant \u2014 call routing & data sync",
+   "kind": "web",
+   "group": "comms",
+   "host": "127.0.0.1:8090",
+   "url": "https://vapi.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8090
+   }
+  },
+  {
+   "id": "immich",
+   "label": "Immich Photos",
+   "desc": "Photo & video library",
+   "kind": "web",
+   "group": "media",
+   "host": "127.0.0.1:8003",
+   "url": "https://photos.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8003
+   }
+  },
+  {
+   "id": "listening-room",
+   "label": "Listening Room",
+   "desc": "Spoiler-safe audiobook player",
+   "kind": "web",
+   "group": "media",
+   "host": "127.0.0.1:8096",
+   "url": "https://listening-room.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "tcp",
+    "host": "172.16.3.1",
+    "port": 8095
+   }
+  },
+  {
+   "id": "audiobook",
+   "label": "Audiobook Player",
+   "desc": "Big Reef chapter player (M4B)",
+   "kind": "web",
+   "group": "media",
+   "host": "172.16.3.5:8137",
+   "url": "https://audiobook.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://audiobook.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "masterb",
+   "label": "Master B",
+   "desc": "Futures trading course (VPS build)",
+   "kind": "web",
+   "group": "media",
+   "host": "127.0.0.1:8104",
+   "url": "https://masterb.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://masterb.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "therec",
+   "label": "The Rec",
+   "desc": "R.E.C. Center \u2014 youth wellness nonprofit site",
+   "kind": "web",
+   "group": "media",
+   "host": "127.0.0.1:8145",
+   "url": "https://therec.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://therec.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "ink-and-ember",
+   "label": "Ink & Ember",
+   "desc": "Arnow writing academy (app + accounts API)",
+   "kind": "web",
+   "group": "media",
+   "host": "127.0.0.1:8108",
+   "url": "https://ink-and-ember.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://ink-and-ember.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "animation-studio",
+   "label": "Animation Studio",
+   "desc": "Lesson Animation Studio \u2014 project brief",
+   "kind": "web",
+   "group": "media",
+   "host": "127.0.0.1:8143",
+   "url": "https://animation-studio.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://animation-studio.srv1738752.hstgr.cloud"
+   }
+  },
+  {
+   "id": "call-schedule",
+   "label": "Call Schedule",
+   "desc": "Attending call schedule \u2014 standalone view (also in Unified)",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8098",
+   "url": "https://unified.srv1738752.hstgr.cloud/call-schedule",
+   "probe": {
+    "type": "https",
+    "url": "https://unified.srv1738752.hstgr.cloud/call-schedule"
+   }
+  },
+  {
+   "id": "call-editor",
+   "label": "Call Editor",
+   "desc": "Edit the attending call schedule",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8098",
+   "url": "https://unified.srv1738752.hstgr.cloud/call-editor",
+   "probe": {
+    "type": "https",
+    "url": "https://unified.srv1738752.hstgr.cloud/call-editor"
+   }
+  },
+  {
+   "id": "attending-swap",
+   "label": "Attending Swap",
+   "desc": "Call-day swap requests & approvals",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8098",
+   "url": "https://unified.srv1738752.hstgr.cloud/attending-swap",
+   "probe": {
+    "type": "https",
+    "url": "https://unified.srv1738752.hstgr.cloud/attending-swap"
+   }
+  },
+  {
+   "id": "schedule-management",
+   "label": "Schedule Management",
+   "desc": "Editor, coverage pool, OR, clinic, bulk import & export",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8098",
+   "url": "https://unified.srv1738752.hstgr.cloud/schedule-management",
+   "probe": {
+    "type": "https",
+    "url": "https://unified.srv1738752.hstgr.cloud/schedule-management"
+   }
+  },
+  {
+   "id": "redesign-compare",
+   "label": "Redesign Decision Studio",
+   "desc": "Pick the design to ship \u2014 18 surfaces, adopt/keep/blend verdicts",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8098",
+   "url": "https://unified.srv1738752.hstgr.cloud/redesign-compare.html",
+   "probe": {
+    "type": "https",
+    "url": "https://unified.srv1738752.hstgr.cloud/redesign-compare.html"
+   }
+  },
+  {
+   "id": "prompts",
+   "label": "Prompt Library",
+   "desc": "2,176 prompts \u2014 searchable, auto-updating from f/prompts.chat",
+   "kind": "web",
+   "group": "hosting",
+   "host": "127.0.0.1:8150",
+   "url": "https://prompts.srv1738752.hstgr.cloud",
+   "probe": {
+    "type": "https",
+    "url": "https://prompts.srv1738752.hstgr.cloud"
+   }
+  }
+ ]
+}
