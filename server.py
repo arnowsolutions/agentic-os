@@ -48,6 +48,7 @@ from modules import ssot
 from modules import calendar_archive
 from modules import chat_routes
 from modules import generalist_routes
+from modules import birthday as birthday_module
 from modules.agent_executor import _resolve_hermes_bin, _resolve_opencode_bin
 
 setup_logging()
@@ -226,6 +227,7 @@ app.include_router(skills_routes.router)
 app.include_router(scheduler_routes.router)
 app.include_router(chat_routes.router)
 app.include_router(generalist_routes.router)
+app.include_router(birthday_module.router)
 
 app.add_middleware(
     CORSMiddleware,

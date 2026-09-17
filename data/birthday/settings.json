@@ -1,0 +1,40 @@
+{
+  "enabled": true,
+  "test_mode": false,
+  "test_recipient": "sfrasier@montefiore.org",
+  "subject_template": "Happy Birthday, {first_name}!",
+  "signature": "",
+  "footer_note": "",
+  "show_note_in_body": false,
+  "cc_on_test": true,
+  "send_time_note": "Sent automatically at 9:00 AM ET",
+  "image_provider": "fal",
+  "image_model": "fal-ai/fast-sdxl",
+  "image_size": "landscape_16_9",
+  "negative_prompt": "text, words, letters, numbers, typography, writing, calligraphy, watermark, logo, signature, caption, title, greeting card text, font, people, faces, hands, animals",
+  "image_prompt": "Elegant abstract background for a premium birthday greeting card. Deep midnight navy backdrop, soft cinematic golden bokeh lights, delicate champagne-gold confetti drifting, subtle light rays, luxurious minimal editorial style, empty negative space in the center, photographic bokeh, high-end corporate aesthetic.",
+  "overlay_kicker": "HAPPY BIRTHDAY",
+  "design": "auto",
+  "design_exclude": [],
+  "card_dept": "Montefiore Urology",
+  "note_source": "template",
+  "llm_model": "deepseek/deepseek-chat",
+  "notes": [
+    "Wishing you a wonderful year ahead \u2014 from all of us in Urology.",
+    "Hope today brings you good food, good company, and a quiet pager.",
+    "Happy birthday! Thank you for everything you bring to the team.",
+    "Wishing you a fantastic year. Enjoy your day \u2014 you've earned it.",
+    "From everyone in the department: happiest of birthdays to you."
+  ],
+  "cc": [
+    "sfrasier@montefiore.org",
+    "asankin@montefiore.org",
+    "alesmall@montefiore.org"
+  ],
+  "last_run": "2026-09-16T18:36:38+00:00",
+  "handoff_enabled": true,
+  "public_base_url": "https://os.srv1738752.hstgr.cloud",
+  "notify_recipient": "sfrasier@montefiore.org",
+  "notify_mirror": "letsgetmoney2009@gmail.com",
+  "keep_published_cards": 60
+}

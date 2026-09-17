@@ -9,6 +9,7 @@ async function renderEvalDashboard(target) {
       </div>
       <div class="btn-group">
         <button class="btn btn-ghost" onclick="renderEvalDashboard()">↻ Refresh</button>
+        <a class="btn btn-primary" href="https://script.google.com/macros/s/AKfycbwbGxvxKkUgkl8EKpCxg6F3yjGbcXPWVZj-dzLMGLbvMavP1gGt3flm3Q_FDuvXD6S-_w/exec?dashboard=1" target="_blank" rel="noopener">Open PD Dashboard ↗</a>
       </div>
     </div>
     <div id="edContent"><div class="loading"><div class="loading-spinner"></div><span>Loading eval data...</span></div></div>
@@ -106,6 +107,7 @@ function renderEvalContent(data) {
       <h3>ℹ About This Dashboard</h3>
       <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
         <p style="margin:0 0 4px 0">Data sourced from the <strong>eval spreadsheet</strong> (all 20 FAC/RES sheets) and the <strong>eval_tracking</strong> PostgreSQL table.</p>
+        <p style="margin:0 0 4px 0">Full review of submitted results — per-resident reports, side-by-side, PGY comparison — lives in the Google <a href="https://script.google.com/macros/s/AKfycbwbGxvxKkUgkl8EKpCxg6F3yjGbcXPWVZj-dzLMGLbvMavP1gGt3flm3Q_FDuvXD6S-_w/exec?dashboard=1" target="_blank" rel="noopener">PD Dashboard ↗</a>.</p>
         <p style="margin:0;font-size:11px">Auto-triggered evals from the OR schedule write identity rows to the spreadsheet — the same as if someone used the eval portal. When a Google Form is submitted, the Apps Script fills in the evaluation data. Dashboard reflects both manual and auto-triggered flows.</p>
       </div>
     </div>
