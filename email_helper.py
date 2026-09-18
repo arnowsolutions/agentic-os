@@ -15,6 +15,27 @@ from modules.google_workspace import GoogleWorkspace
 from modules.smtp_sender import send_email_smart
 
 
+def _copy_cc(to: str):
+    """Copy-Cc rule (house convention, verified 2026-09-18): mail to Shareef must
+    carry a second recipient — the program account — or Montefiore silently drops
+    it. Driven by ~/.hermes/scripts/.smtp.env so every sender shares one knob.
+    Never applies to other recipients (student/faculty mail is never copied)."""
+    try:
+        env = {}
+        for line in open('/home/hermeswebui/.hermes/scripts/.smtp.env'):
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                env[k.strip()] = v.strip()
+        trigger = env.get('SMTP_MIRROR_WHEN_TO', '').strip().lower()
+        copy_to = env.get('SMTP_MIRROR_TO', '').strip()
+        if trigger and copy_to and trigger in (to or '').lower():
+            return [copy_to]
+    except FileNotFoundError:
+        pass
+    return None
+
+
 def _html_wrap(text: str, subject: str) -> str:
     lines = "<br>".join(text.strip().split("\n"))
     return f"""<!DOCTYPE html>
@@ -40,6 +61,7 @@ def main():
             subject=args.subject,
             body=html,
             is_html=True,
+            cc=_copy_cc(args.to),
         )
         if result["successful"]:
             print(f"email sent: {result['data']['id']}")
