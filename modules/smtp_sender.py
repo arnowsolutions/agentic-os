@@ -55,6 +55,41 @@ def _get_smtp_config() -> Dict[str, str]:
     }
 
 
+HOUSE_SMTP_ENV = "/home/hermeswebui/.hermes/scripts/.smtp.env"
+HOUSE_COPY_TO_FALLBACK = "urologyresidencyprogram@gmail.com"
+
+
+def _house_copy_cc(to: str, cc=None, bcc=None):
+    """House copy-Cc rule (verified 2026-09-18): mail to @montefiore.org from the
+    automated Gmail sender is silently quarantined when it carries a single
+    recipient; a second recipient gets it delivered. The copy target is the
+    program account — the personal address must never appear on outbound mail.
+    The knob lives in ~/.hermes/scripts/.smtp.env (SMTP_MIRROR_TO) so every
+    sender shares one setting; falls back to the program account if the file is
+    missing (e.g. on the VPS). Never applies to mail addressed only externally.
+    Idempotent: returns `cc` unchanged when the copy target is already present.
+    """
+    copy_to = ""
+    try:
+        with open(HOUSE_SMTP_ENV) as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    if k.strip() == "SMTP_MIRROR_TO":
+                        copy_to = v.strip()
+    except FileNotFoundError:
+        pass
+    if not copy_to:
+        copy_to = HOUSE_COPY_TO_FALLBACK
+    addrs = [str(a).strip().lower() for a in ([to] + list(cc or []) + list(bcc or [])) if a]
+    if not any("@montefiore.org" in a for a in addrs):
+        return cc
+    if copy_to.lower() in addrs:
+        return cc
+    return list(cc or []) + [copy_to]
+
+
 def is_smtp_configured() -> bool:
     """Check if SMTP credentials are configured."""
     cfg = _get_smtp_config()
@@ -86,6 +121,9 @@ def send_email(
             "error": "SMTP not configured (SMTP_USER / SMTP_APP_PASSWORD missing)",
             "data": None,
         }
+
+    # House copy-Cc rule (verified 2026-09-18) — idempotent; see _house_copy_cc.
+    cc = _house_copy_cc(to, cc, bcc)
 
     # ⛔ NEVER use from_email — always use the authenticated SMTP user
     # Montefiore flagged our account for sending as sfrasier@montefiore.org
@@ -172,6 +210,9 @@ def send_email_smart(
 
     This is the main entry point for all email sending in the Vapi system.
     """
+    # House copy-Cc rule (verified 2026-09-18) — covers the OAuth fallback too.
+    cc = _house_copy_cc(to, cc, bcc)
+
     # Try SMTP first if configured
     if is_smtp_configured():
         result = send_email(

@@ -138,7 +138,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "handoff_enabled": True,
     "public_base_url": "https://os.srv1738752.hstgr.cloud",
     "notify_recipient": "sfrasier@montefiore.org",
-    "notify_mirror": "letsgetmoney2009@gmail.com",
+    # Copy-Cc target is NOT a setting — it comes from ~/.hermes/scripts/.smtp.env
+    # (SMTP_MIRROR_TO, house convention 2026-09-18); the personal address is gone.
     "keep_published_cards": 60,
 }
 
@@ -704,6 +705,34 @@ def _smtp_cfg() -> Dict[str, str]:
     return _get_smtp_config()
 
 
+def _house_copy_cc(to: str, cc=None, bcc=None):
+    """Copy-Cc rule (house convention, verified 2026-09-18) — same knob as the
+    rest of the stack (~/.hermes/scripts/.smtp.env, SMTP_MIRROR_TO), so fixing it
+    in one place covers every sender. Adds the program account as a second
+    recipient on any mail touching @montefiore.org (a single recipient gets
+    silently quarantined by Montefiore's filter); the personal address must
+    never appear on outbound mail. Idempotent."""
+    copy_to = ""
+    try:
+        with open("/home/hermeswebui/.hermes/scripts/.smtp.env") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    if k.strip() == "SMTP_MIRROR_TO":
+                        copy_to = v.strip()
+    except FileNotFoundError:
+        pass
+    if not copy_to:
+        copy_to = "urologyresidencyprogram@gmail.com"
+    addrs = [str(a).strip().lower() for a in ([to] + list(cc or []) + list(bcc or [])) if a]
+    if not any("@montefiore.org" in a for a in addrs):
+        return cc
+    if copy_to.lower() in addrs:
+        return cc
+    return list(cc or []) + [copy_to]
+
+
 def send_card(to: str, subject: str, html: str, image_path: Optional[Path],
               cc: Optional[List[str]] = None, cid: Optional[str] = None,
               bcc: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -711,11 +740,18 @@ def send_card(to: str, subject: str, html: str, image_path: Optional[Path],
 
     `cid` MUST be the same token referenced as `cid:<token>` in `html`.
 
+    House copy-Cc rule (normalized 2026-09-18): every card with a @montefiore.org
+    recipient (To/Cc/Bcc) automatically gets the program-account copy Cc — the
+    second recipient is what gets mail past Montefiore's quarantine of the
+    automated Gmail sender (verified 2026-09-18). The copy target comes from
+    ~/.hermes/scripts/.smtp.env (SMTP_MIRROR_TO) and the personal address must
+    never appear on outbound mail. Idempotent.
+
     `bcc` recipients are added to the SMTP envelope ONLY — no Bcc header is
     written, because a Bcc header leaks the blind copy to everyone on the thread
-    (and some clients render it). Use bcc for the personal-copy mirror so it
-    never shows up as a CC on a card a resident or faculty member receives.
+    (and some clients render it).
     """
+    cc = _house_copy_cc(to, cc, bcc)
     cfg = _smtp_cfg()
     if not cfg.get("user") or not cfg.get("password"):
         return {"successful": False, "error": "SMTP not configured", "data": None}
@@ -764,10 +800,11 @@ def send_card(to: str, subject: str, html: str, image_path: Optional[Path],
 # ─────────────────────────────────────────────────────────────
 # Outlook handoff — the delivery path that actually reaches residents
 #
-# Montefiore's tenant accepts mail from the automated Gmail sender and then
-# quarantines it, so nothing addressed to @montefiore.org ever lands (verified
-# 2026-09-16 with plain, HTML and image variants). Every other sender in this
-# stack uses the same Gmail account, so this is tenant-wide, not a bug here.
+# Montefiore's tenant quarantines mail from the automated Gmail sender when it
+# carries a single recipient (verified 2026-09-16 with plain, HTML and image
+# variants). Update 2026-09-18: a second recipient — the program-account copy
+# Cc, now applied in send_card — gets the mail delivered. The handoff remains
+# the belt-and-suspenders path for anything that still does not land.
 #
 # The handoff sidesteps it: the card is published to a public URL, and we build
 # a pre-filled Outlook compose link that the user opens and sends from their own
@@ -944,11 +981,11 @@ def handoff(target_date: Optional[str] = None, only: Optional[str] = None,
 
 
 def notify_handoff(result: Dict[str, Any], settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Email the user their handoff links, via the one path that reaches them:
-    the business address plus the personal-Gmail mirror (house convention)."""
+    """Email the user their handoff links. Business mail carries the program
+    account as a second recipient (house copy-Cc convention, 2026-09-18),
+    applied inside send_card; the personal address is no longer involved."""
     settings = settings or load_settings()
     to = settings.get("notify_recipient") or "sfrasier@montefiore.org"
-    mirror = settings.get("notify_mirror")
     date_str = result.get("date", "")
 
     rows = []
@@ -981,14 +1018,10 @@ def notify_handoff(result: Dict[str, Any], settings: Optional[Dict[str, Any]] = 
 
     if not is_valid_email(to):
         return {"successful": False, "error": f"bad notify recipient {to!r}"}
-    # Personal copy rides BCC: it is only ever our own duplicate, and as a CC it
-    # showed up as a stray personal Gmail address on the message.
-    bcc = [mirror] if (mirror and is_valid_email(mirror)
-                       and mirror.lower() != to.lower()) else None
-    res = send_card(to, f"Birthday greeting ready to send — {date_str}", html, None,
-                    bcc=bcc)
+    # Copy-Cc (program account) is applied inside send_card — house convention.
+    res = send_card(to, f"Birthday greeting ready to send — {date_str}", html, None)
     return {"successful": bool(res.get("successful")), "to": to, "cc": None,
-            "bcc": bcc, "error": res.get("error")}
+            "bcc": None, "error": res.get("error")}
 
 
 def notify_send_result(result: Dict[str, Any],
@@ -1003,7 +1036,6 @@ def notify_send_result(result: Dict[str, Any],
     """
     settings = settings or load_settings()
     to = settings.get("notify_recipient") or "sfrasier@montefiore.org"
-    mirror = settings.get("notify_mirror")
     date_str = result.get("date", "")
     sent = result.get("sent") or []
     failed = result.get("failed") or []
@@ -1065,22 +1097,20 @@ def notify_send_result(result: Dict[str, Any],
         f'<div style="font:700 20px/1.3 Segoe UI,Arial,sans-serif;color:#0f172a;">'
         f'{n} birthday greeting{"" if n == 1 else "s"} sent — {date_str}</div>'
         '<div style="font:400 14px/1.6 Segoe UI,Arial,sans-serif;color:#475569;margin:10px 0 20px;">'
-        'Sent directly from the program mailbox. Delivery to @montefiore.org is '
-        '<strong>inconsistent</strong> — a send can succeed and still not arrive, with no '
-        'bounce to warn you. If someone reports not receiving their card, the button below '
-        'resends it from your own Outlook.'
+        'Sent directly from the program mailbox, with the program-account copy Cc '
+        'that gets it past the Montefiore quarantine. If a card still does not arrive, '
+        'the button below resends it from your own Outlook.'
         '</div>'
         + fail_rows + "".join(rows) +
         '</div></div>')
 
     if not is_valid_email(to):
         return {"successful": False, "error": f"bad notify recipient {to!r}"}
-    bcc = [mirror] if (mirror and is_valid_email(mirror)
-                       and mirror.lower() != to.lower()) else None
     subject = (f"Birthday greeting sent — {date_str}" if n == 1
                else f"{n} birthday greetings sent — {date_str}")
-    res = send_card(to, subject, html, None, bcc=bcc)
-    return {"successful": bool(res.get("successful")), "to": to, "bcc": bcc,
+    # Copy-Cc (program account) is applied inside send_card — house convention.
+    res = send_card(to, subject, html, None)
+    return {"successful": bool(res.get("successful")), "to": to, "bcc": None,
             "count": n, "error": res.get("error")}
 
 
@@ -1292,7 +1322,6 @@ def send_format_preview(person: Dict[str, Any], settings: Optional[Dict[str, Any
     html = re.sub(r"(<body[^>]*>)", lambda m: m.group(1) + "\n" + banner, html, count=1)
 
     to = to or settings.get("test_recipient") or "sfrasier@montefiore.org"
-    mirror = settings.get("notify_mirror")
     if cc is None:
         # Mirror the real leadership list when configured, so a format review
         # shows exactly what leadership will receive.
@@ -1300,12 +1329,8 @@ def send_format_preview(person: Dict[str, Any], settings: Optional[Dict[str, Any
               if settings.get("cc_on_test") else [])
     # never cc the recipient onto their own copy
     cc = [a for a in cc if a.lower() != (to or "").lower()]
-    # Our own personal copy — BCC, never a visible CC.
-    bcc = [mirror] if (mirror and is_valid_email(mirror) and mirror != to
-                       and mirror.lower() not in [c.lower() for c in cc]) else []
 
-    res = send_card(to, subject, html, card, cc=cc or None, cid=cid,
-                    bcc=bcc or None)
+    res = send_card(to, subject, html, card, cc=cc or None, cid=cid)
     append_log({
         "date": local_today().strftime("%Y-%m-%d"), "contact_id": person.get("id"),
         "name": f"{person.get('first_name','')} {person.get('last_name','')}".strip(),
@@ -1427,23 +1452,17 @@ def run(target_date: Optional[str] = None, dry_run: bool = False,
 
     test_recipient = settings.get("test_recipient") or "sfrasier@montefiore.org"
     live_cc = [a.strip() for a in (settings.get("cc") or []) if is_valid_email(a.strip())]
-    mirror_addr = (settings.get("notify_mirror") or "").strip()
 
     base_bcc: List[str] = []
     if test_mode:
         # Leadership is excluded from tests by default so they don't receive our
         # drafts; `cc_on_test` mirrors the real list when a format review needs to
-        # show exactly what leadership will get. The personal copy always rides
-        # BCC — it is our own duplicate and must never appear as a CC.
-        base_cc: List[str] = ([a for a in live_cc if a.lower() != mirror_addr.lower()]
-                              if settings.get("cc_on_test") else [])
-        if mirror_addr and is_valid_email(mirror_addr) and mirror_addr != test_recipient:
-            base_bcc.append(mirror_addr)
+        # show exactly what leadership will get. The program-account copy Cc is
+        # applied per-send inside send_card (house convention, 2026-09-18).
+        base_cc: List[str] = list(live_cc) if settings.get("cc_on_test") else []
     else:
-        # Live sends cc program leadership (settings["cc"]) — and only them. The
-        # personal mirror is test-path only, stripped here defensively so it can
-        # never ride along to a resident or faculty member.
-        base_cc = [a for a in live_cc if a.lower() != mirror_addr.lower()]
+        # Live sends cc program leadership (settings["cc"]).
+        base_cc = list(live_cc)
 
     for person in people:
         cid_ = person.get("id") or f"{person.get('first_name')}-{person.get('last_name')}"

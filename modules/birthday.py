@@ -121,7 +121,7 @@ def put_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
         "overlay_kicker", "note_source", "llm_model", "notes", "cc", "noise_source",
         "footer_note", "design", "card_dept", "design_exclude",
         # outlook handoff (the delivery path that actually reaches @montefiore.org)
-        "handoff_enabled", "public_base_url", "notify_recipient", "notify_mirror",
+        "handoff_enabled", "public_base_url", "notify_recipient",
         "keep_published_cards",
     }
     unknown = [k for k in payload if k not in allowed]
