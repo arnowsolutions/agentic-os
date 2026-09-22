@@ -271,10 +271,23 @@ def build_monday_body(event):
     )
 
 
+_CLOCK_RANGE_RE = re.compile(
+    r"\s*[\(\[]\s*\d{1,2}:\d{2}\s*(?:-|\u2013|\u2014|to)\s*\d{1,2}:\d{2}\s*(?:[APap]\.?[Mm]\.?)?\s*[\)\]]"
+)
+
+
+def _strip_clock(text):
+    """Drop clock ranges like '(7:30-8:00 AM)' — those belong in the agenda, not the subject."""
+    if not text:
+        return ""
+    return _CLOCK_RANGE_RE.sub("", str(text)).strip(" -\u2013\u2014\t")
+
+
 def build_grand_rounds_subject(event):
     mt = event["meeting_type"]
-    t7 = event["topic_7_8"]
-    t8 = event["topic_8_9"]
+    # Clock ranges ("7:30-8:00 AM") belong in the agenda/body, never in the subject.
+    t7 = _strip_clock(event["topic_7_8"])
+    t8 = _strip_clock(event["topic_8_9"])
     if event.get("is_interview_day"):
         topic = (t7 or t8 or "").strip()
         return f"Invitation: Urology Residency Interview Day {get_interview_day_number(topic)}"
