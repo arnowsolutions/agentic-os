@@ -5,7 +5,7 @@ Outlook Calendar Deeplink Generator
 Generates an HTML page with buttons that open pre-filled Outlook calendar
 compose forms. No login, no API, no token — just URL deeplinks.
 
-Each button opens outlook.office.com/calendar/deeplink/compose with:
+Each button opens outlook.cloud.microsoft/calendar/deeplink/compose with:
   - Subject pre-filled
   - Body pre-filled (plain text, nicely formatted)
   - Recipients pre-filled (or test email in test mode)
@@ -371,7 +371,7 @@ def build_deeplink(subject, body, to_param, start_dt, end_dt, location="Zoom"):
         "enddt": end_dt,
         "location": location,
     }, quote_via=urllib.parse.quote)
-    return f"https://outlook.office.com/calendar/deeplink/compose?{params}"
+    return f"https://outlook.cloud.microsoft/calendar/deeplink/compose?{params}"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -890,7 +890,7 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
       params.set('startdt', data.startdt);
       params.set('enddt', data.enddt);
       params.set('location', data.location);
-      const url = 'https://outlook.office.com/calendar/deeplink/compose?' + params.toString();
+      const url = 'https://outlook.cloud.microsoft/calendar/deeplink/compose?' + params.toString();
       window.open(url, '_blank');
       markSent(currentEditId);
       closeEditor();
@@ -1032,8 +1032,6 @@ def main():
     print(f"\n  Each button opens Outlook with pre-filled details — just click Send.")
 
 
-if __name__ == "__main__":
-    main()
 
 
 # ── Interview-day helpers (appended) ──────────────────────────
@@ -1058,3 +1056,7 @@ def _build_interview_day_body(formatted, topic):
         f"<hr>"
         f"<strong>Montefiore Medical Center | Department of Urology</strong>"
     )
+
+
+if __name__ == "__main__":
+    main()

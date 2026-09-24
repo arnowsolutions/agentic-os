@@ -241,7 +241,7 @@ def build_schoenberg_request(rows):
         "Please let me know your availability.\n\nThank you,\nShareef Frasier"
     )
     params = _up.urlencode({"to": CC_EMAIL, "subject": subject, "body": body}, quote_via=_up.quote)
-    url = "https://outlook.office.com/mail/deeplink/compose?" + params
+    url = "https://outlook.cloud.microsoft/mail/deeplink/compose?" + params
     anchor = (f'<a id="reqDatesBtn" href="{url}" target="_blank" '
               'style="display:inline-block;background:#f59e0b;color:#0f172a;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">'
               'Request Dates from Dr. Schoenberg</a>')
@@ -324,7 +324,7 @@ def build_deeplink(subject, body, to_param, start_dt, end_dt, location="Zoom"):
         "enddt": end_dt,
         "location": location,
     }, quote_via=urllib.parse.quote)
-    return f"https://outlook.office.com/calendar/deeplink/compose?{params}"
+    return f"https://outlook.cloud.microsoft/calendar/deeplink/compose?{params}"
 
 
 # ── Event building ──────────────────────────────────────────────────────────

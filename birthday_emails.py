@@ -813,7 +813,7 @@ def send_card(to: str, subject: str, html: str, image_path: Optional[Path],
 
 PUBLIC_CARDS_DIR = BASE_DIR / "dashboard" / "cards"
 PREVIEW_DIR = BASE_DIR / "dashboard" / "previews"
-OUTLOOK_MAIL_DEEPLINK = "https://outlook.office.com/mail/deeplink/compose"
+OUTLOOK_MAIL_DEEPLINK = "https://outlook.cloud.microsoft/mail/deeplink/compose"
 
 
 def publish_card(card_path: Path, settings: Optional[Dict[str, Any]] = None) -> Optional[str]:

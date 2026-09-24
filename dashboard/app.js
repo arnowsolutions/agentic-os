@@ -445,7 +445,7 @@ window.sendEdited = function() {
   if (location) params.set('location', location);
   if (startdt) params.set('startdt', startdt);
   if (enddt) params.set('enddt', enddt);
-  const url = 'https://outlook.office.com/calendar/deeplink/compose?' + params.toString();
+  const url = 'https://outlook.cloud.microsoft/calendar/deeplink/compose?' + params.toString();
   closeModal();
   window.open(url, '_blank');
 };
@@ -462,5 +462,5 @@ window.openEventDirect = function(event) {
   });
   const optional = [['to', event.to], ['location', event.location], ['startdt', event.startdt], ['enddt', event.enddt]];
   for (const [k, v] of optional) if (v) params.set(k, v);
-  window.open('https://outlook.office.com/calendar/deeplink/compose?' + params.toString(), '_blank');
+  window.open('https://outlook.cloud.microsoft/calendar/deeplink/compose?' + params.toString(), '_blank');
 };
