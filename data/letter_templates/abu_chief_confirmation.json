@@ -1,0 +1,27 @@
+{
+  "id": "abu-chief-confirmation",
+  "label": "ABU Chief Resident Confirmation",
+  "subtitle": "Annual Program Director letter to the American Board of Urology",
+  "letterhead_docx": "data/letterhead/Residency_Program_Letterhead_-_Alex_Sankin.docx",
+  "notes": "One letter per chief resident, every year, when the ABU opens the Qualifying (Part 1) Examination cycle in September. The Board requires the letter in its office by January 1 of the exam year and the Program Director's Evaluation Form by March 1. The letterhead, signature image and credential block come from the .docx template untouched - never rebuild the letterhead.",
+  "placeholders": ["name", "last", "exam_year", "start_year"],
+  "content": [
+    "The American Board of Urology",
+    "600 Peter Jefferson Parkway, Suite 150",
+    "Charlottesville, VA 22911",
+    "",
+    "RE:  {name}, MD \u2014 Confirmation of Chief Resident Status",
+    "      Qualifying (Part 1) Examination, The American Board of Urology",
+    "",
+    "To Whom It May Concern:",
+    "",
+    "I am writing to confirm that {name}, MD is a chief resident in good standing in the ACGME-accredited Urology Residency Training Program at Montefiore Medical Center and is expected to successfully complete at least six months as chief resident by June 30, {exam_year}.",
+    "",
+    "Dr. {last} entered the Urology Residency Training Program on July 1, {start_year} and is expected to complete the residency program on June 30, {exam_year}.",
+    "",
+    "I understand that a Program Director\u2019s Evaluation Form for each resident who has applied for the examination will be emailed to me and/or our residency coordinator in late January, and I will ensure that each form is completed and returned to the Board office by March 1, {exam_year}.",
+    "",
+    "Please contact me at 347-842-1700 or asankin@montefiore.org with any questions.",
+    ""
+  ]
+}

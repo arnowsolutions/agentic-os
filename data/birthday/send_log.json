@@ -315,5 +315,43 @@
     "test_mode": false,
     "ts": "2026-09-22T13:00:20+00:00",
     "status": "sent"
+  },
+  {
+    "date": "2026-09-25",
+    "contact_id": "contact-matthew-antonellis",
+    "name": "Matthew Antonellis",
+    "intended_email": "matantonel@montefiore.org",
+    "sent_to": "matantonel@montefiore.org",
+    "cc": [
+      "sfrasier@montefiore.org",
+      "asankin@montefiore.org",
+      "alesmall@montefiore.org"
+    ],
+    "bcc": [],
+    "subject": "Happy Birthday, Matthew!",
+    "card": "/workspace/agentic-os/data/birthday/cards/2026-09-25_matthew-antonellis_confetti.jpg",
+    "note": "Wishing you a fantastic year. Enjoy your day \u2014 you've earned it.",
+    "test_mode": false,
+    "ts": "2026-09-25T13:00:36+00:00",
+    "status": "sent"
+  },
+  {
+    "date": "2026-09-25",
+    "contact_id": "contact-matthew-antonellis",
+    "name": "Matthew Antonellis",
+    "intended_email": "matantonel@montefiore.org",
+    "sent_to": "matantonel@montefiore.org",
+    "cc": [
+      "sfrasier@montefiore.org",
+      "asankin@montefiore.org",
+      "alesmall@montefiore.org"
+    ],
+    "bcc": [],
+    "subject": "Happy Birthday, Matthew!",
+    "card": "/workspace/agentic-os/data/birthday/cards/2026-09-25_matthew-antonellis_confetti.jpg",
+    "note": "Wishing you a fantastic year. Enjoy your day \u2014 you've earned it.",
+    "test_mode": false,
+    "ts": "2026-09-25T13:00:40+00:00",
+    "status": "sent"
   }
 ]

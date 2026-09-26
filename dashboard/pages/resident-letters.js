@@ -1,11 +1,19 @@
 // ──────────────────────────────────────────────────────────────
-// Resident Letters — Good Standing & Income Verification
+// Resident Letters — Good Standing, Income Verification
+//                  + ABU Chief Resident Confirmation (annual)
 // Embedded into Agentic OS dashboard
+//
+// The first two letters are rendered from HTML templates. The ABU chief letter
+// is NOT: it fills the department's own Word letterhead file (letterhead banner
+// and Dr. Sankin's signature already in it) via letterhead_letters.py, so the
+// letterhead is never reproduced by hand. Required from every chief each year
+// the ABU opens the Qualifying (Part 1) Examination cycle.
 // ──────────────────────────────────────────────────────────────
 
 const LETTER_TYPES = [
   { id: 'good-standing', label: 'Letter of Good Standing', icon: '▸' },
   { id: 'income', label: 'Income Verification Letter', icon: '▸' },
+  { id: 'abu-chief', label: 'ABU Chief Resident Confirmation (annual)', icon: '▸' },
 ];
 
 async function renderResidentLetters() {
@@ -14,7 +22,7 @@ async function renderResidentLetters() {
     <div class="page-header">
       <div class="page-header-left">
         <h1 class="page-title">Resident Letters</h1>
-        <p class="page-subtitle">Generate Good Standing & Income Verification letters from CRM data</p>
+        <p class="page-subtitle">Good Standing &amp; Income Verification letters, plus the annual ABU chief-resident confirmation on department letterhead</p>
       </div>
       <div class="btn-group">
         <button class="btn" onclick="renderResidentLetters()">↻ Refresh</button>
@@ -32,6 +40,7 @@ async function loadLetterPage() {
     const residents = contacts.filter(c => c.category === 'Resident' && !c.archived)
       .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
     renderLetterUI(residents);
+    loadChiefCohort();
   } catch (err) {
     document.getElementById('lettersContent').innerHTML =
       `<div class="card" style="padding:24px;text-align:center;color:var(--red)">
@@ -49,9 +58,9 @@ function renderLetterUI(residents) {
   // ── Letter Type Selection ──────────────────────────────
   html += `<div class="card" style="padding:16px 20px">
     <h3 style="margin:0 0 12px 0;font-size:14px">Letter Type</h3>
-    <div style="display:flex;gap:12px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
       ${LETTER_TYPES.map(t => `
-        <label style="flex:1;cursor:pointer">
+        <label style="flex:1;min-width:220px;cursor:pointer">
           <input type="radio" name="letterType" value="${t.id}" ${t.id === 'good-standing' ? 'checked' : ''}
                  onchange="toggleLetterFields()" style="margin-right:6px">
           ${t.icon} ${t.label}
@@ -79,8 +88,29 @@ function renderLetterUI(residents) {
     </div>
   </div>`;
 
+  // ── ABU chief-resident panel (hidden until that type is selected) ──
+  html += `<div id="chiefFields" class="card" style="padding:16px 20px;display:none">
+    <h3 style="margin:0 0 4px 0;font-size:14px">ABU Chief Resident Confirmation &mdash; annual batch</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px 0">
+      One letter per chief resident, on department letterhead with Dr. Sankin's signature already in place.
+      The Board needs it in its office by January 1 of the exam year; the Program Director's Evaluation
+      Form is due March 1.
+    </p>
+    <div style="display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:start">
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Exam year</label>
+        <select id="chiefYear" class="form-input" onchange="loadChiefCohort()"
+                style="width:100%;padding:8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg);color:var(--text)"></select>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Chiefs in this cohort (from the roster)</label>
+        <div id="chiefRoster" style="font-size:13px;color:var(--text-muted)">Loading...</div>
+      </div>
+    </div>
+  </div>`;
+
   // ── Resident Selection ─────────────────────────────────
-  html += `<div class="card" style="padding:16px 20px">
+  html += `<div id="residentPicker" class="card" style="padding:16px 20px">
     <h3 style="margin:0 0 12px 0;font-size:14px">Select Resident</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">`;
   for (const r of residents) {
@@ -114,10 +144,51 @@ function renderLetterUI(residents) {
   container.innerHTML = html;
 }
 
+function currentLetterType() {
+  return document.querySelector('input[name="letterType"]:checked')?.value;
+}
+
 function toggleLetterFields() {
-  const type = document.querySelector('input[name="letterType"]:checked')?.value;
+  const type = currentLetterType();
   const gsFields = document.getElementById('gsFields');
+  const chiefFields = document.getElementById('chiefFields');
+  const picker = document.getElementById('residentPicker');
   if (gsFields) gsFields.style.display = type === 'good-standing' ? '' : 'none';
+  if (chiefFields) chiefFields.style.display = type === 'abu-chief' ? '' : 'none';
+  // the ABU letter goes to the whole chief cohort, so per-resident picking is moot
+  if (picker) picker.style.display = type === 'abu-chief' ? 'none' : '';
+  const previewBtn = document.querySelector('button[onclick="previewLetter()"]');
+  if (previewBtn) previewBtn.style.display = type === 'abu-chief' ? 'none' : '';
+  if (type === 'abu-chief') loadChiefCohort();
+}
+
+async function loadChiefCohort() {
+  const rosterEl = document.getElementById('chiefRoster');
+  const yearEl = document.getElementById('chiefYear');
+  if (!rosterEl || !yearEl) return;
+  try {
+    const resp = await api.get('/api/letters/chief/roster');
+    const years = resp.years || [];
+    if (!years.length) {
+      rosterEl.innerHTML = '<em>No chief-resident records found.</em>';
+      return;
+    }
+    if (!yearEl.options.length) {
+      yearEl.innerHTML = years.map(y =>
+        `<option value="${y}" ${y === resp.exam_year ? 'selected' : ''}>${y}</option>`).join('');
+    }
+    const year = yearEl.value || resp.exam_year;
+    const r2 = await api.get(`/api/letters/chief/roster?exam_year=${encodeURIComponent(year)}`);
+    const chiefs = r2.chiefs || [];
+    rosterEl.innerHTML = chiefs.length
+      ? chiefs.map(c => `<div style="padding:3px 0">
+            <strong style="color:var(--text)">${escapeHtml(c.name)}, MD</strong>
+            <span style="color:var(--text-muted)">&bull; ${escapeHtml(c.pgy || '')} &bull; completes June 30, ${escapeHtml(String(c.exam_year || ''))}</span>
+          </div>`).join('')
+      : '<em>No chiefs found for this year.</em>';
+  } catch (err) {
+    rosterEl.innerHTML = `<em>Could not load roster: ${escapeHtml(err.message)}</em>`;
+  }
 }
 
 function getSelectedResident() {
@@ -131,11 +202,28 @@ function getSelectedResident() {
 }
 
 async function generateLetter() {
+  const type = currentLetterType();
+  if (!type) { showToast('! Please select a letter type', 'error'); return; }
+
+  // ── ABU chief letter: annual batch, one per chief ──
+  if (type === 'abu-chief') {
+    const exam_year = document.getElementById('chiefYear')?.value;
+    try {
+      const resp = await api.post('/api/letters/chief/generate', { exam_year });
+      if (resp.success) {
+        showToast(`✓ ${resp.count} letter(s) generated`, 'success');
+        showChiefResults(resp);
+      } else {
+        showToast('! ' + (resp.error || 'Generation failed'), 'error');
+      }
+    } catch (err) {
+      showToast('! Error: ' + err.message, 'error');
+    }
+    return;
+  }
+
   const resident = getSelectedResident();
   if (!resident) { showToast('! Please select a resident', 'error'); return; }
-
-  const type = document.querySelector('input[name="letterType"]:checked')?.value;
-  if (!type) { showToast('! Please select a letter type', 'error'); return; }
 
   let body = { resident_id: resident.id, type };
 
@@ -160,11 +248,43 @@ async function generateLetter() {
   }
 }
 
+function showChiefResults(resp) {
+  const div = document.getElementById('letterResult');
+  div.style.display = 'block';
+  const rows = (resp.letters || []).map(l => `
+    <tr>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border-color)">
+        <strong>${escapeHtml(l.name)}, MD</strong>
+        <div style="font-size:11px;color:var(--text-muted)">${escapeHtml(l.pgy || '')} &bull; completes June 30, ${escapeHtml(String(l.exam_year || ''))}</div>
+      </td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border-color);font-size:11px;color:var(--text-muted)">${escapeHtml(l.file || '')}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border-color);white-space:nowrap">
+        <a href="${l.download_url}" class="btn btn-sm" download>↓ Download</a>
+      </td>
+    </tr>`).join('');
+  div.innerHTML = `
+    <div class="card" style="padding:16px 20px;background:#f0fdf4;border:1px solid #bbf7d0">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <strong style="color:#15803d">✓ ${resp.count} ABU chief-resident letter(s) generated</strong><br>
+          <span style="font-size:12px;color:var(--text-muted)">
+            Exam year ${escapeHtml(String(resp.exam_year || ''))} &bull; department letterhead + signature already in place
+          </span>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">${rows}</table>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:10px">
+        Sent to the Board office by January 1, ${escapeHtml(String(resp.exam_year || ''))};
+        Program Director's Evaluation Form due March 1, ${escapeHtml(String(resp.exam_year || ''))}.
+      </div>
+    </div>`;
+}
+
 async function previewLetter() {
   const resident = getSelectedResident();
   if (!resident) { showToast('! Please select a resident', 'error'); return; }
 
-  const type = document.querySelector('input[name="letterType"]:checked')?.value;
+  const type = currentLetterType();
   const params = new URLSearchParams({ resident_id: resident.id, type, preview: 'true' });
 
   if (type === 'good-standing') {

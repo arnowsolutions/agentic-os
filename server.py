@@ -1816,13 +1816,77 @@ async def generate_resident_letter(request: Request):
 
 @app.get("/api/letters/file")
 def download_resident_letter(name: str = Query("", description="generated letter filename")):
-    """Serve a generated letter file for download/open."""
+    """Serve a generated letter file for download/open (.html, .docx or .pdf)."""
     safe = os.path.basename(name or "")
     path = _letters_dir() / safe
     if not safe or not path.exists():
         return {"success": False, "error": "Letter not found"}
-    return Response(content=path.read_text(), media_type="text/html",
+    media = {
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pdf": "application/pdf",
+        "html": "text/html",
+    }.get(path.suffix.lstrip(".").lower(), "application/octet-stream")
+    return Response(content=path.read_bytes(), media_type=media,
                     headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+
+
+# ─── Routes: Letterhead letters (annual, filled from the department .docx) ───
+# These letters are NOT rebuilt in HTML: they fill the department's own Word
+# letterhead template (letterhead banner + Dr. Sankin's signature included) via
+# letterhead_letters.py, so the letterhead is never reproduced by hand.
+# The ABU chief-resident confirmation letter is required from every chief each
+# year the Board opens the Qualifying (Part 1) Examination cycle.
+
+@app.get("/api/letters/templates")
+def list_letterhead_templates():
+    """Reusable letter templates available on the OS (data/letter_templates/*.json)."""
+    try:
+        import letterhead_letters as lhl
+        return {"success": True, "templates": [
+            {"id": t.get("id"), "label": t.get("label"), "subtitle": t.get("subtitle"),
+             "notes": t.get("notes"), "placeholders": t.get("placeholders", [])}
+            for t in lhl.list_templates()]}
+    except Exception as e:
+        return {"success": False, "error": str(e), "templates": []}
+
+
+@app.get("/api/letters/chief/roster")
+def chief_letter_roster(exam_year: int = 0):
+    """Chief residents eligible for the confirmation letter, by exam year."""
+    try:
+        import letterhead_letters as lhl
+        years = lhl.chief_years()
+        chiefs = lhl.find_chiefs(exam_year or None)
+        return {"success": True, "years": years,
+                "exam_year": exam_year or (years[-1] if years else None),
+                "chiefs": chiefs}
+    except Exception as e:
+        return {"success": False, "error": str(e), "years": [], "chiefs": []}
+
+
+@app.post("/api/letters/chief/generate")
+async def generate_chief_letters(request: Request):
+    """Build one ABU chief-resident confirmation letter per chief (annual)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    exam_year = body.get("exam_year") or None
+    if isinstance(exam_year, str) and exam_year.isdigit():
+        exam_year = int(exam_year)
+    try:
+        import letterhead_letters as lhl
+        made = lhl.generate_chief_letters(exam_year)
+    except Exception as e:
+        return {"success": False, "error": f"Letter generation failed: {e}"}
+    if not made:
+        return {"success": False,
+                "error": "No chief residents found for that exam year"}
+    for m in made:
+        m["download_url"] = f"/api/letters/file?name={m['file']}"
+    return {"success": True, "count": len(made), "letters": made,
+            "exam_year": made[0].get("exam_year"), "template": "abu-chief-confirmation",
+            "note": "Open each .docx: letterhead and signature are already in place."}
 
 
 
