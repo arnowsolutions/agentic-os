@@ -24,6 +24,15 @@ const MASSTEMAIL_CATEGORIES = [
     desc: 'Sub-I exit interviews — interviewee & time per row',
     live: true,
   },
+  {
+    key: 'reviewer-invites',
+    label: 'Reviewer Invites',
+    icon: '▸',
+    src: '/api/reviewer-invites',
+    liveParam: '',
+    desc: '2026-27 application review — 11 reviewer emails, each with its own login credentials',
+    live: true,
+  },
   // Chief Meetings — embedded table for now (no server page yet)
   {
     key: 'chief-meetings',

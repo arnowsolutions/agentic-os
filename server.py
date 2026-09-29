@@ -5132,6 +5132,76 @@ async def calendar_invites_page(test: str = Query("true", description="Set to 'f
         return HTMLResponse(content=f"<html><body><h2>Error generating invites page</h2><pre>{e}</pre></body></html>", status_code=500)
 
 
+@app.get("/api/reviewer-invites", response_class=HTMLResponse)
+async def reviewer_invites_page():
+    """Reviewer invite emails (2026-27 application review) with one-click Outlook drafts + sent state.
+
+    Reads data/reviewer_invites.json, which scripts/interview-2026-27/11-build-reviewer-emails.py
+    writes from the LIVE reviewer roster + the committee credential sheet — so the page can
+    never show a stale queue size or another reviewer's password.
+
+    The sign-in column is evidence from auth.users.last_sign_in_at, not a guess: a sign-in
+    after the owner's own send mark proves the credential arrived.
+    """
+    import sys
+    sys.path.insert(0, str(BASE_DIR))
+    signins = {}
+    try:
+        invites = json.loads((BASE_DIR / "data" / "reviewer_invites.json").read_text()).get("invites", [])
+        emails = [i["email"].strip().lower() for i in invites]
+        if emails:
+            conn = _get_db_conn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT lower(email), last_sign_in_at FROM auth.users WHERE lower(email) = ANY(%s)",
+                        (emails,),
+                    )
+                    for em, ts in cur.fetchall():
+                        if ts:
+                            signins[em] = ts.isoformat()
+            finally:
+                conn.close()
+    except Exception as e:
+        print(f"reviewer-invites: sign-in lookup skipped ({e})")
+    try:
+        import importlib
+        if "reviewer_invites_generator" in sys.modules:
+            importlib.reload(sys.modules["reviewer_invites_generator"])
+        import reviewer_invites_generator as gen
+        return HTMLResponse(content=gen.generate_html_page(signins))
+    except Exception as e:
+        return HTMLResponse(content=f"<html><body><h2>Error generating reviewer invites page</h2><pre>{e}</pre></body></html>", status_code=500)
+
+
+@app.post("/api/reviewer-invites/mark")
+async def reviewer_invites_mark(request: Request):
+    """Record the owner's sent / not-sent mark for one reviewer invite.
+
+    Plain text files, no guessing: this is the only thing that sets "Sent", because the
+    deeplink flow gives the app no delivery signal.
+    """
+    import sys
+    sys.path.insert(0, str(BASE_DIR))
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "invalid JSON body"}
+    email = (body or {}).get("email", "").strip()
+    if not email:
+        return {"ok": False, "error": "email is required"}
+    sent = bool((body or {}).get("sent", True))
+    try:
+        import importlib
+        if "reviewer_invites_generator" in sys.modules:
+            importlib.reload(sys.modules["reviewer_invites_generator"])
+        import reviewer_invites_generator as gen
+        status = gen.save_status(email, sent, by="owner")
+        return {"ok": True, "email": email, "sent": sent, "marked": len(status)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/conference/events")
 def conference_events():
     """Return all Grand Rounds / related events from the CANONICAL store
