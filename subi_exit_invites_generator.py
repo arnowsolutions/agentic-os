@@ -14,7 +14,7 @@ import json
 import os
 import sys
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -57,6 +57,11 @@ ZOOM_JOIN_URL = "https://us02web.zoom.us/j/5172907646?pwd=SVRqbElnTHRUNGxLL3B3bV
 ZOOM_MEETING_ID = "517 290 7646"
 ZOOM_PASSCODE = "197277"
 CC_EMAIL = "mschoenb@montefiore.org"  # Dr. Schoenberg attends every Sub-I Exit Interview
+
+# Calendar slot for the "Request Dates" invite (all-day entry by default).
+# CAL_LOCATION = None means NO room - a blank room is expressed by omitting the value.
+CAL_FRIDAY_OFFSET = 4   # all-day entry on the Friday of the requested week
+CAL_LOCATION = None
 DEFAULT_DURATION_MINUTES = 10
 
 
@@ -180,72 +185,217 @@ def _ordinal(n):
     return f"{n}{suf}"
 
 
-def _pick_next_cohort(rows, window_days=35):
-    """Students still needing interviews whose rotation end is soonest (>= today,
-    within window_days), so Dr. Schoenberg is asked cohort by cohort."""
-    from datetime import date as _date
-    now = _date.today()
-    cands = []
-    for r in rows:
-        if r.get("date"):  # already has a scheduled interview
-            continue
-        end = parse_rotation_end(r.get("notes", ""))
-        if end and end.date() >= now and (end.date() - now).days <= window_days:
-            cands.append((end.date(), r))
-    if not cands:
+def _parse_rotation(notes):
+    """(start, end) dates parsed from the notes 'Rotates m/d/yy - m/d/yy'."""
+    import re as _re
+    m = _re.search(r"(\d{1,2})/(\d{1,2})/(\d{2,4})\s*[-\u2013]\s*(\d{1,2})/(\d{1,2})/(\d{2,4})", notes or "")
+    if not m:
         return None, None
-    min_end = min(e for e, _ in cands)
-    return [r for e, r in cands if e == min_end], min_end
+    def _d(mo, dy, yr):
+        y = int(yr)
+        y = 2000 + y if y < 100 else y
+        return date(y, int(mo), int(dy))
+    try:
+        return _d(m.group(1), m.group(2), m.group(3)), _d(m.group(4), m.group(5), m.group(6))
+    except Exception:
+        return None, None
+
+
+def _pending_cohort(rows, window_days=35):
+    """Everyone still owed an exit interview, sorted by rotation end.
+
+    Includes students whose rotation has ALREADY ended - they still need the
+    interview, and omitting them is what produced a request missing half of the
+    backlog (2026-10-01). Then anyone ending within window_days.
+    """
+    today = date.today()
+    out = []
+    for r in rows:
+        if r.get("date"):          # interview already scheduled
+            continue
+        _s, end = _parse_rotation(r.get("notes", ""))
+        if not end:
+            continue
+        if end < today or (end - today).days <= window_days:
+            out.append((end, r))
+    out.sort(key=lambda t: t[0])
+    return out
+
+
+def _rotation_weeks(start, end):
+    if not start or not end:
+        return None
+    return max(1, round((end - start).days / 7))
+
+
+def _interview_window(end):
+    """(monday, friday) of the calendar week containing the rotation end.
+
+    Students are interviewed in their final week; a Saturday end (e.g. 10/24)
+    still belongs to the Monday-Friday week that precedes it.
+    """
+    monday = end - timedelta(days=end.weekday())
+    return monday, monday + timedelta(days=4)
+
+
+def _window_label(monday, last):
+    if monday.month == last.month:
+        return f"{monday.strftime('%B')} {monday.day}\u2013{last.day}"
+    return f"{monday.strftime('%B')} {monday.day} \u2013 {last.strftime('%B')} {last.day}"
+
+
+def _short_label(monday, last):
+    if monday.month == last.month:
+        return f"{monday.strftime('%b')} {monday.day}-{last.day}"
+    return f"{monday.strftime('%b')} {monday.day} - {last.strftime('%b')} {last.day}"
+
+
+def _short_date(d):
+    return f"{d.month}/{d.day}/{str(d.year)[2:]}"
+
+
+def _next_week_monday(today=None):
+    today = today or date.today()
+    return today + timedelta(days=(7 - today.weekday()))
+
+
+def _esc(s):
+    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _detail(row, today=None):
+    """One student's status line. Students who already left say so, so they can
+    sit in the same week as the ones still rotating without reading oddly."""
+    today = today or date.today()
+    start, end = _parse_rotation(row.get("notes", ""))
+    if not end:
+        return ""
+    if end < today:
+        return f"Rotated through {_short_date(end)} &mdash; still needs the interview"
+    wk = _rotation_weeks(start, end)
+    if wk and wk <= 2:
+        return f"Two-week rotation, through {end.strftime('%A')}, {_short_date(end)}"
+    return f"Rotating through {end.strftime('%A')}, {_short_date(end)}"
+
+
+_NUM = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+_num = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight"}
+
+
+def build_schoenberg_body_html(windows, n_overdue):
+    """Grand-Rounds-style HTML body: <strong> headings, <hr> rules, detail tables.
+
+    A CALENDAR deeplink is the only route that renders HTML (bodyType=HTML) - the
+    same format the Grand Rounds invite uses; a mail deeplink delivers literal
+    tags (outlook-compose-deeplinks rule 4). Spacing is built in on purpose: the
+    renderer collapses bare <p> gaps, so every block carries GAP and the body
+    rides inside a line-height wrapper (rule 15).
+
+    Grouping is by INTERVIEW WEEK, not by who has already left: the students who
+    finished their rotation are interviewed in the same upcoming week as those
+    finishing then, each labelled with their own status (owner correction
+    2026-10-01 - a separate "rotation complete" section read as disorganised).
+    """
+    GAP = "<br>&nbsp;"
+    total = sum(len(people) for _m, _f, people in windows)
+    first_n = len(windows[0][2]) if windows else 0
+    later_n = total - first_n
+    m0, f0 = (windows[0][0], windows[0][1]) if windows else (_next_week_monday(), _next_week_monday())
+    is_next = m0 == _next_week_monday()
+
+    p = ['<div style="line-height:1.6">']
+    p.append("<strong>Sub-I Exit Interviews &mdash; Scheduling Request</strong><hr>")
+    p.append(f"<p>Good afternoon Dr.&nbsp;Schoenberg,{GAP}</p>")
+    p.append(f"<p><strong>{_NUM.get(total, str(total))} Sub-I exit interviews</strong> still need to be "
+             f"scheduled.{GAP}</p>")
+    if len(windows) > 1:
+        lead = f"<strong>{_NUM.get(first_n, first_n)} next week</strong>" if is_next else \
+               f"<strong>{_NUM.get(first_n, first_n)} the week of {_window_label(m0, f0)}</strong>"
+        extra = (f", including the {_num.get(n_overdue, n_overdue)} who have already finished rotating"
+                 if n_overdue else "")
+        p.append(f"<p>{lead}{extra}, and <strong>{_num.get(later_n, later_n)}</strong> the week of "
+                 f"{_window_label(windows[-1][0], windows[-1][1])}.{GAP}</p>")
+
+    for monday, friday, people in windows:
+        p.append("<hr>")
+        label = _window_label(monday, friday).upper()
+        head = ("NEXT WEEK &mdash; " + label) if monday == _next_week_monday() else ("WEEK OF " + label)
+        p.append(f"<strong>{head}</strong>")
+        rows = "".join(
+            f"<tr><td valign='top' style='padding:3px 14px 3px 0'>"
+            f"<strong>{_esc(r.get('interviewee'))}</strong></td>"
+            f"<td style='padding:3px 0'>{_detail(r)}</td></tr>"
+            for _end, r in people)
+        p.append(f"<table cellpadding='4' style='border-collapse:collapse'>{rows}</table>{GAP}")
+
+    p.append("<hr>")
+    first_when = "next week" if is_next else f"the week of {_window_label(m0, f0)}"
+    if len(windows) > 1:
+        ask = (f"Could you give me a <strong>10-minute slot {first_when} for each of the "
+               f"{_num.get(first_n, first_n)}</strong>, and one the week of "
+               f"{_window_label(windows[-1][0], windows[-1][1])}? Midday around "
+               f"<strong>12:30&nbsp;PM</strong> has worked well previously.")
+    else:
+        ask = (f"Could you give me a <strong>10-minute slot {first_when} for each one</strong>? Midday around "
+               f"<strong>12:30&nbsp;PM</strong> has worked well previously.")
+    p.append(f"<p>{ask}{GAP}</p>")
+    p.append(f"<p>Send me the days and times and I&rsquo;ll put the calendar invites and Zoom details "
+             f"together.{GAP}</p>")
+    p.append("<p>Thank you,<br><strong>Shareef Frasier</strong></p>")
+    p.append("</div>")
+    return "".join(p)
 
 
 def build_schoenberg_request(rows):
     """Build (anchor_html, storage_key) for the 'Request Dates' button.
 
-    Auto-scopes to the soonest-ending cohort of students who still need an exit
-    interview — replaces the old hardcoded Juliana/Ashley email (2026-09-09)."""
-    import urllib.parse as _up
-    group, end = _pick_next_cohort(rows)
-    if not group:
-        return ('<a id="reqDatesBtn" style="display:inline-block;background:#e4e4e7;color:#71717a;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;cursor:not-allowed">No upcoming cohorts to schedule</a>', "none")
+    Opens a CALENDAR compose draft carrying an HTML body - the format the Grand
+    Rounds invite already uses, and the only deeplink that renders bold. Scope
+    and wording come from the DB; nothing here is hardcoded.
 
-    names = [str(r.get("interviewee") or "").strip() for r in group if str(r.get("interviewee") or "").strip()]
-    subject = "Sub-I Exit Interviews: " + " & ".join(names)
+    Interview weeks, not status groups: students whose rotation already ended are
+    merged into the SOONEST upcoming week (they have left and just need the
+    interview), so one ask covers everyone being interviewed next week.
+    """
+    pending = _pending_cohort(rows)
+    if not pending:
+        return ('<a id="reqDatesBtn" style="display:inline-block;background:#e4e4e7;color:#71717a;padding:8px 16px;'
+                'border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;cursor:not-allowed">'
+                'No upcoming cohorts to schedule</a>', "none")
 
-    end_label = f"{end.strftime('%B')} {_ordinal(end.day)}, {end.year}"
-    monday = end - timedelta(days=end.weekday())
-    week = []
-    d = monday
-    while d < end:
-        week.append(d)
-        d += timedelta(days=1)
-    if not week:
-        week = [end - timedelta(days=1)]
-    window_label = f"{monday.strftime('%B')} {monday.day}–{week[-1].day}"
-    if len(week) > 1:
-        days_label = (f"{monday.strftime('%B')} " + ", ".join(str(x.day) for x in week[:-1]) + f", or {week[-1].day}")
-    else:
-        days_label = f"{monday.strftime('%B')} {week[0].day}"
+    today = date.today()
+    groups, overdue = {}, []
+    for end, r in pending:
+        if end < today:
+            overdue.append((end, r))
+        else:
+            m, f = _interview_window(end)
+            groups.setdefault((m, f), []).append((end, r))
 
-    if len(names) == 1:
-        who = f"{names[0]} is currently rotating with us through {end_label}."
-    elif len(names) == 2:
-        who = f"{names[0]} and {names[1]} are currently rotating with us through {end_label}."
-    else:
-        who = ", ".join(names[:-1]) + f", and {names[-1]} are currently rotating with us through {end_label}."
+    n_overdue = len(overdue)
+    if groups:
+        first_key = min(groups)
+        if overdue:      # already finished rotating -> interviewed in that same week
+            groups[first_key] = sorted(groups[first_key] + overdue,
+                                       key=lambda t: (t[0], str(t[1].get("interviewee") or "")))
+    elif overdue:        # nobody still rotating: ask for the coming week
+        m = _next_week_monday()
+        groups[(m, m + timedelta(days=4))] = sorted(overdue, key=lambda t: t[0])
 
-    body = (
-        "Good afternoon,\n\n"
-        + who +
-        f"\n\nI'd like to schedule their Sub-I Exit Interviews with you during the last week of their rotation ({window_label}), before their end date on {end_label}. "
-        f"Would a 10-minute time slot on {days_label} work for you? A midday slot around 12:30 PM worked well previously.\n\n"
-        "Please let me know your availability.\n\nThank you,\nShareef Frasier"
-    )
-    params = _up.urlencode({"to": CC_EMAIL, "subject": subject, "body": body}, quote_via=_up.quote)
-    url = "https://outlook.cloud.microsoft/mail/deeplink/compose?" + params
+    windows = [(m, f, groups[(m, f)]) for (m, f) in sorted(groups)]
+    body = build_schoenberg_body_html(windows, n_overdue)
+
+    base_monday, base_friday = windows[0][0], windows[0][1]
+    subject = f"Sub-I Exit Interviews: your availability ({_short_label(base_monday, base_friday)})"
+
+    cal_day = base_monday + timedelta(days=CAL_FRIDAY_OFFSET)
+    url = build_deeplink(subject, body, CC_EMAIL,
+                         f"{cal_day.isoformat()}T00:00:00", f"{cal_day.isoformat()}T23:59:59", CAL_LOCATION)
     anchor = (f'<a id="reqDatesBtn" href="{url}" target="_blank" '
-              'style="display:inline-block;background:#f59e0b;color:#0f172a;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">'
+              'style="display:inline-block;background:#f59e0b;color:#0f172a;padding:8px 16px;border-radius:6px;'
+              'text-decoration:none;font-size:13px;font-weight:600">'
               'Request Dates from Dr. Schoenberg</a>')
-    key = "schoenberg_dates_requested_" + end.strftime("%Y%m%d")
+    key = "schoenberg_dates_requested_" + base_monday.strftime("%Y%m%d")
     return anchor, key
 
 
@@ -315,15 +465,17 @@ def build_body(iv):
 # ── Deeplink builder (IDENTICAL to outlook_deeplink_generator.py) ───────────
 def build_deeplink(subject, body, to_param, start_dt, end_dt, location="Zoom"):
     # EXACT match: quote_via=urllib.parse.quote — same as the working GR generator
-    params = urllib.parse.urlencode({
+    params = {
         "subject": subject,
         "body": body,
         "bodyType": "HTML",
         "to": to_param,
         "startdt": start_dt,
         "enddt": end_dt,
-        "location": location,
-    }, quote_via=urllib.parse.quote)
+    }
+    if location:          # omit entirely for "no room" — never send location="None"
+        params["location"] = location
+    params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
     return f"https://outlook.cloud.microsoft/calendar/deeplink/compose?{params}"
 
 

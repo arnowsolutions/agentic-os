@@ -353,5 +353,24 @@
     "test_mode": false,
     "ts": "2026-09-25T13:00:40+00:00",
     "status": "sent"
+  },
+  {
+    "date": "2026-10-01",
+    "contact_id": "contact-jasmin-capellan",
+    "name": "Jasmin Capellan",
+    "intended_email": "jcapellan@montefiore.org",
+    "sent_to": "jcapellan@montefiore.org",
+    "cc": [
+      "sfrasier@montefiore.org",
+      "asankin@montefiore.org",
+      "alesmall@montefiore.org"
+    ],
+    "bcc": [],
+    "subject": "Happy Birthday, Jasmin!",
+    "card": "/workspace/agentic-os/data/birthday/cards/2026-10-01_jasmin-capellan_ivory-press.jpg",
+    "note": "From everyone in the department: happiest of birthdays to you.",
+    "test_mode": false,
+    "ts": "2026-10-01T13:00:22+00:00",
+    "status": "sent"
   }
 ]
