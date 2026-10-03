@@ -5043,12 +5043,14 @@ async def update_subi_exit_interview(row_id: int, request: Request):
         if not conn:
             return {"error": "No DB password"}
         cur = conn.cursor()
-        allowed_fields = {"interviewee", "recipient_email", "interview_date", "interview_time", "duration_minutes", "notes"}
+        allowed_fields = {"interviewee", "recipient_email", "interview_date", "interview_time", "duration_minutes", "notes", "sent_status"}
         updates = []
         values = []
         for field in allowed_fields:
             if field in body:
                 val = body[field]
+                if field == "sent_status":
+                    val = bool(val)
                 if field == "interview_date" and (not val or val == ""):
                     val = None
                 updates.append(f"{field} = %s")

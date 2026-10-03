@@ -512,6 +512,7 @@ def build_event_data(test_mode=True):
             "interviewee": iv.get("interviewee") or "TBD",
             "recipient_email": iv.get("recipient_email", ""),
             "duration_minutes": dur, "notes": iv.get("notes", ""),
+            "sent_status": bool(iv.get("sent_status")),
             "url": url, "update_url": update_url,
         })
         event_data[eid] = {
@@ -553,7 +554,16 @@ def generate_html_page(test_mode=True):
         has_cv = bool(find_cv(r.get("interviewee", ""), r.get("recipient_email", "")))
         eml_label = "⬇ .eml (CV)" if has_cv else "⬇ .eml"
         eml_link = f'<a href="/api/subi-exit/eml?id={r["id"]}" style="display:inline-block;color:#71717a;font-size:11px;margin-left:8px;text-decoration:none;border:1px solid #d4d4d8;padding:3px 10px;border-radius:4px" title="Download .eml file — double-click in Outlook to open with CV attached">{eml_label}</a>' if has_date else ''
-        action_cell = f'{outlook_btn}{eml_link}' if has_date else '<span style="color:#71717a;font-size:12px">TBD — date not set</span>'
+        status_slot = ""
+        if has_date:
+            # Sent marking — MANUAL and the owner's to undo, never proof of delivery.
+            # Persisted in unified.subi_exit_interviews.sent_status so it survives a reload.
+            sent = bool(r.get("sent_status"))
+            chip = ('<a href="#" class="sent-badge" title="You marked this sent — click to undo">Sent</a>'
+                    if sent else
+                    '<a href="#" class="mark-sent" title="Mark this invite as sent">Mark sent</a>')
+            status_slot = f'<span id="status-{r["event_id"]}" data-row-id="{r["id"]}">{chip}</span>'
+        action_cell = f'{outlook_btn}{eml_link}{status_slot}' if has_date else '<span style="color:#71717a;font-size:12px">TBD — date not set</span>'
         edit_btn = (f'<a href="#" data-edit-id="{r["id"]}" class="edit-btn" '
                     f'data-interviewee="{esc(r["interviewee"])}" data-email="{esc(r["recipient_email"])}" '
                     f'data-date="{esc(r["date"])}" data-time="{esc(r["time"])}" '
@@ -571,7 +581,7 @@ def generate_html_page(test_mode=True):
         if rot_match:
             rot_dates = f'<br><span style="color:#71717a;font-size:11px">{rot_match.group(1)} – {rot_match.group(2)}</span>'
         to_display = ", ".join([r["recipient_email"], CC_EMAIL]) if r["recipient_email"] else CC_EMAIL
-        rows_html += f'''<tr id="row-{r['event_id']}" style="border-bottom:1px solid #e4e4e7">
+        rows_html += f'''<tr id="row-{r['event_id']}" class="{'row-sent' if has_date and r.get('sent_status') and r['date'] >= today_iso else ''}" style="border-bottom:1px solid #e4e4e7">
   <td style="padding:10px 14px;white-space:nowrap;font-size:13px"><strong>{date_display}</strong><br><span style="color:#71717a;font-size:11px">{date_dow}</span></td>
   <td style="padding:10px 14px;white-space:nowrap;font-size:13px"><strong>{time_display}</strong></td>
   <td style="padding:10px 14px;font-size:13px;max-width:280px;overflow:hidden;text-overflow:ellipsis"><strong>{r['interviewee']}</strong>{rot_dates}</td>
@@ -605,7 +615,8 @@ def generate_html_page(test_mode=True):
   input:checked + .slider {{ background:#f59e0b }}
   input:checked + .slider:before {{ transform:translateX(20px); background:#fff }}
   .toggle-bar .hint {{ color:#71717a; font-size:12px }}
-  .sent-badge {{ display:inline-flex; align-items:center; gap:4px; background:#d1fae5; color:#047857; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600 }}
+  .sent-badge {{ display:inline-flex; align-items:center; gap:4px; background:#d1fae5; color:#047857; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; text-decoration:none; cursor:pointer; margin-left:8px }}
+  .mark-sent {{ display:inline-block; color:#b45309; font-size:11px; font-weight:600; border:1px dashed #f59e0b; padding:3px 10px; border-radius:999px; text-decoration:none; cursor:pointer; margin-left:8px }}
   .sent-badge:before {{ content:'\\2713' }}
   .row-sent {{ opacity:0.5 }}
   .row-sent .invite-btn {{ background:#e4e4e7 !important; cursor:default }}
@@ -686,7 +697,7 @@ def generate_html_page(test_mode=True):
     <th style="width:90px">Time</th>
     <th>Interviewee</th>
     <th style="width:250px">To</th>
-    <th style="width:250px">Action</th>
+    <th style="width:400px">Action</th>
   </tr></thead>
   <tbody>
   {rows_html}    </tbody>
@@ -732,14 +743,61 @@ def generate_html_page(test_mode=True):
 
   <script>
     const eventData = {event_data_json};
+
+    // ── Sent marking ──────────────────────────────────────────────────────────
+    // Clicking "Open in Outlook" marks the row Sent; the chip is the OWNER's own
+    // mark and clicking it undoes. It is persisted to
+    // unified.subi_exit_interviews.sent_status so it survives a reload.
+    // It records that the invite was opened/sent, never that it was delivered.
+    function paintSent(eid, sent) {{
+      const slot = document.getElementById('status-' + eid);
+      if (!slot) return;
+      slot.innerHTML = sent
+        ? '<a href="#" class="sent-badge" title="You marked this sent — click to undo">Sent</a>'
+        : '<a href="#" class="mark-sent" title="Mark this invite as sent">Mark sent</a>';
+      const row = document.getElementById('row-' + eid);
+      if (row) row.classList.toggle('row-sent', sent);
+      wireChip(slot);
+    }}
+    function persistSent(eid, sent) {{
+      const slot = document.getElementById('status-' + eid);
+      if (!slot || !slot.dataset.rowId) return;
+      fetch('/api/subi-exit-interviews/' + slot.dataset.rowId, {{
+        method: 'PUT',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify({{sent_status: sent}}),
+      }}).then(r => r.json()).then(res => {{
+        if (!res.success) console.warn('sent mark not saved:', res);
+      }}).catch(err => console.warn('sent mark not saved:', err));
+    }}
+    function toggleSent(eid) {{
+      const slot = document.getElementById('status-' + eid);
+      if (!slot) return false;
+      const sent = !slot.querySelector('.sent-badge');
+      paintSent(eid, sent);
+      persistSent(eid, sent);
+      return false;
+    }}
+    function wireChip(slot) {{
+      const a = slot.querySelector('a');
+      if (!a) return;
+      a.addEventListener('click', function (ev) {{
+        ev.preventDefault(); ev.stopPropagation();
+        toggleSent(slot.id.replace('status-', ''));
+      }});
+    }}
+    function setSent(eid, sent) {{
+      paintSent(eid, sent);
+      persistSent(eid, sent);
+    }}
+    document.querySelectorAll('[id^="status-"]').forEach(wireChip);
+
     // UPDATE toggle — switch href between normal and update URLs
     document.querySelectorAll('a[data-event-id]').forEach(a => {{
-      a.addEventListener('click', function() {{
+      a.addEventListener('click', function () {{
         const upd = document.getElementById('updateToggle').checked;
         if (upd) this.href = this.dataset.updateUrl;
-        const eid = this.dataset.eventId;
-        document.getElementById('status-' + eid).innerHTML = '<span class="sent-badge">Sent</span>';
-        document.getElementById('row-' + eid).classList.add('row-sent');
+        setSent(this.dataset.eventId, true);
       }});
     }});
 

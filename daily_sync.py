@@ -90,14 +90,25 @@ def sync_qgenda():
     conn = get_db()
     conn.execute("DELETE FROM qgenda_schedule")
     count = 0
+    source_rows = 0
+    # Table UNIQUE(first_name,last_name,date,task) collapses the export's many
+    # legitimate same-day/same-name/same-task rows (multi-site assignments ->
+    # same Task Name, different patient/case). Collapse them here with an
+    # explicit seen-set so INSERT OR IGNORE never silently eats them without
+    # the printed count telling us it happened.
+    seen_keys = set()
     with open(QG_PATH, encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
+            source_rows += 1
+            key = (row.get("Staff First Name","").strip(), row.get("Staff Last Name","").strip(),
+                   row.get("Schedule Date","").strip(), row.get("Task Name","").strip())
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
             conn.execute(
                 "INSERT OR IGNORE INTO qgenda_schedule (first_name, last_name, email, date, task) VALUES (?,?,?,?,?)",
-                (row.get("Staff First Name","").strip(), row.get("Staff Last Name","").strip(),
-                 row.get("Staff Email","").strip(), row.get("Schedule Date","").strip(),
-                 row.get("Task Name","").strip())
+                (key[0], key[1], row.get("Staff Email","").strip(), key[2], key[3])
             )
             count += 1
     conn.commit()
@@ -105,6 +116,13 @@ def sync_qgenda():
                  ("qgenda_schedule", count, str(count), datetime.now().isoformat()))
     conn.commit()
     conn.close()
+    collapsed = source_rows - count
+    if collapsed:
+        # Surface, never hide: schedule rows that share name+date+task and are
+        # therefore not separately representable in this table.
+        log(f"QGenda: {collapsed} of {source_rows} export rows share name+date+task "
+            f"and collapse into the same assignment (table UNIQUE key)")
+        CHANGES.append(f"QGenda: {collapsed} export rows collapsed (name+date+task not unique)")
     CHANGES.append(f"QGenda: {count} rows")
     return count
 
