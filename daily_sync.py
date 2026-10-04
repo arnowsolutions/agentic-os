@@ -3,23 +3,57 @@
    Reads: Call Schedule, QGenda CSV, Staff CSV, GME Tracker
    Writes to: local SQLite at ~/.hermes/data/sync_cache.db
    Runs via cron once a day.
+
+   NOTE (Oct 2026): This is the file the cron job `0b738c09185b` actually
+   executes (jobs.json -> script: vapi_daily_sync.py). A near-identical copy
+   lives at /workspace/agentic-os/daily_sync.py. They diverged once (a fix was
+   applied to only one), so BOTH must be kept byte-identical. See
+   _assert_copy_in_sync() at the bottom.
 """
 import csv
 import hashlib
 import os
 import sqlite3
+import sys
 from collections import defaultdict
 from datetime import date, datetime
+
+# --- Interpreter / dependency hardening (Sep 2026 regression) ---------------
+# openpyxl is installed ONLY in the user-site dir that already sits under
+# HOME=/home/hermeswebui/.hermes/home. When the cron runner spawns this script
+# with a different HOME (gateway-spawned subprocess), user-site resolution
+# changes and `import openpyxl` fails MID-SCRIPT -- after sync_qgenda() and
+# sync_staff() have already committed, leaving call_schedule + gme_residents
+# silently stale. Pin the user-site dir explicitly so HOME cannot break us.
+_PINNED_USER_SITE = "/home/hermeswebui/.hermes/home/.local/lib/python3.12/site-packages"
+if os.path.isdir(_PINNED_USER_SITE) and _PINNED_USER_SITE not in sys.path:
+    sys.path.insert(0, _PINNED_USER_SITE)
+
+# Fail LOUDLY and EARLY at the top, before any table is touched, so a missing
+# dependency can never produce a half-synced DB again.
+try:
+    import openpyxl  # noqa: F401
+except ModuleNotFoundError as _exc:  # pragma: no cover
+    raise SystemExit(
+        f"FATAL: {_exc}. Cannot sync xlsx sources. "
+        f"Install with: /usr/local/bin/python3 -m pip install openpyxl "
+        f"(user-site: {_PINNED_USER_SITE})"
+    )
 
 # Data directories - look in /opt/data first, then legacy /workspace
 # (Jun 2026 regression: rewrite pointed ONLY at /opt/data, which never existed
 #  on any host; the real source files live under /workspace. Fallback restored.)
-HERMES_DATA = os.path.join(os.path.dirname(os.path.expanduser("~/.hermes")), "data")
-if not os.path.exists(HERMES_DATA):
-    os.makedirs(HERMES_DATA, exist_ok=True)
+# Sep 2026: do NOT derive this from HOME -- the cron runner may spawn with a
+# foreign HOME (e.g. /root), which crashed with PermissionError before any
+# sync ran. Pin it to the Hermes home explicitly.
+HERMES_DATA = "/home/hermeswebui/.hermes/data"
+os.makedirs(HERMES_DATA, exist_ok=True)
 # Canonical cache location consumed by agentic-os (see skill vapi-voice-crm-calendar-swaps)
 DB_PATH = "/workspace/agentic-os/data/sync_cache.db"
 DATA_BASES = ["/opt/data", "/workspace"]
+
+# Twin copy that must stay identical to this file (see module docstring).
+_TWIN_COPY = "/workspace/agentic-os/daily_sync.py"
 
 
 def _resolve(*rel_parts):
@@ -42,6 +76,24 @@ CHANGES = []
 
 def log(msg):
     print(f"  {msg}")
+
+
+def _warn_if_twin_drifted():
+    """A fix was once written to only one of the two copies, so the cron job
+    kept running the unfixed file for days. Warn loudly (do not fail the sync)
+    when the twin's content differs, so the next run surfaces it."""
+    try:
+        if not os.path.exists(_TWIN_COPY):
+            return
+        with open(__file__, encoding="utf-8") as fh:
+            here = hashlib.sha256(fh.read().encode("utf-8")).hexdigest()
+        with open(_TWIN_COPY, encoding="utf-8") as fh:
+            there = hashlib.sha256(fh.read().encode("utf-8")).hexdigest()
+        if here != there:
+            log(f"WARN: {_TWIN_COPY} has DRIFTED from this script "
+                f"(sha256 {there[:12]} != {here[:12]}). Re-sync both copies.")
+    except OSError as exc:  # pragma: no cover - never let the check break the sync
+        log(f"WARN: twin-copy drift check skipped: {exc}")
 
 
 def get_db():
@@ -95,20 +147,21 @@ def sync_qgenda():
     # legitimate same-day/same-name/same-task rows (multi-site assignments ->
     # same Task Name, different patient/case). Collapse them here with an
     # explicit seen-set so INSERT OR IGNORE never silently eats them without
-    # the printed count telling us it happened.
+    # the printed count telling us it happened. sync_meta must record the
+    # COMMITTED count, never the raw source-row count.
     seen_keys = set()
     with open(QG_PATH, encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
             source_rows += 1
-            key = (row.get("Staff First Name","").strip(), row.get("Staff Last Name","").strip(),
-                   row.get("Schedule Date","").strip(), row.get("Task Name","").strip())
+            key = (row.get("Staff First Name", "").strip(), row.get("Staff Last Name", "").strip(),
+                   row.get("Schedule Date", "").strip(), row.get("Task Name", "").strip())
             if key in seen_keys:
                 continue
             seen_keys.add(key)
             conn.execute(
                 "INSERT OR IGNORE INTO qgenda_schedule (first_name, last_name, email, date, task) VALUES (?,?,?,?,?)",
-                (key[0], key[1], row.get("Staff Email","").strip(), key[2], key[3])
+                (key[0], key[1], row.get("Staff Email", "").strip(), key[2], key[3])
             )
             count += 1
     conn.commit()
@@ -137,7 +190,7 @@ def sync_staff():
     with open(STAFF_PATH, encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            name = row.get("Employee Name","").strip()
+            name = row.get("Employee Name", "").strip()
             parts = name.split(",")
             if len(parts) >= 2:
                 display = f"{parts[1].strip().split()[0]} {parts[0].strip()}"
@@ -145,8 +198,8 @@ def sync_staff():
                 display = name
             conn.execute(
                 "INSERT OR IGNORE INTO staff_directory (display_name, email, phone, location, employee_id) VALUES (?,?,?,?,?)",
-                (display, row.get("Email","").strip(), row.get("Phone","").strip(),
-                 row.get("Location Code","").strip(), row.get("Employee ID","").strip())
+                (display, row.get("Email", "").strip(), row.get("Phone", "").strip(),
+                 row.get("Location Code", "").strip(), row.get("Employee ID", "").strip())
             )
             count += 1
     conn.commit()
@@ -230,6 +283,7 @@ def sync_gme():
 if __name__ == "__main__":
     os.makedirs(HERMES_DATA, exist_ok=True)
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    _warn_if_twin_drifted()
     init_db()
     sync_qgenda()
     sync_staff()
