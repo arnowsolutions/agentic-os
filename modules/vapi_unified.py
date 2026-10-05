@@ -15,7 +15,7 @@ _THIS_DIR = Path(__file__).resolve().parent  # modules/
 _WORKSPACE = os.environ.get("WORKSPACE") or str(_THIS_DIR.parent.parent)  # agentic-os/../.. = /workspace
 SCHEDULE_PATH = os.path.join(_WORKSPACE, "Call_Schedule_Q3_Q4_2026.xlsx")
 GME_PATH = os.path.join(_WORKSPACE, "Resident_Trackers2025-2026.xlsx")
-QGENDA_PATH = os.path.join(_WORKSPACE, "repos/qgenda/data/Montefiore_Medical_Center_-_Urology_Schedule_Export_1-1-2026_to_12-31-2026.csv")
+QGENDA_PATH = os.path.join(_WORKSPACE, "Montefiore_Medical_Center_-_Urology_Schedule_Export_1-1-2026_to_12-31-2026.csv")
 REIMBURSEMENT_DB = os.path.join(_WORKSPACE, "repos/reimbursement/reimbursement.db")
 STAFF_PATH = os.path.join(_WORKSPACE, "repos/sick-call-line/data/associates.csv")
 GME_CAP = 1250.0

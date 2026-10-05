@@ -480,7 +480,7 @@ The Vapi voice assistant reads from three local data files and one Drive-synced 
 | Source | Path | Format | Contents |
 |--------|------|--------|----------|
 | **Call Schedule** | `/workspace/Call_Schedule_Q3_Q4_2026.xlsx` | xlsx (openpyxl) | 3 sheets (Moses, Wakefield, Weiler) — dates, day, primary/backup/peds attendings |
-| **QGenda** | `/workspace/repos/qgenda/data/Montefiore_Medical_Center_-_Urology_Schedule_Export_1-1-2026_to_12-31-2026.csv` | CSV | 4,272 rows — physician daily clinic/OR assignments by person and date |
+| **QGenda** | `/workspace/Montefiore_Medical_Center_-_Urology_Schedule_Export_1-1-2026_to_12-31-2026.csv` | CSV | physician daily clinic/OR assignments by person and date (moved here 2026-10-04 when the retired `repos/qgenda` app was archived; the other app data is preserved in `/workspace/qgenda-data/`) |
 | **Staff (associates)** | `/workspace/repos/sick-call-line/data/associates.csv` | CSV | Staff directory for sick-call and lookup |
 | **Location Rosters** | `/workspace/agentic-os/data/location_rosters/parsed/` | JSON (parsed from xlsx) | ~13 parsed roster files covering Nursing, Clerical, etc. — Drive-synced from `urologyresidencyprogram@gmail.com` |
 

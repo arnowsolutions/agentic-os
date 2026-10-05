@@ -67,7 +67,7 @@ def _resolve(*rel_parts):
     return os.path.join(DATA_BASES[0], rel)
 
 
-QG_PATH = _resolve("repos/qgenda/data/Montefiore_Medical_Center_-_Urology_Schedule_Export_1-1-2026_to_12-31-2026.csv")
+QG_PATH = _resolve("Montefiore_Medical_Center_-_Urology_Schedule_Export_1-1-2026_to_12-31-2026.csv")
 STAFF_PATH = _resolve("repos/sick-call-line/data/associates.csv")
 SCHED_PATH = _resolve("Call_Schedule_Q3_Q4_2026.xlsx")
 GME_PATH = _resolve("Resident_Trackers2025-2026.xlsx")
