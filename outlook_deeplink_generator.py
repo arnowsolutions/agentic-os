@@ -5,7 +5,7 @@ Outlook Calendar Deeplink Generator
 Generates an HTML page with buttons that open pre-filled Outlook calendar
 compose forms. No login, no API, no token — just URL deeplinks.
 
-Each button opens outlook.cloud.microsoft/calendar/deeplink/compose with:
+Each button opens outlook.office.com/calendar/deeplink/compose with:
   - Subject pre-filled
   - Body pre-filled (plain text, nicely formatted)
   - Recipients pre-filled (or test email in test mode)
@@ -355,6 +355,63 @@ def build_grand_rounds_body(event):
     )
 
 
+# Microsoft's sign-in endpoint rejects long deeplinks with "AADSTS90015:
+# Requested query string is too long" whenever the browser has to bounce
+# through the sign-in step (cold/expired session — hit twice in a row for a
+# real send on 2026-10-14). Recipients are ~2.4K chars of any Friday link
+# and cannot be trimmed, so when a Friday link would exceed the ~3,900-char
+# safe ceiling, swap in a slim body that keeps the date, the agenda, the
+# Zoom join line + credentials and the rooms.
+MAX_DEEPLINK_CHARS = 3900
+
+
+def build_grand_rounds_body_compact(event):
+    """Slim Grand Rounds body for events whose full body would overflow the deeplink.
+
+    Drops the phone dial-in block, the address footer and the table scaffolding;
+    keeps the date, the agenda (both slots), Zoom join link, meeting ID/passcode
+    and the rooms.
+    """
+    d = datetime.strptime(event["date"], "%Y-%m-%d")
+    formatted = d.strftime("%A, %B %d, %Y")
+    t7 = event["topic_7_8"]
+    t8 = event["topic_8_9"]
+    if t7 and not t8:
+        t8 = t7
+    elif t8 and not t7:
+        t7 = t8
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    return (
+        f"<strong>Montefiore Urology &mdash; Grand Rounds</strong><br>"
+        f"<strong>{esc(formatted)}</strong><br><br>"
+        f"<strong>Agenda</strong><br>"
+        f"{esc(t7)}<br>"
+        f"{esc(t8)}<br><br>"
+        f"<strong>Zoom:</strong> {esc(event['zoom_link'])}<br>"
+        f"Meeting ID {esc(event['meeting_id'])} &middot; Passcode {esc(event['passcode'])}<br>"
+        f"Montefiore Moses &mdash; Hutch I, PH2 Conf A / Conf B"
+    )
+
+
+def fit_friday_body(event, subject, to_param, start_dt, end_dt, location):
+    """Return a body whose deeplink fits the sign-in ceiling, preferring the full body.
+
+    Checked against the longer **UPDATE** subject too, so flipping the UPDATE
+    toggle can never rebuild an over-length link from the same row.
+    """
+    full = build_grand_rounds_body(event)
+    longest = max(
+        len(build_deeplink(subject, full, to_param, start_dt, end_dt, location)),
+        len(build_deeplink(f"**UPDATE** {subject}", full, to_param, start_dt, end_dt, location)),
+    )
+    if longest <= MAX_DEEPLINK_CHARS:
+        return full
+    return build_grand_rounds_body_compact(event)
+
+
 # ══════════════════════════════════════════════════════════════
 #  DEEPLINK BUILDER
 # ══════════════════════════════════════════════════════════════
@@ -371,7 +428,7 @@ def build_deeplink(subject, body, to_param, start_dt, end_dt, location="Zoom"):
         "enddt": end_dt,
         "location": location,
     }, quote_via=urllib.parse.quote)
-    return f"https://outlook.cloud.microsoft/calendar/deeplink/compose?{params}"
+    return f"https://outlook.office.com/calendar/deeplink/compose?{params}"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -462,15 +519,20 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
         to_param = test_email if test_mode else ",".join(recipients)
         subject = build_grand_rounds_subject(ev)
         update_subject = f"**UPDATE** {subject}"
-        body = build_grand_rounds_body(ev)
         if ev.get("is_interview_day"):
             location = "Montefiore Medical Center - Urology (interview day)"
             start_dt = f"{ev['date']}T08:00:00"
             end_dt = f"{ev['date']}T16:00:00"
+            body = build_grand_rounds_body(ev)
         else:
             location = "Hutch I PH2 Conf A (7-8) / Conf B (8-9)"
             start_dt = f"{ev['date']}T07:00:00"
             end_dt = f"{ev['date']}T09:00:00"
+            # Full body restored 2026-10-14 evening: the real failure was the
+            # cloud.microsoft host (it rejects even 3.3K links for the sender) —
+            # office.com opens the full ~5.4K link fine. fit_friday_body stays
+            # defined below as a fallback if the host situation ever regresses.
+            body = build_grand_rounds_body(ev)
         url = build_deeplink(subject, body, to_param, start_dt, end_dt, location)
         update_url = build_deeplink(update_subject, body, to_param, start_dt, end_dt, location)
         eid = f"fri_{ev['date']}"
@@ -890,7 +952,7 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
       params.set('startdt', data.startdt);
       params.set('enddt', data.enddt);
       params.set('location', data.location);
-      const url = 'https://outlook.cloud.microsoft/calendar/deeplink/compose?' + params.toString();
+      const url = 'https://outlook.office.com/calendar/deeplink/compose?' + params.toString();
       window.open(url, '_blank');
       markSent(currentEditId);
       closeEditor();
