@@ -476,7 +476,8 @@ def build_deeplink(subject, body, to_param, start_dt, end_dt, location="Zoom"):
     if location:          # omit entirely for "no room" — never send location="None"
         params["location"] = location
     params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-    return f"https://outlook.cloud.microsoft/calendar/deeplink/compose?{params}"
+    # HOST: office.com — cloud.microsoft rejects these links (AADSTS90015) for this account.
+    return f"https://outlook.office.com/calendar/deeplink/compose?{params}"
 
 
 # ── Event building ──────────────────────────────────────────────────────────

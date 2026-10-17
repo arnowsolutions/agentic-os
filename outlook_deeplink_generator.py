@@ -355,14 +355,101 @@ def build_grand_rounds_body(event):
     )
 
 
+def build_monday_body_premium(event, header_topic: bool = True):
+    """Monday SASP invite body in the office's premium look, sized to fit a URL.
+
+    Mirrors the template the automated Monday campaign sends — navy header band,
+    a Zoom box with a join button, an agenda box, the date/time line and the
+    footer — but with short inline styles so the whole compose link stays under
+    MAX_DEEPLINK_CHARS. The office's own mailer HTML (calendar_mailer.py) is
+    ~6K and can never travel in a compose link; a link that will not open is
+    worse than a plainer body, so this keeps the LOOK and the values.
+
+    header_topic=False drops only the topic from the small header subtitle (it
+    still leads the agenda box, which is where the reference email bolds it) —
+    the middle tier for long topics that would otherwise push the link over.
+    """
+    d = datetime.strptime(event["date"], "%Y-%m-%d")
+    formatted = d.strftime("%A, %B %d, %Y")
+    tz = d.strftime("%Z") or "EDT"
+    zoom_link = event["zoom_link"]
+    topic = str(event["topic"])
+    year = event["date"][:4]
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def dr(name):
+        if not name or name in ("N/A", "TBD", "", "None"):
+            return "TBD"
+        return f"Dr. {esc(name)}"
+
+    def dr_resident(name):
+        from gr_schedule import dr_resident as _dr_resident
+        v = _dr_resident(name)
+        return esc(v) if v else "TBD"
+
+    subtitle = f"Resident Weekly Conference {year}" + (
+        f" : &quot;{esc(topic)}&quot;" if header_topic else ""
+    )
+
+    return (
+        f"<table width='100%' style='background:#1a3a5c'>"
+        f"<tr><td style='padding:16px 20px'>"
+        f"<font color='#ffffff' size='4'><b>Montefiore Urology</b></font><br>"
+        f"<font color='#c7d5e5' size='2'>{subtitle}</font>"
+        f"</td></tr></table>"
+        f"<table width='100%' style='background:#f0f7ff;border:1px solid #bfdbfe'>"
+        f"<tr><td style='padding:14px;text-align:center'>"
+        f"<font color='#1d4ed8' size='1'><b>ZOOM MEETING</b></font><br>"
+        f"<a href='{esc(zoom_link)}' style='background:#1a3a5c;color:#ffffff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none'>Click Here to Join Zoom Meeting &rarr;</a><br>"
+        f"<font color='#6b7280' size='1'>Meeting ID:</font> <b>{esc(event['meeting_id'])}</b> &nbsp; "
+        f"<font color='#6b7280' size='1'>Passcode:</font> <b>{esc(event['passcode'])}</b>"
+        f"</td></tr></table>"
+        f"<table width='100%' style='background:#f9fafb;border:1px solid #e5e7eb'>"
+        f"<tr><td style='padding:12px 16px'>"
+        f"<font color='#6b7280' size='1'><b>AGENDA</b></font><br>"
+        f"<b>MONDAY CONFERENCE</b> &nbsp; 7:00 &ndash; 8:00 AM<br>"
+        f"<b>{esc(topic)}</b><br>"
+        f"Resident: {dr_resident(event['resident'])} &nbsp;|&nbsp; Attending: {dr(event['attending'])}"
+        f"</td></tr></table>"
+        f"<p style='margin:12px 0 4px 0'><b>Date:</b> {esc(formatted)}<br><b>Time:</b> 07:00 &ndash; 08:00 ({tz})</p>"
+        f"<font color='#6b7280' size='1'>Montefiore Medical Center &bull; Department of Urology<br>"
+        f"This is an automated message. Please do not reply directly to this email.</font>"
+    )
+
+
+def build_monday_body_min(event):
+    """Last-resort Monday body if even the premium one would not fit a link."""
+    d = datetime.strptime(event["date"], "%Y-%m-%d")
+    formatted = d.strftime("%A, %B %d, %Y")
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    return (
+        f"<strong>Montefiore Urology - Resident AM Conference</strong><br>"
+        f"<strong>{esc(formatted)}</strong> &middot; 7:00 - 8:00 AM (Eastern)<br>"
+        f"<strong>Zoom:</strong> <a href='{esc(event['zoom_link'])}'>Join Zoom Meeting</a><br>"
+        f"<strong>{esc(event['topic'])}</strong><br>"
+        f"Meeting ID {esc(event['meeting_id'])} &middot; Passcode {esc(event['passcode'])}"
+    )
+
+
 # Microsoft's sign-in endpoint rejects long deeplinks with "AADSTS90015:
-# Requested query string is too long" whenever the browser has to bounce
-# through the sign-in step (cold/expired session — hit twice in a row for a
-# real send on 2026-10-14). Recipients are ~2.4K chars of any Friday link
-# and cannot be trimmed, so when a Friday link would exceed the ~3,900-char
-# safe ceiling, swap in a slim body that keeps the date, the agenda, the
-# Zoom join line + credentials and the rooms.
-MAX_DEEPLINK_CHARS = 3900
+# Requested query string is too long" — but ONLY when the click has to bounce
+# through the sign-in step (no live Outlook session in that browser). The link
+# rides that bounce as a return-URL and grows ~1.5x.
+#
+# Measured 2026-10-16 with a real browser on the exact live links:
+#     Monday  3,581 chars -> sign-in request  5,506  == REJECTED for the owner
+#     Friday  5,602 chars -> sign-in request  8,184
+# A good link (compact Friday, 3,283) rides in at ~5.0K and opens.
+# So the failing axis is the SIGN-IN length, and the safe raw ceiling sits
+# around 3.2K. Every link (Monday SASP and Friday Grand Rounds) is therefore
+# held under MAX_DEEPLINK_CHARS by swapping in a slim body — recipients are
+# untouchable (~2.4K of a Friday link) and the session may be cold at click time.
+MAX_DEEPLINK_CHARS = 3300
 
 
 def build_grand_rounds_body_compact(event):
@@ -410,6 +497,30 @@ def fit_friday_body(event, subject, to_param, start_dt, end_dt, location):
     if longest <= MAX_DEEPLINK_CHARS:
         return full
     return build_grand_rounds_body_compact(event)
+
+
+def fit_monday_body(event, subject, to_param, start_dt, end_dt, location):
+    """Return the richest Monday SASP body whose deeplink still fits the ceiling.
+
+    Tries the premium look first and steps down to the minimal body only if even
+    that would not fit; the link must open on a cold session to be worth sending.
+    """
+    body = build_monday_body_min(event)
+    tiers = (
+        lambda e: build_monday_body_premium(e, header_topic=True),
+        lambda e: build_monday_body_premium(e, header_topic=False),
+        build_monday_body_min,
+    )
+    for build in tiers:
+        candidate = build(event)
+        longest = max(
+            len(build_deeplink(subject, candidate, to_param, start_dt, end_dt, location)),
+            len(build_deeplink(f"**UPDATE** {subject}", candidate, to_param, start_dt, end_dt, location)),
+        )
+        if longest <= MAX_DEEPLINK_CHARS:
+            return candidate
+        body = candidate
+    return body
 
 
 # ══════════════════════════════════════════════════════════════
@@ -494,10 +605,10 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
         to_param = test_email if test_mode else ",".join(recipients)
         subject = build_monday_subject(ev)
         update_subject = f"**UPDATE** {subject}"
-        body = build_monday_body(ev)
         location = ev["zoom_link"]
         start_dt = f"{ev['date']}T07:00:00"
         end_dt = f"{ev['date']}T08:00:00"
+        body = fit_monday_body(ev, subject, to_param, start_dt, end_dt, location)
         url = build_deeplink(subject, body, to_param, start_dt, end_dt, location)
         update_url = build_deeplink(update_subject, body, to_param, start_dt, end_dt, location)
         eid = f"mon_{ev['date']}"
@@ -523,16 +634,16 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
             location = "Montefiore Medical Center - Urology (interview day)"
             start_dt = f"{ev['date']}T08:00:00"
             end_dt = f"{ev['date']}T16:00:00"
-            body = build_grand_rounds_body(ev)
         else:
             location = "Hutch I PH2 Conf A (7-8) / Conf B (8-9)"
             start_dt = f"{ev['date']}T07:00:00"
             end_dt = f"{ev['date']}T09:00:00"
-            # Full body restored 2026-10-14 evening: the real failure was the
-            # cloud.microsoft host (it rejects even 3.3K links for the sender) —
-            # office.com opens the full ~5.4K link fine. fit_friday_body stays
-            # defined below as a fallback if the host situation ever regresses.
-            body = build_grand_rounds_body(ev)
+        # Length guard, same as Monday: a click on a cold session bounces through
+        # Microsoft's sign-in endpoint, where the link rides as a return-URL and
+        # grows ~1.5x. 2026-10-16: a 3,581-char Monday link rode in at 5,506 and
+        # was rejected; a 3,283-char link rides in ~5.0K and opens. The host must
+        # stay outlook.office.com (cloud.microsoft rejects even 3.3K links).
+        body = fit_friday_body(ev, subject, to_param, start_dt, end_dt, location)
         url = build_deeplink(subject, body, to_param, start_dt, end_dt, location)
         update_url = build_deeplink(update_subject, body, to_param, start_dt, end_dt, location)
         eid = f"fri_{ev['date']}"
@@ -694,6 +805,20 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
     (subject, formatted body, Zoom link, time, location, attendees).<br>
     Just click <strong>Send</strong> in the Outlook tab that opens.<br><br>
     {test_html}
+  </div>
+
+  <div class="info" style="border-left:4px solid #b45309">
+    <strong>Sign in to Outlook first.</strong><br>
+    If Outlook Web is not already signed in <em>in this browser</em>, the invite link is re-routed
+    through Microsoft's sign-in page &mdash; and when that happens the draft never opens, you just
+    get an <span style="white-space:nowrap">AADSTS90015 &ldquo;query string is too long&rdquo;</span>
+    error. Open Outlook Web once (it signs in with your existing session), then click the invite
+    button. Nothing is sent until you press Send.
+    <div style="margin-top:10px">
+      <a href="https://outlook.office.com/mail/" target="_blank" rel="noopener"
+         style="display:inline-block;background:#0d9488;color:#fff;padding:7px 14px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">1. Open Outlook Web</a>
+      <span style="font-size:12px;color:#71717a;margin-left:8px">then click any invite button below</span>
+    </div>
   </div>
 
   <div class="toggle-bar">

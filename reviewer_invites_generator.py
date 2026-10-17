@@ -14,7 +14,7 @@ TWO KINDS OF STATUS, kept distinct on purpose:
     a test login, and is labelled as such instead of being counted as progress.
 
 Deeplink rules (see the outlook-compose-deeplinks skill):
-  - host is outlook.cloud.microsoft
+  - host is outlook.office.com (cloud.microsoft rejects these links with AADSTS90015)
   - MAIL drafts take a PLAIN-TEXT body and NO bodyType (HTML in a mail deeplink is ignored
     and renders as literal tags)
   - percent-encode with quote_via=quote, never quote_plus
@@ -29,8 +29,8 @@ from urllib.parse import urlencode, quote
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "data" / "reviewer_invites.json"
 STATUS_FILE = BASE_DIR / "data" / "reviewer_invite_status.json"
-OUTLOOK_MAIL = "https://outlook.cloud.microsoft/mail/deeplink/compose"
-OUTLOOK_CAL = "https://outlook.cloud.microsoft/calendar/deeplink/compose"
+OUTLOOK_MAIL = "https://outlook.office.com/mail/deeplink/compose"
+OUTLOOK_CAL = "https://outlook.office.com/calendar/deeplink/compose"
 
 # Where the formatting probes point. Kept on the owner's own address so a mis-click can
 # never reach a reviewer.
@@ -288,8 +288,8 @@ def generate_html_page(signins: dict | None = None) -> str:
                                           CAL_START, CAL_END, CAL_LOCATION)
         plain_url = build_deeplink(subject, inv["body"] + SIG_TEXT, inv["email"])
         length = len(cal_url)
-        # 5,600 is the practical ceiling for the cloud.microsoft handler (the old
-        # outlook.office.com host failed outright on long links; ~5.5K is known-good here).
+        # ~5.5K is the known-good ceiling for office.com (host flipped back 2026-10-14/16:
+        # cloud.microsoft rejected these links with AADSTS90015 at every length).
         budget = "ok" if length < 5600 else "over"
 
         mark = status.get(key)

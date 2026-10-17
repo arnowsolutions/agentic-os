@@ -319,8 +319,8 @@ tbody.innerHTML = rows.map(r => `
     <td style="padding:8px 10px;vertical-align:top">${escapeHtml(r.attending)}</td>
     <td style="padding:8px 10px;text-align:center;vertical-align:top">${icsSentBadge(r.date)}</td>
     <td style="padding:8px 10px;text-align:center;white-space:nowrap">
-      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMondayOutlook('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Open in Outlook"></button>
-      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadMondayIcs('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Download .ics"></button>
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="openMondayOutlook('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Open in Outlook">Open in Outlook</button>
+      <button class="btn btn-sm" style="font-size:10px;padding:3px 7px" onclick="downloadMondayIcs('${r.date}','${r.topic.replace(/'/g,"\\'")}','${r.resident.replace(/'/g,"\\'")}','${r.attending.replace(/'/g,"\\'")}')" title="Download .ics">.ics</button>
     </td>
   </tr>
 `).join('');

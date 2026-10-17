@@ -191,7 +191,7 @@ function buildChiefMeetingsInline() {
       <td style="padding:10px 16px">${escapeHtml(label || '—')}</td>
       <td style="padding:10px 16px">${st} – ${et}</td>
       <td style="padding:10px 16px">${escapeHtml(loc)}</td>
-      <td style="padding:10px 16px;text-align:center"><button class="btn btn-sm" onclick="openChiefOutlookHub('${date}')"></button></td>
+      <td style="padding:10px 16px;text-align:center"><button class="btn btn-sm" onclick="openChiefOutlookHub('${date}')">Open in Outlook</button></td>
     </tr>`;
   }).join('');
   return `
