@@ -34,6 +34,23 @@ FROM_EMAIL = os.environ.get("FROM_EMAIL", SMTP_USER)
 FROM_NAME = os.environ.get("FROM_NAME", "Montefiore Urology")
 
 
+def _button(label: str, href: str) -> str:
+    """Outlook-safe CTA button.
+
+    Outlook's Word renderer ignores `display:inline-block` on <a>, so an
+    inline-block anchor keeps its 10px padding but the background paints over
+    the following line — that is what put the Zoom button on top of the
+    Meeting ID. A one-cell table with a display:block anchor renders the same
+    in Outlook, Gmail and Apple Mail.
+    """
+    return f"""<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto">
+<tr><td align="center" bgcolor="#1a3a5c" style="background-color:#1a3a5c;border-radius:6px">
+<a href="{href}" style="display:block;padding:10px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;line-height:18px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px">{label}</a>
+</td></tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td height="12" style="font-size:0;line-height:0">&nbsp;</td></tr></table>"""
+
+
 def _html_wrap(title: str, body_html: str) -> str:
     """Wrap body content in a premium branded HTML email template."""
     return f"""<!DOCTYPE html>
@@ -42,7 +59,7 @@ def _html_wrap(title: str, body_html: str) -> str:
 <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:20px">
 <tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+<table width="700" cellpadding="0" cellspacing="0" style="width:100%;max-width:700px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
 <!-- Header -->
 <tr><td style="background:#1a3a5c;padding:20px 40px;text-align:center">
 <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:700">Montefiore Urology</h1>
@@ -209,7 +226,7 @@ def send_calendar_invite(to: str, subject: str, summary: str, description: str,
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:16px">
 <tr><td style="padding:16px 20px;text-align:center">
 <p style="margin:0 0 12px 0;font-size:11px;color:#1d4ed8;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Zoom Meeting</p>
-<a href="{zoom_link}" style="display:inline-block;background-color:#1a3a5c;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 24px;border-radius:6px;margin-bottom:8px">Click Here to Join Zoom Meeting →</a>
+{_button("Click Here to Join Zoom Meeting →", zoom_link)}
 <table cellpadding="0" cellspacing="0" style="margin:0 auto">
 <tr><td style="font-size:12px;color:#6b7280;padding:2px 8px 2px 0">Meeting ID:</td><td style="font-size:13px;color:#111827;font-weight:600">{meeting_id}</td></tr>
 <tr><td style="font-size:12px;color:#6b7280;padding:2px 8px 2px 0">Passcode:</td><td style="font-size:13px;color:#111827;font-weight:600">{passcode}</td></tr>
@@ -229,8 +246,10 @@ def send_calendar_invite(to: str, subject: str, summary: str, description: str,
 
     agenda = ""
     if session_7_8 or session_8_9:
-        # If only one session provided, duplicate it into both time slots
-        if session_7_8 and not session_8_9:
+        # If only one session provided, duplicate it into both time slots ONLY
+        # for a genuine 2-hour event. A 1-hour Monday conference (60 min) must
+        # render a single 7:00-8:00 AM row, never a phantom 8:00-9:00 row.
+        if duration_minutes and duration_minutes >= 120 and session_7_8 and not session_8_9:
             session_8_9 = session_7_8
             session_8_9_label = session_7_8_label or "Grand Rounds Conference"
         if session_8_9 and not session_7_8:

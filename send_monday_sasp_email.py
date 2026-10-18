@@ -9,7 +9,7 @@ import json, re, os, sys
 from datetime import date, timedelta, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from calendar_mailer import send_calendar_invite, send_reminder_email, _html_wrap
+from calendar_mailer import send_calendar_invite, send_reminder_email, _html_wrap, _button
 
 # ── Monday Zoom Config ────────────────────────────────────
 ZOOM_LINK = "https://montefiore.zoom.us/j/92009850717?pwd=25ask1SzLX2SdSrTbbhzb159UsyDFY.1"
@@ -262,7 +262,7 @@ def send_monday_reminder(event, mon_date):
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px">
 <tr><td style="padding:16px 20px;font-size:11px;color:#1d4ed8;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #bfdbfe;text-align:center">Zoom Meeting</td></tr>
 <tr><td style="padding:16px 20px;text-align:center">
-<a href="{ZOOM_LINK}" style="display:inline-block;background-color:#1a3a5c;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:600;text-decoration:none;padding:10px 24px;border-radius:6px;margin-bottom:12px">Click Here to Join Zoom Meeting →</a>
+{_button("Click Here to Join Zoom Meeting →", ZOOM_LINK)}
 <table cellpadding="0" cellspacing="0" style="margin:0 auto">
 <tr><td style="font-size:12px;color:#6b7280;padding:2px 8px 2px 0">Meeting ID:</td><td style="font-size:13px;color:#111827;font-weight:600">{MEETING_ID}</td></tr>
 <tr><td style="font-size:12px;color:#6b7280;padding:2px 8px 2px 0">Passcode:</td><td style="font-size:13px;color:#111827;font-weight:600">{PASSCODE}</td></tr>
