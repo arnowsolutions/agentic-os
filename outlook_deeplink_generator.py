@@ -358,16 +358,28 @@ def build_grand_rounds_body(event):
 def build_monday_body_premium(event, header_topic: bool = True):
     """Monday SASP invite body in the office's premium look, sized to fit a URL.
 
-    Mirrors the template the automated Monday campaign sends — navy header band,
-    a Zoom box with a join button, an agenda box, the date/time line and the
-    footer — but with short inline styles so the whole compose link stays under
-    MAX_DEEPLINK_CHARS. The office's own mailer HTML (calendar_mailer.py) is
-    ~6K and can never travel in a compose link; a link that will not open is
-    worse than a plainer body, so this keeps the LOOK and the values.
+    Mirrors the reference email — navy header band, a centred Zoom card with a
+    join button and credentials, an agenda card, resident/attending, date/time
+    and the footer — in the least markup that still renders as cards.
 
-    header_topic=False drops only the topic from the small header subtitle (it
-    still leads the agenda box, which is where the reference email bolds it) —
-    the middle tier for long topics that would otherwise push the link over.
+    Composed for the Outlook compose window (Word engine):
+      * the join button is a one-cell table with the anchor inside. An anchor
+        carrying its own padding is what painted the button over the ZOOM
+        MEETING label;
+      * the cards are real tables carrying `bgcolor`, because the compose engine
+        drops CSS backgrounds and borders — a style-only card renders as loose
+        floating text;
+      * one 700px centred shell keeps the band and cards the same width as the
+        reference instead of stretching across a wide compose pane;
+      * `<font>`/`<b>` carry the type instead of long style strings: every
+        character is percent-encoded in the link, so a 20-char style costs 30.
+
+    The link must fit MAX_DEEPLINK_CHARS for the LIVE recipient list too, not
+    just for a single test address — a body that only fits in test mode silently
+    degrades to the plain-text tier on the real send.
+
+    header_topic=False drops only the topic from the header subtitle (it still
+    leads the agenda card) — the middle tier for long topics.
     """
     d = datetime.strptime(event["date"], "%Y-%m-%d")
     formatted = d.strftime("%A, %B %d, %Y")
@@ -389,33 +401,46 @@ def build_monday_body_premium(event, header_topic: bool = True):
         v = _dr_resident(name)
         return esc(v) if v else "TBD"
 
-    subtitle = f"Resident Weekly Conference {year}" + (
-        f" : &quot;{esc(topic)}&quot;" if header_topic else ""
-    )
+    resident_name = dr_resident(event["resident"])
+    attending_name = dr(event["attending"])
+    subtitle = f"Resident Weekly Conference {year}"
+    if header_topic:
+        subtitle += f" : &quot;{esc(topic)}&quot;"
+    subtitle += f" - {attending_name} / {resident_name}"
 
     return (
-        f"<table width='100%' style='background:#1a3a5c'>"
-        f"<tr><td style='padding:16px 20px'>"
-        f"<font color='#ffffff' size='4'><b>Montefiore Urology</b></font><br>"
-        f"<font color='#c7d5e5' size='2'>{subtitle}</font>"
+        f"<table width=700 align=center cellpadding=0 cellspacing=0>"
+        f"<tr><td bgcolor=#1a3a5c align=center style='padding:16px'>"
+        f"<font color=#ffffff size=4><b>Montefiore Urology</b></font><br>"
+        f"<font color=#c7d5e5 size=2>{subtitle}</font>"
+        f"</td></tr>"
+        f"<tr><td align=center style='padding:12px'>"
+        # Zoom card
+        f"<table width='100%'><tr><td bgcolor=#f0f7ff align=center style='padding:12px'>"
+        f"<font color=#1d4ed8 size=1><b>ZOOM MEETING</b></font>"
+        f"<table align=center style='margin:8px auto'><tr>"
+        f"<td bgcolor=#1a3a5c style='padding:9px 18px'>"
+        f"<a href='{esc(zoom_link)}' style='color:#fff;font-size:13px;font-weight:bold;text-decoration:none'>"
+        f"Click Here to Join Zoom Meeting &rarr;</a></td></tr></table>"
+        f"<font color=#666 size=2>Meeting ID: <b>{esc(event['meeting_id'])}</b>"
+        f" | Passcode: <b>{esc(event['passcode'])}</b></font>"
+        f"</td></tr></table><br>"
+        # Agenda card
+        f"<table width='100%'><tr><td bgcolor=#f9fafb align=center style='padding:10px'>"
+        f"<font color=#666 size=1><b>AGENDA</b></font><br>"
+        f"<font color=#666 size=1><b>MONDAY CONFERENCE</b></font><br>"
+        f"<font color=#999 size=2>7:00 &ndash; 8:00 AM</font><br>"
+        f"<font color=#111 size=3><b>{esc(topic)}</b></font>"
         f"</td></tr></table>"
-        f"<table width='100%' style='background:#f0f7ff;border:1px solid #bfdbfe'>"
-        f"<tr><td style='padding:14px;text-align:center'>"
-        f"<font color='#1d4ed8' size='1'><b>ZOOM MEETING</b></font><br>"
-        f"<a href='{esc(zoom_link)}' style='background:#1a3a5c;color:#ffffff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none'>Click Here to Join Zoom Meeting &rarr;</a><br>"
-        f"<font color='#6b7280' size='1'>Meeting ID:</font> <b>{esc(event['meeting_id'])}</b> &nbsp; "
-        f"<font color='#6b7280' size='1'>Passcode:</font> <b>{esc(event['passcode'])}</b>"
+        # People + date/time
+        
+        f"<font color=#111 size=2><b>Resident:</b> {resident_name}<br>"
+        f"<b>Attending:</b> {attending_name}<br><br>"
+        f"<b>Date:</b> {esc(formatted)}<br><b>Time:</b> 07:00 &ndash; 08:00 ({tz})</font>"
+        f"</td></tr>"
+        f"<tr><td bgcolor=#f9fafb align=center style='padding:10px'>"
+        f"<font color=#999 size=1>Montefiore Medical Center &bull; Department of Urology</font>"
         f"</td></tr></table>"
-        f"<table width='100%' style='background:#f9fafb;border:1px solid #e5e7eb'>"
-        f"<tr><td style='padding:12px 16px'>"
-        f"<font color='#6b7280' size='1'><b>AGENDA</b></font><br>"
-        f"<b>MONDAY CONFERENCE</b> &nbsp; 7:00 &ndash; 8:00 AM<br>"
-        f"<b>{esc(topic)}</b><br>"
-        f"Resident: {dr_resident(event['resident'])} &nbsp;|&nbsp; Attending: {dr(event['attending'])}"
-        f"</td></tr></table>"
-        f"<p style='margin:12px 0 4px 0'><b>Date:</b> {esc(formatted)}<br><b>Time:</b> 07:00 &ndash; 08:00 ({tz})</p>"
-        f"<font color='#6b7280' size='1'>Montefiore Medical Center &bull; Department of Urology<br>"
-        f"This is an automated message. Please do not reply directly to this email.</font>"
     )
 
 
