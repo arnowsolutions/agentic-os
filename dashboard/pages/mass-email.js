@@ -67,9 +67,10 @@ const MASSTEMAIL_CATEGORIES = [
 // Active sub-tab
 let massEmailActive = 'grand-rounds';
 // Live vs Test toggle per page (client-side override on the iframe src)
-// Defaults to TEST: deeplinks address only the test mailbox until the operator
-// flips the switch for a real send.
-let massEmailLive = false;
+// LIVE by default: the deeplink only opens a compose window, so the group must be
+// pre-filled in To — nothing is sent until the operator clicks Send. TEST is for
+// opening a copy addressed to the test mailbox alone.
+let massEmailLive = true;
 
 async function renderMassEmail() {
   const content = document.getElementById('pageContent');
