@@ -1,0 +1,20 @@
+{
+  "id": "jury_duty_excuse",
+  "title": "Jury Duty — Program Director Excusal Request",
+  "description": "Short letter from the Program Director confirming a resident's training status and asking the court to excuse them from jury duty. Format follows the department's prior submission (John Hordines, September 2025): letterhead page, spelled-out date, 'To Whom It May Concern', three short paragraphs, typed signature block.",
+  "signer": {
+    "name": "Alex Sankin, M.D.",
+    "title": "Program Director, Urology Residency Training Program"
+  },
+  "salutation": "To Whom It May Concern,",
+  "paragraphs": [
+    "I am writing to confirm the residency status of Dr. {name}. {Subj} is currently a {pgy} resident in the Department of Urology at Montefiore Hospital and is expected to graduate on June 30, {grad_year}.",
+    "Due to critical staffing needs, we respectfully request that Dr. {last} be excused from jury duty. {Poss} absence at this time could significantly impact the department and may result in an extension of {poss} residency training.",
+    "If you require any additional information or documentation, please do not hesitate to contact me."
+  ],
+  "pronouns": {
+    "he": {"Subj": "He", "Poss": "His", "poss": "his"},
+    "she": {"Subj": "She", "Poss": "Her", "poss": "her"},
+    "they": {"Subj": "They", "Poss": "Their", "poss": "their"}
+  }
+}

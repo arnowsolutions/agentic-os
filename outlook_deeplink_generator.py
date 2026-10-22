@@ -476,6 +476,19 @@ def build_monday_body_min(event):
 # untouchable (~2.4K of a Friday link) and the session may be cold at click time.
 MAX_DEEPLINK_CHARS = 3300
 
+# Friday Grand Rounds has its OWN ceiling, because the full body IS the spec.
+#
+# The documented Friday look is the full body: AGENDA / ZOOM MEETING DETAILS /
+# PHONE DIAL-IN / address footer. Measured 2026-10-21 on the real list:
+#     full body (1,731 chars) + 88 recipients -> 5,525-char link
+#     compact body (403 chars) + 88 recipients -> 3,361-char link
+# With the old shared 3,300 cap every LIVE Friday link was forced onto the
+# compact body while test mode (1 recipient, 3,102) kept the full one — so the
+# body silently "changed" between preview and send. Never do that again: keep
+# the full body and only fall back past this much higher guard (a pathologically
+# long topic), and flag it in the UI when it happens.
+MAX_FRIDAY_DEEPLINK_CHARS = 6500
+
 
 def build_grand_rounds_body_compact(event):
     """Slim Grand Rounds body for events whose full body would overflow the deeplink.
@@ -509,7 +522,12 @@ def build_grand_rounds_body_compact(event):
 
 
 def fit_friday_body(event, subject, to_param, start_dt, end_dt, location):
-    """Return a body whose deeplink fits the sign-in ceiling, preferring the full body.
+    """Return ``(body, is_slim)``, preferring the documented full body.
+
+    The full Friday body is the format the office sends and reads — do NOT trade
+    it away for a shorter link. The compact body exists only as a guard past
+    MAX_FRIDAY_DEEPLINK_CHARS, and callers must surface that state instead of
+    swapping it in silently.
 
     Checked against the longer **UPDATE** subject too, so flipping the UPDATE
     toggle can never rebuild an over-length link from the same row.
@@ -519,9 +537,9 @@ def fit_friday_body(event, subject, to_param, start_dt, end_dt, location):
         len(build_deeplink(subject, full, to_param, start_dt, end_dt, location)),
         len(build_deeplink(f"**UPDATE** {subject}", full, to_param, start_dt, end_dt, location)),
     )
-    if longest <= MAX_DEEPLINK_CHARS:
-        return full
-    return build_grand_rounds_body_compact(event)
+    if longest <= MAX_FRIDAY_DEEPLINK_CHARS:
+        return full, False
+    return build_grand_rounds_body_compact(event), True
 
 
 def fit_monday_body(event, subject, to_param, start_dt, end_dt, location):
@@ -588,6 +606,13 @@ def _build_event_rows(events, test_mode, test_email):
             display_subject = ev["subject"].replace("Invitation: ", "")
             if len(display_subject) > 55:
                 display_subject = display_subject[:52] + "..."
+            # Never let a body swap pass silently: if the link guard forced the
+            # slim body, the row says so instead of the email looking different
+            # from the preview with no explanation.
+            if ev.get("body_mode") == "slim":
+                display_subject += ('<span style="background:#fef3c7;color:#b45309;padding:2px 6px;'
+                                    'border-radius:999px;font-size:10px;font-weight:600;margin-left:6px">'
+                                    'SLIM BODY</span>')
             date_display = datetime.strptime(ev["date"], "%Y-%m-%d").strftime("%b %d, %Y")
             date_dow = datetime.strptime(ev["date"], "%Y-%m-%d").strftime("%a")
             event_id = ev["event_id"]
@@ -663,12 +688,11 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
             location = "Hutch I PH2 Conf A (7-8) / Conf B (8-9)"
             start_dt = f"{ev['date']}T07:00:00"
             end_dt = f"{ev['date']}T09:00:00"
-        # Length guard, same as Monday: a click on a cold session bounces through
-        # Microsoft's sign-in endpoint, where the link rides as a return-URL and
-        # grows ~1.5x. 2026-10-16: a 3,581-char Monday link rode in at 5,506 and
-        # was rejected; a 3,283-char link rides in ~5.0K and opens. The host must
-        # stay outlook.office.com (cloud.microsoft rejects even 3.3K links).
-        body = fit_friday_body(ev, subject, to_param, start_dt, end_dt, location)
+        # Friday keeps the FULL documented body (see MAX_FRIDAY_DEEPLINK_CHARS):
+        # the old shared 3,300 cap silently replaced it with the compact body on
+        # every live send, which is what made the email look different each time.
+        # Host must stay outlook.office.com (cloud.microsoft rejects long links).
+        body, slim_body = fit_friday_body(ev, subject, to_param, start_dt, end_dt, location)
         url = build_deeplink(subject, body, to_param, start_dt, end_dt, location)
         update_url = build_deeplink(update_subject, body, to_param, start_dt, end_dt, location)
         eid = f"fri_{ev['date']}"
@@ -676,11 +700,12 @@ def generate_html_page(monday_events, gr_events, test_mode=True, test_email=TEST
             "date": ev["date"], "type_label": ev["meeting_type"],
             "type_color": TYPE_COLORS.get(ev["meeting_type"], "#1a3a5c"),
             "subject": subject, "url": url, "update_url": update_url,
-            "event_id": eid,
+            "event_id": eid, "body_mode": "slim" if slim_body else "full",
         })
         event_data_json[eid] = {
             "subject": subject, "body": body, "to": to_param,
             "startdt": start_dt, "enddt": end_dt, "location": location,
+            "body_mode": "slim" if slim_body else "full",
         }
 
     # Sort each by date
