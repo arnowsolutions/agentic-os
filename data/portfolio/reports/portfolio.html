@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arnow Solutions — Portfolio</title>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --panel-2:#1c2230; --line:#2a3444;
+    --ink:#e6edf3; --muted:#8b98a9; --accent:#003da5; --accent-2:#4c8dff;
+    --done:#2ea043; --partial:#d29922;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:960px; margin:0 auto; padding:32px 20px 80px; }
+  header.top { border-bottom:1px solid var(--line); padding-bottom:24px; margin-bottom:28px; }
+  .eyebrow {
+    text-transform:uppercase; letter-spacing:.14em; font-size:11px;
+    color:var(--accent-2); font-weight:700; margin:0 0 10px;
+  }
+  h1 { font-size:clamp(26px,5vw,40px); line-height:1.15; margin:0 0 12px; letter-spacing:-.02em; }
+  .sub { color:var(--muted); font-size:15px; margin:0; }
+  .stats { display:flex; gap:22px; flex-wrap:wrap; margin-top:20px; }
+  .stat b { display:block; font-size:22px; color:var(--ink); }
+  .stat span { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin:24px 0 8px; }
+  .chip {
+    border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    padding:7px 14px; border-radius:999px; font-size:13px; text-decoration:none;
+  }
+  .chip:hover { border-color:var(--accent-2); }
+  h2 {
+    font-size:13px; text-transform:uppercase; letter-spacing:.14em;
+    color:var(--muted); margin:40px 0 16px; padding-bottom:10px;
+    border-bottom:1px solid var(--line);
+  }
+  .card {
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:22px 22px 6px; margin-bottom:16px;
+  }
+  .card header { display:flex; align-items:center; gap:12px; }
+  .card h3 { margin:0; font-size:20px; letter-spacing:-.01em; }
+  .status { width:9px; height:9px; border-radius:50%; flex:none; }
+  .status.done { background:var(--done); box-shadow:0 0 0 3px rgba(46,160,67,.15); }
+  .status.partial { background:var(--partial); box-shadow:0 0 0 3px rgba(210,153,34,.15); }
+  .meta { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 4px; }
+  .tag {
+    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    background:rgba(76,141,255,.12); color:var(--accent-2);
+    padding:4px 9px; border-radius:6px; font-weight:600;
+  }
+  .tag.ghost { background:var(--panel-2); color:var(--muted); text-transform:none; letter-spacing:0; }
+  .sec { margin:18px 0; }
+  .sec h4 {
+    margin:0 0 6px; font-size:11px; text-transform:uppercase;
+    letter-spacing:.12em; color:var(--accent-2); font-weight:700;
+  }
+  .sec p { margin:0 0 10px; color:#c9d4e0; }
+  .empty { color:var(--muted); font-style:italic; }
+  code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:.9em; }
+  footer {
+    margin-top:56px; padding-top:20px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:12px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:#f7f8fa; --panel:#ffffff; --panel-2:#eef1f6; --line:#dfe4ec;
+      --ink:#111823; --muted:#5c6a7d;
+    }
+    .sec p { color:#2c3746; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Arnow Solutions</p>
+    <h1>Portfolio</h1>
+    <p class="sub">Every project, what it was built for, what it fixed, and what makes it worth a look.</p>
+    <div class="stats">
+      <div class="stat"><b>1</b><span>Projects</span></div>
+      <div class="stat"><b>1</b><span>Fully documented</span></div>
+      <div class="stat"><b>0</b><span>Voice notes</span></div>
+      <div class="stat"><b>October 30, 2026</b><span>Updated</span></div>
+    </div>
+    <nav class="chips"><a class="chip" href="#personal-tools">Personal Tools</a></nav>
+  </header>
+  <h2 id="personal-tools">Personal Tools</h2>
+<article class="card">
+  <header>
+    <span class="status done" aria-hidden="true"></span>
+    <h3>The Listening Room</h3>
+  </header>
+  <div class="meta"><span class="tag">live</span> <span class="tag ghost">Python, FastAPI, self-hosted transcription, scheduled agent pipeline</span> <span class="tag ghost">https://audiobook.srv1738752.hstgr.cloud</span></div>
+  <div class="body"><div class="sec"><h4>Why it was created</h4><p>I listen to audiobooks constantly, and I wanted the reading experience I have with a physical book — chapter navigation, knowing exactly where I am, being able to search back for a passage — but for audio. Commercial players give you a progress bar and not much else. I wanted my own library, my own rules, and word-level captions so I could read along while listening.</p></div><div class="sec"><h4>What problem it solved</h4><p>Two problems, actually.</p>
+<p>The first is the obvious one: off-the-shelf audiobook apps either lock you into a store, mangle your chapters, or charge a subscription for a library you already own. None of them show you the actual words. So I built a self-hosted player that streams my own files with proper byte-range seeking, honors the chapter marks embedded in the file, and transcribes every book on the machine so I can follow the text while it plays.</p>
+<p>The second problem is the one I didn&#x27;t expect it to solve. I don&#x27;t have time to read research. Every week I want to know what happened in AI — the notable repos, the model releases, the funding, the conversations worth following — and every week it sat in a tab I never opened. So I pointed my agent at it. Every week a job researches the top developments, writes a brief, produces a two-host podcast episode, and files it into my library as a chaptered audiobook. I never go looking for the research. It shows up in the same place my books live, already spoken out loud, ready for the commute.</p></div><div class="sec"><h4>What's cool about it</h4><p>The captions are word-level, not just sentence-level, so the text follows the audio word by word as it plays. Transcription runs entirely on the machine — my books never leave the server.</p>
+<p>But the part I actually like is that it turned into a research machine. The weekly AI roundup is produced end to end without me touching it: an agent pulls real sources, produces a two-host conversation about the week, and ships it as a properly chaptered audiobook sitting next to Kevin Hart and 50 Cent. It runs on its own schedule, verifies its own file before releasing it — duration, chapter count, tags — and refuses to hand over a broken episode. It reports the failure instead of faking one.</p>
+<p>There&#x27;s also a live waveform on the seek bar drawn from the actual audio, so you can see where the loud parts are. Real per-user access control — an admin grants specific books to specific accounts rather than one shared password. And the whole thing runs behind a supervisor that restarts it if it dies, so the URL never serves a dead page.</p>
+<p>The proof it works: a stack of weekly roundups is sitting in the library right now — October 5th, 12th, and 19th — each one researched, written, voiced, chaptered, and filed without me asking.</p></div></div>
+</article>
+  <footer>Built from voice notes on the Agentic OS · regenerated automatically</footer>
+</div>
+</body>
+</html>
