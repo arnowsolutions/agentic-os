@@ -372,5 +372,24 @@
     "test_mode": false,
     "ts": "2026-10-01T13:00:22+00:00",
     "status": "sent"
+  },
+  {
+    "date": "2026-11-20",
+    "contact_id": "contact-esther-kim",
+    "name": "Esther Kim",
+    "intended_email": "eskim@montefiore.org",
+    "sent_to": "eskim@montefiore.org",
+    "cc": [
+      "sfrasier@montefiore.org",
+      "asankin@montefiore.org",
+      "alesmall@montefiore.org"
+    ],
+    "bcc": [],
+    "subject": "Happy Birthday, Esther!",
+    "card": "/workspace/agentic-os/data/birthday/cards/2026-11-20_esther-kim_ivory-press.jpg",
+    "note": "Wishing you a wonderful year ahead \u2014 from all of us in Urology.",
+    "test_mode": false,
+    "ts": "2026-11-20T14:01:05+00:00",
+    "status": "sent"
   }
 ]
