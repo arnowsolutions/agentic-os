@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
-"""Build the AI brief HTML email from the markdown brief."""
+"""Build the AI brief HTML email from the markdown brief.
+
+Usage: build_ai_brief_html.py [YYYY-MM-DD]
+Defaults to today's date. The markdown is read from
+/workspace/agentic-os/data/briefings/ai-brief-<date>.md
+"""
 import re
+import sys
+from datetime import date as _date
 from pathlib import Path
 
-SRC = Path("/workspace/agentic-os/data/briefings/ai-brief-2026-09-23.md")
+_DAY = sys.argv[1] if len(sys.argv) > 1 else _date.today().isoformat()
+_OBJ = _date.fromisoformat(_DAY)
+DATE_LONG = _OBJ.strftime("%B %-d, %Y")
+
+SRC = Path(f"/workspace/agentic-os/data/briefings/ai-brief-{_DAY}.md")
 OUT = Path("/tmp/ai-brief.html")
 
 md = SRC.read_text()
@@ -117,7 +128,7 @@ HTML = f"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI &amp; Hermes Brief — September 23, 2026</title>
+<title>AI &amp; Hermes Brief — {DATE_LONG}</title>
 <style>
   body {{
     margin: 0; padding: 0;
@@ -192,7 +203,7 @@ HTML = f"""<!DOCTYPE html>
 <div class="wrap">
   <div class="card">
     <h1>AI &amp; Hermes Brief</h1>
-    <div class="kicker">September 23, 2026 &nbsp;·&nbsp; Big Reef daily scan &nbsp;·&nbsp; window: Sept 16–23, 2026</div>
+    <div class="kicker">{DATE_LONG} &nbsp;·&nbsp; Big Reef daily scan &nbsp;·&nbsp; window: 24 hours</div>
     {body}
     <div class="foot">
       Generated automatically from GitHub API, Hacker News RSS, Google News RSS, Reddit, and web search.
